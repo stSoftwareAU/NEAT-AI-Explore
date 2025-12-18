@@ -46,6 +46,7 @@
           <h2 id="currentNeuronTitle">output-0</h2>
           <dl id="neuronProps" class="propList"></dl>
           <div id="impactBreakdown" class="impactBreakdown"></div>
+          <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
         </section>
 
         <!-- Arrow -->
@@ -60,6 +61,12 @@
             <div class="sortControls">
               <label>Sort by:</label>
               <select id="synapseSort" class="select">
+                <option value="allocImpact">
+                  Allocated impact ↓ (into current)
+                </option>
+                <option value="allocImpactAsc">
+                  Allocated impact ↑ (into current)
+                </option>
                 <option value="impact">Source impact ↓ (highest)</option>
                 <option value="impactAsc">
                   Source impact ↑ (lowest - prunable?)

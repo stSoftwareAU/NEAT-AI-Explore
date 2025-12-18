@@ -56,14 +56,22 @@ Then open `http://localhost:8000`.
 
 ## Features
 
-- **Trace Explorer**: Click on output neuron → see inbound synapses → click to
-  go upstream → repeat until you reach inputs. Builds a breadcrumb trail.
+- **Trace Explorer**: Click an output neuron → see inbound synapses → click to
+  go upstream toward observations → repeat until you reach inputs. Builds a
+  breadcrumb trail.
 - **Synapse Sorting**: Sort inbound synapses by |weight|, weight, or |mean
   contribution|.
 - **Neuron Details**: Shows type, squash, bias, impact score, and recorded
   stats.
 - **Reconstruction Checks**: If enabled in export, shows max value/activation
   deltas to identify recording or squash function mismatches.
+
+## Direction terminology (to avoid confusion)
+
+- **Dataflow direction (network computation)**: observations/inputs → outputs
+- **Navigation direction (this explorer UI)**: outputs → observations/inputs
+- **Inbound synapses (UI)**: synapses that flow from an upstream neuron into the
+  currently selected neuron (i.e. arrows point _toward_ the current neuron)
 
 ## Snapshot JSON Format
 

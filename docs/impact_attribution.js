@@ -240,3 +240,96 @@ export function computeImpactBreakdownToOutputs(input) {
     maxPaths,
   };
 }
+
+/**
+ * Inbound synapse impact allocation (heuristic).
+ *
+ * Problem:
+ * - Snapshots provide a per-neuron `impact`, but the UI shows inbound synapses.
+ * - Users want to understand "how does this neuron's impact relate to each
+ *   inbound synapse?" (in terms of the current neuron).
+ *
+ * Heuristic:
+ * - For each inbound synapse (from -> to), compute a local attribution score:
+ *     score = |meanContribution|  (preferred when available)
+ *     fallback: |weight|
+ * - Allocate the neuron's impact across inbound synapses proportionally:
+ *     allocatedImpact_i = neuronImpact * score_i / Σ score
+ *
+ * This creates an explainable breakdown where the allocated impacts sum to the
+ * neuron's impact (within rounding), without claiming it's ground-truth.
+ */
+
+/**
+ * @typedef {{
+ *   fromUuid: string,
+ *   toUuid: string,
+ *   weight: number,
+ *   meanContribution?: number | null
+ * }} InboundSynapseWithStats
+ */
+
+/**
+ * @typedef {{
+ *   toUuid: string,
+ *   neuronImpact: number | null,
+ *   totalScore: number,
+ *   synapses: Array<InboundSynapseWithStats & {
+ *     score: number,
+ *     share: number,
+ *     allocatedImpact: number | null
+ *   }>
+ * }} InboundAllocationResult
+ */
+
+/**
+ * @param {{
+ *   toUuid: string,
+ *   neuronImpact?: number | null,
+ *   inboundSynapses: InboundSynapseWithStats[]
+ * }} input
+ * @returns {InboundAllocationResult}
+ */
+export function computeInboundSynapseImpactAllocation(input) {
+  const { toUuid, neuronImpact = null, inboundSynapses } = input ?? {};
+  if (!toUuid || !Array.isArray(inboundSynapses)) {
+    return {
+      toUuid: toUuid ?? "",
+      neuronImpact: neuronImpact ?? null,
+      totalScore: 0,
+      synapses: [],
+    };
+  }
+
+  const rows = inboundSynapses
+    .filter((s) =>
+      s && typeof s.fromUuid === "string" && typeof s.toUuid === "string" &&
+      typeof s.weight === "number" && isFinite(s.weight)
+    )
+    .map((s) => {
+      const mc = s.meanContribution;
+      const score = typeof mc === "number" && isFinite(mc)
+        ? Math.abs(mc)
+        : Math.abs(s.weight);
+      return { ...s, score };
+    });
+
+  const totalScore = rows.reduce(
+    (acc, r) => acc + (isFinite(r.score) ? r.score : 0),
+    0,
+  );
+
+  const synapses = rows.map((r) => {
+    const share = totalScore > 0 ? r.score / totalScore : 0;
+    const allocatedImpact =
+      typeof neuronImpact === "number" && isFinite(neuronImpact) &&
+        totalScore > 0
+        ? neuronImpact * share
+        : null;
+    return { ...r, share, allocatedImpact };
+  }).sort((a, b) =>
+    (b.allocatedImpact ?? b.score) - (a.allocatedImpact ?? a.score)
+  );
+
+  return { toUuid, neuronImpact: neuronImpact ?? null, totalScore, synapses };
+}

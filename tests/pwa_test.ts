@@ -62,6 +62,7 @@ Deno.test("service worker caches the app shell", async () => {
       '"./styles.css"',
       '"./app.js"',
       '"./impact_attribution.js"',
+      '"./impact_diagnostics.js"',
       '"./manifest.webmanifest"',
       '"./icons/icon-192x192.png"',
       '"./Tooltips.json"',

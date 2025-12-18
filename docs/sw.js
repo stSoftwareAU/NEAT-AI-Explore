@@ -7,10 +7,10 @@
  *
  * Note: This PWA is a viewer/debug tool. Offline support is best-effort.
  *
- * Version: 20251218.3
+ * Version: 20251218.4
  */
 
-const VERSION = "20251218.3";
+const VERSION = "20251218.4";
 const STATIC_CACHE = `neat-ai-explore-static-v${VERSION}`;
 const RUNTIME_CACHE = `neat-ai-explore-runtime-v${VERSION}`;
 
@@ -19,6 +19,7 @@ const STATIC_FILES = [
   "./styles.css",
   "./app.js",
   "./impact_attribution.js",
+  "./impact_diagnostics.js",
   "./Tooltips.json",
   "./manifest.webmanifest",
   "./icons/icon-72x72.png",

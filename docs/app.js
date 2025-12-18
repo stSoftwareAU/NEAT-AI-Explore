@@ -10,7 +10,16 @@
  * - Synapses: connections between neurons
  */
 
-import { computeImpactBreakdownToOutputs } from "./impact_attribution.js";
+import {
+  computeImpactBreakdownToOutputs,
+  computeInboundSynapseImpactAllocation,
+} from "./impact_attribution.js";
+import {
+  computeGradientProxyImpact,
+  computeOutgoingProxyTerms,
+  computePreActivations,
+  computeSquashDerivativeStats,
+} from "./impact_diagnostics.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -19,12 +28,14 @@ let trace = []; // Array of neuron UUIDs
 let uuidToLabel = {}; // "input-N" -> "human-name"
 let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 
-let lastImpactBreakdown = null;
-let lastImpactNeuronUuid = null;
-let lastImpactNeuronImpact = null;
-let lastImpactOutputUuid = null;
-let lastImpactPathPage = 0;
-const IMPACT_PATH_PAGE_SIZE = 200;
+let DIAG_PRE = new Map();
+let DIAG_SQUASH = new Map();
+let DIAG_PROXY = new Map();
+
+let lastInboundAllocation = null;
+let lastInboundToUuid = null;
+let lastInboundPage = 0;
+const INBOUND_PAGE_SIZE = 200;
 
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
@@ -59,6 +70,7 @@ const el = {
   currentNeuronTitle: document.getElementById("currentNeuronTitle"),
   neuronProps: document.getElementById("neuronProps"),
   impactBreakdown: document.getElementById("impactBreakdown"),
+  impactDiagnosticsPanel: document.getElementById("impactDiagnosticsPanel"),
   pathModal: document.getElementById("pathModal"),
   pathModalBackdrop: document.getElementById("pathModalBackdrop"),
   pathModalTitle: document.getElementById("pathModalTitle"),
@@ -175,6 +187,33 @@ async function loadSnapshot(source, label) {
 
     const outputs = (creature.neurons ?? []).filter((n) => n.type === "output");
     const startUuid = outputs[0]?.uuid ?? "output-0";
+
+    try {
+      const derivedSynapses = SNAPSHOT?.derived?.synapses ?? {};
+      const recordingNeurons = SNAPSHOT?.recording?.neurons ?? {};
+      DIAG_PRE = computePreActivations({
+        neuronsByUuid,
+        synapses,
+        derivedSynapses,
+        recordingNeurons,
+      });
+      DIAG_SQUASH = computeSquashDerivativeStats({
+        neuronsByUuid,
+        preActivations: DIAG_PRE,
+      });
+      DIAG_PROXY = computeGradientProxyImpact({
+        neuronsByUuid,
+        synapses,
+        preActivations: DIAG_PRE,
+        outputUuids: outputs.map((o) => o.uuid),
+        iterations: 8,
+      });
+    } catch (e) {
+      console.warn("Impact diagnostics failed (non-fatal):", e);
+      DIAG_PRE = new Map();
+      DIAG_SQUASH = new Map();
+      DIAG_PROXY = new Map();
+    }
 
     trace = [];
     navigateTo(startUuid);
@@ -347,6 +386,25 @@ function renderCurrentNeuron(uuid) {
     props.push(["Impact", formatSig(impact, 3) + impactNote, impactClass]);
   }
 
+  if (!isInput) {
+    const proxy = DIAG_PROXY.get(uuid);
+    if (typeof proxy === "number" && isFinite(proxy)) {
+      props.push(["Impact (proxy, grad)", formatSig(proxy, 3)]);
+    }
+    const s = DIAG_SQUASH.get(uuid);
+    if (s) {
+      props.push(["Squash |d| mean", formatSig(s.meanAbsD, 3)]);
+      props.push(["Squash d≈0 %", formatSig(s.fracNearZero * 100, 3) + "%"]);
+      if (s.nonSmooth) {
+        props.push([
+          "Squash warning",
+          s.note ?? "non-smooth / branching",
+          "error",
+        ]);
+      }
+    }
+  }
+
   if (stats) {
     props.push(["Mean Activation", formatNumber(stats.meanActivation)]);
     props.push([
@@ -398,6 +456,73 @@ function renderCurrentNeuron(uuid) {
   });
 
   renderImpactBreakdown(uuid, n.type, impact);
+  renderImpactDiagnosticsPanel(uuid, n.type);
+}
+
+function renderImpactDiagnosticsPanel(uuid, neuronType) {
+  if (!el.impactDiagnosticsPanel) return;
+
+  if (uuid.startsWith("input-") || neuronType === "input") {
+    el.impactDiagnosticsPanel.innerHTML = "";
+    return;
+  }
+
+  const outs = synapses.filter((s) => s.fromUuid === uuid);
+  if (outs.length === 0) {
+    el.impactDiagnosticsPanel.innerHTML = "";
+    return;
+  }
+
+  const title = "Impact proxy working → downstream";
+  const note =
+    "Each term shows why the gradient-style proxy thinks this neuron can influence outputs: " +
+    "term = sens(to) × |w| × mean|d(to squash)|. Non-smooth squashes are flagged.";
+
+  const terms = computeOutgoingProxyTerms({
+    fromUuid: uuid,
+    synapses,
+    neuronsByUuid,
+    proxySens: DIAG_PROXY,
+    squashStats: DIAG_SQUASH,
+  });
+
+  const rows = terms.slice(0, 8).map((t) => {
+    const toLabel = truncateNeuronName(t.toUuid);
+    const w = formatSig(t.weight, 3);
+    const d = t.toMeanAbsD != null ? formatSig(t.toMeanAbsD, 3) : "N/A";
+    const sens = t.toSens != null ? formatSig(t.toSens, 3) : "N/A";
+    const term = t.term != null ? formatSig(t.term, 3) : "N/A";
+    const warn = t.toNonSmooth ? ` ⚠ ${t.toSquash}` : t.toSquash;
+
+    return `
+      <div class="impactBreakdownRow">
+        <div class="impactBreakdownOut">${escapeHtml(toLabel)}</div>
+        <div class="impactBreakdownStats">
+          <span class="stat" title="Downstream squash">${
+      escapeHtml(warn)
+    }</span>
+          <span class="stat" title="Weight">w: ${escapeHtml(w)}</span>
+          <span class="stat" title="mean |d(squash)| at downstream node">${
+      escapeHtml("d: " + d)
+    }</span>
+          <span class="stat" title="Downstream sensitivity">${
+      escapeHtml("sens: " + sens)
+    }</span>
+          <span class="stat" title="term = sens × |w| × d">${
+      escapeHtml("term: " + term)
+    }</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  el.impactDiagnosticsPanel.innerHTML = `
+    <div class="impactBreakdownHeader">
+      <div class="impactBreakdownTitle">${escapeHtml(title)}</div>
+    </div>
+    <div class="impactBreakdownNote">${escapeHtml(note)}</div>
+    <div class="impactBreakdownList">${rows}</div>
+  `;
 }
 
 function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
@@ -418,92 +543,65 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
     return;
   }
 
-  const breakdown = computeImpactBreakdownToOutputs({
-    startUuid: uuid,
-    synapses,
-    outputUuids: outputs,
-    neuronImpact: neuronImpact ?? null,
-    collectPaths: true,
-    maxDepth: 10,
-    maxPaths: 2500,
-    topPathsPerOutput: 3,
-  });
-
-  if (!breakdown.outputs || breakdown.outputs.length === 0) {
+  const inbound = getInboundSynapses(uuid);
+  if (inbound.length === 0 || neuronImpact == null) {
     el.impactBreakdown.innerHTML = "";
     return;
   }
 
-  const title = "Impact → outputs";
-  const note =
-    "Heuristic allocation using |weight| products across forward paths. " +
-    "This is shown to explain multi-path fan-out; it isn't a ground-truth per-synapse impact.";
+  const allocation = computeInboundSynapseImpactAllocation({
+    toUuid: uuid,
+    neuronImpact: neuronImpact ?? null,
+    inboundSynapses: inbound.map((s) => ({
+      fromUuid: s.fromUuid,
+      toUuid: s.toUuid,
+      weight: s.weight,
+      meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+    })),
+  });
 
-  lastImpactBreakdown = breakdown;
-  lastImpactNeuronUuid = uuid;
-  lastImpactNeuronImpact = neuronImpact ?? null;
-  lastImpactOutputUuid = null;
-  lastImpactPathPage = 0;
+  lastInboundAllocation = allocation;
+  lastInboundToUuid = uuid;
+  lastInboundPage = 0;
+
+  const title = "Impact ← inbound synapses";
+  const note =
+    "Heuristic allocation of this neuron's impact back across its inbound synapses. " +
+    "score = |meanContribution| (fallback |weight|), then allocatedImpact = impact × score / Σ score.";
 
   const headerHtml = `
     <div class="impactBreakdownHeader">
       <div class="impactBreakdownTitle">${escapeHtml(title)}</div>
-      ${
-    breakdown.truncated
-      ? '<div class="impactBreakdownTruncated" title="Path enumeration hit a safety limit">truncated</div>'
-      : ""
-  }
+      <button class="impactBreakdownBtn" type="button" data-open-inbound="1" title="Inspect full calculation">Inspect</button>
     </div>
     <div class="impactBreakdownNote">${escapeHtml(note)}</div>
   `;
 
-  const rows = breakdown.outputs.map((o) => {
-    const allocated = o.allocatedImpact != null
-      ? formatSig(o.allocatedImpact, 3)
+  const top = allocation.synapses.slice(0, 5);
+  const rows = top.map((r) => {
+    const fromLabel = truncateNeuronName(r.fromUuid);
+    const alloc = r.allocatedImpact != null
+      ? formatSig(r.allocatedImpact, 3)
       : "N/A";
-    const sharePct = formatSig(o.share * 100, 3) + "%";
-    const outLabel = truncateNeuronName(o.outputUuid);
-
-    const pathsHtml = (o.topPaths ?? []).length > 0
-      ? `
-        <ul class="impactBreakdownPaths">
-          ${
-        (o.topPaths ?? []).map((p) => `
-            <li title="Path score: product(|weight|)">
-              <span class="impactPath">${
-          escapeHtml(p.nodes.map(truncateUuid).join(" → "))
-        }</span>
-              <span class="impactPathScore">${
-          escapeHtml(formatSig(p.score, 3))
-        }</span>
-            </li>
-          `).join("")
-      }
-        </ul>
-      `
-      : "";
-
+    const sharePct = formatSig(r.share * 100, 3) + "%";
+    const mc = r.meanContribution != null
+      ? formatSig(r.meanContribution, 3)
+      : "N/A";
     return `
       <div class="impactBreakdownRow">
-        <div class="impactBreakdownOut">${escapeHtml(outLabel)}</div>
+        <div class="impactBreakdownOut">${escapeHtml(fromLabel)}</div>
         <div class="impactBreakdownStats">
-          <span class="stat" title="Allocated impact to this output">${
-      escapeHtml(allocated)
+          <span class="stat" title="Allocated impact from this inbound synapse">${
+      escapeHtml(alloc)
     }</span>
           <span class="stat" title="Share of this neuron's impact">${
       escapeHtml(sharePct)
     }</span>
-          <span class="stat" title="Distinct acyclic forward paths considered">paths: ${
-      escapeHtml(String(o.pathCount))
+          <span class="stat" title="Mean contribution (activation × weight)">${
+      escapeHtml("c: " + mc)
     }</span>
-          <button class="impactBreakdownBtn" type="button" data-output="${
-      escapeHtml(o.outputUuid)
-    }" title="Inspect all paths and calculations">
-            Inspect
-          </button>
         </div>
       </div>
-      ${pathsHtml}
     `;
   }).join("");
 
@@ -515,22 +613,17 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
     if (!(target instanceof HTMLElement)) return;
     const btn = target.closest(".impactBreakdownBtn");
     if (!btn) return;
-    const outputUuid = btn.getAttribute("data-output");
-    if (!outputUuid) return;
-    openPathModal(outputUuid);
+    if (btn.getAttribute("data-open-inbound") === "1") openInboundModal();
   };
 }
 
-function openPathModal(outputUuid) {
+function openInboundModal() {
   if (!el.pathModal || !el.pathModalBody || !el.pathModalTitle) return;
-  if (!lastImpactBreakdown) return;
-
-  lastImpactOutputUuid = outputUuid;
-  lastImpactPathPage = 0;
-
+  if (!lastInboundAllocation || !lastInboundToUuid) return;
+  lastInboundPage = 0;
   el.pathModal.classList.add("isOpen");
   el.pathModal.setAttribute("aria-hidden", "false");
-  renderPathModalPage();
+  renderInboundModalPage();
 }
 
 function closePathModal() {
@@ -539,106 +632,75 @@ function closePathModal() {
   el.pathModal.setAttribute("aria-hidden", "true");
 }
 
-function renderPathModalPage() {
+function renderInboundModalPage() {
   if (!el.pathModalBody || !el.pathModalTitle || !el.pathModalMore) return;
-  if (!lastImpactBreakdown || !lastImpactOutputUuid) return;
+  if (!lastInboundAllocation || !lastInboundToUuid) return;
 
-  const out = (lastImpactBreakdown.outputs ?? []).find((o) =>
-    o.outputUuid === lastImpactOutputUuid
-  );
-  if (!out) return;
+  const rows = lastInboundAllocation.synapses;
+  const total = rows.length;
+  const shown = Math.min(total, (lastInboundPage + 1) * INBOUND_PAGE_SIZE);
 
-  const paths = (out.paths ?? out.topPaths ?? []).slice().sort((a, b) =>
-    (b.score ?? 0) - (a.score ?? 0)
-  );
+  el.pathModalTitle.textContent = `Inbound impact allocation for ${
+    truncateUuid(lastInboundToUuid)
+  }`;
 
-  const total = paths.length;
-  const shown = Math.min(
-    total,
-    (lastImpactPathPage + 1) * IMPACT_PATH_PAGE_SIZE,
-  );
-
-  const neuronImpact = lastImpactNeuronImpact;
-  const outputScore = out.score ?? 0;
-  const totalScore = lastImpactBreakdown.totalScore ?? 0;
-  const share = out.share ?? 0;
-  const allocated = typeof neuronImpact === "number" && isFinite(neuronImpact)
-    ? neuronImpact * share
-    : null;
-
-  el.pathModalTitle.textContent = `Impact path inspector: ${
-    truncateUuid(lastImpactNeuronUuid ?? "")
-  } → ${truncateUuid(lastImpactOutputUuid)}`;
-
-  const eqAllocated = allocated != null
-    ? `${formatSig(neuronImpact, 6)} × ${formatSig(share, 6)} = ${
-      formatSig(allocated, 6)
-    }`
-    : "N/A";
+  const impact = lastInboundAllocation.neuronImpact;
+  const totalScore = lastInboundAllocation.totalScore;
 
   const header = `
     <dl class="modalKvp">
-      <dt>Neuron</dt>
-      <dd>${escapeHtml(lastImpactNeuronUuid ?? "N/A")}</dd>
-      <dt>Output</dt>
-      <dd>${escapeHtml(lastImpactOutputUuid)}</dd>
-      <dt>Paths enumerated</dt>
-      <dd>${escapeHtml(String(out.pathCount ?? total))}${
-    lastImpactBreakdown.truncated
-      ? ' <span class="impactBreakdownTruncated">truncated</span>'
-      : ""
-  }</dd>
-      <dt>Output score</dt>
-      <dd>${escapeHtml(formatSig(outputScore, 6))}</dd>
-      <dt>Total score</dt>
+      <dt>Current neuron</dt>
+      <dd>${escapeHtml(lastInboundToUuid)}</dd>
+      <dt>Neuron impact</dt>
+      <dd>${escapeHtml(impact != null ? formatSig(impact, 6) : "N/A")}</dd>
+      <dt>Inbound synapses</dt>
+      <dd>${escapeHtml(String(total))}</dd>
+      <dt>Σ score</dt>
       <dd>${escapeHtml(formatSig(totalScore, 6))}</dd>
-      <dt>Share</dt>
-      <dd>${escapeHtml(formatSig(share, 6))} (=${
-    escapeHtml(formatSig(share * 100, 4))
-  }%)</dd>
-      <dt>Allocated impact</dt>
-      <dd>${
-    escapeHtml(allocated != null ? formatSig(allocated, 6) : "N/A")
-  } <span class="pathEquation">(= impact × share: ${
-    escapeHtml(eqAllocated)
-  })</span></dd>
+      <dt>Score definition</dt>
+      <dd>${escapeHtml("|meanContribution| (fallback |weight|)")}</dd>
+      <dt>Allocation</dt>
+      <dd><span class="pathEquation">allocatedImpact = impact × score / Σ score</span></dd>
     </dl>
-    <div class="impactBreakdownNote">
-      Path score per path: <span class="pathEquation">∏ |weight|</span>. Output score: <span class="pathEquation">Σ (path score)</span>. Share: <span class="pathEquation">outputScore / totalScore</span>.
-    </div>
   `;
 
-  const items = paths.slice(0, shown).map((p, idx) => {
-    const nodes = p.nodes ?? [];
-    const steps = p.steps ?? [];
-    const absWeights = steps.map((s) => Math.abs(s.weight));
-    const recomputed = absWeights.reduce((acc, w) => acc * w, 1);
-    const chain = nodes.map(truncateUuid).join(" → ");
-    const weightStr = steps.map((s) => formatSig(s.weight, 6)).join(", ");
-    const absStr = absWeights.map((w) => formatSig(w, 6)).join(" × ");
-    const eq = absWeights.length > 0
-      ? `${absStr} = ${formatSig(recomputed, 6)}`
-      : `1 = ${formatSig(recomputed, 6)}`;
+  const items = rows.slice(0, shown).map((r) => {
+    const score = r.score ?? 0;
+    const share = r.share ?? 0;
+    const alloc = r.allocatedImpact;
+    const mc = r.meanContribution;
+    const eq = totalScore > 0 && impact != null
+      ? `${formatSig(impact, 6)} × ${formatSig(score, 6)} / ${
+        formatSig(totalScore, 6)
+      } = ${formatSig(alloc ?? 0, 6)}`
+      : "N/A";
 
     return `
       <details class="pathItem">
         <summary>
-          <span class="pathSummaryPath">${escapeHtml(chain)}</span>
+          <span class="pathSummaryPath">${
+      escapeHtml(`${truncateUuid(r.fromUuid)} → ${truncateUuid(r.toUuid)}`)
+    }</span>
           <span class="pathSummaryScore">${
-      escapeHtml(formatSig(p.score, 6))
+      escapeHtml(formatSig(alloc ?? 0, 6))
     }</span>
         </summary>
         <div class="pathDetails">
-          <div>Weights (signed): <span class="pathEquation">${
-      escapeHtml(weightStr || "N/A")
+          <div>Weight: <span class="pathEquation">${
+      escapeHtml(formatSig(r.weight, 6))
     }</span></div>
-          <div>Score: <span class="pathEquation">${escapeHtml(eq)}</span></div>
-          <div>Recorded score: <span class="pathEquation">${
-      escapeHtml(formatSig(p.score, 6))
-    }</span> (Δ=${escapeHtml(formatSig((p.score ?? 0) - recomputed, 6))})</div>
-          <div class="impactBreakdownNote">Path #${
-      escapeHtml(String(idx + 1))
-    }</div>
+          <div>Mean contribution: <span class="pathEquation">${
+      escapeHtml(mc != null ? formatSig(mc, 6) : "N/A")
+    }</span></div>
+          <div>Score: <span class="pathEquation">${
+      escapeHtml(formatSig(score, 6))
+    }</span></div>
+          <div>Share: <span class="pathEquation">${
+      escapeHtml(formatSig(share, 6))
+    } (=${escapeHtml(formatSig(share * 100, 4))}%)</span></div>
+          <div>Allocated impact: <span class="pathEquation">${
+      escapeHtml(eq)
+    }</span></div>
         </div>
       </details>
     `;
@@ -658,8 +720,8 @@ if (el.pathModalBackdrop) el.pathModalBackdrop.onclick = () => closePathModal();
 if (el.pathModalClose) el.pathModalClose.onclick = () => closePathModal();
 if (el.pathModalMore) {
   el.pathModalMore.onclick = () => {
-    lastImpactPathPage += 1;
-    renderPathModalPage();
+    lastInboundPage += 1;
+    renderInboundModalPage();
   };
 }
 
@@ -688,18 +750,47 @@ function renderSynapseList(toUuid) {
     return;
   }
 
+  const currentImpact = getNeuronImpact(toUuid);
+  const allocation = computeInboundSynapseImpactAllocation({
+    toUuid,
+    neuronImpact: currentImpact ?? null,
+    inboundSynapses: inbound.map((s) => ({
+      fromUuid: s.fromUuid,
+      toUuid: s.toUuid,
+      weight: s.weight,
+      meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+    })),
+  });
+  const allocByFrom = new Map(allocation.synapses.map((r) => [r.fromUuid, r]));
+
   const enriched = inbound.map((syn) => {
     const impact = getNeuronImpact(syn.fromUuid);
     const mse = getMSE(syn.fromUuid);
     const contrib = getMeanContribution(syn.fromUuid, syn.toUuid);
     const alias = getAlias(syn.fromUuid);
     const isInput = syn.fromUuid.startsWith("input-");
-    return { ...syn, impact, mse, contrib, alias, isInput };
+    const allocRow = allocByFrom.get(syn.fromUuid);
+    const allocImpact = allocRow?.allocatedImpact ?? null;
+    const allocShare = allocRow?.share ?? null;
+    return {
+      ...syn,
+      impact,
+      mse,
+      contrib,
+      alias,
+      isInput,
+      allocImpact,
+      allocShare,
+    };
   });
 
   const sortKey = el.synapseSort.value;
   enriched.sort((a, b) => {
     switch (sortKey) {
+      case "allocImpact":
+        return (b.allocImpact ?? 0) - (a.allocImpact ?? 0);
+      case "allocImpactAsc":
+        return (a.allocImpact ?? 0) - (b.allocImpact ?? 0);
       case "weight":
         return b.weight - a.weight;
       case "absWeight":
@@ -766,6 +857,14 @@ function renderSynapseList(toUuid) {
         `<span class="stat ${impactClass}" title="${tooltip}">src imp: ${
           formatSig(syn.impact, 3)
         }${impactNote}</span>`,
+      );
+    }
+
+    if (syn.allocImpact != null) {
+      statsHtml.push(
+        `<span class="stat" title="Allocated impact into the current neuron (sums to current neuron's impact)">alloc imp: ${
+          formatSig(syn.allocImpact, 3)
+        }</span>`,
       );
     }
 

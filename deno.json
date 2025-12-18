@@ -1,4 +1,8 @@
 {
+  "imports": {
+    "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
+    "@std/path": "jsr:@std/path@^1.0.0"
+  },
   "lint": {
     "exclude": ["docs/**", "app.js"]
   },

@@ -62,6 +62,7 @@
           <h2 id="currentNeuronTitle">output-0</h2>
           <dl id="neuronProps" class="propList"></dl>
           <div id="impactBreakdown" class="impactBreakdown"></div>
+          <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
         </section>
 
         <!-- Arrow -->
@@ -76,6 +77,12 @@
             <div class="sortControls">
               <label>Sort by:</label>
               <select id="synapseSort" class="select">
+                <option value="allocImpact">
+                  Allocated impact ↓ (into current)
+                </option>
+                <option value="allocImpactAsc">
+                  Allocated impact ↑ (into current)
+                </option>
                 <option value="impact">Source impact ↓ (highest)</option>
                 <option value="impactAsc">
                   Source impact ↑ (lowest - prunable?)
@@ -130,7 +137,7 @@
         window.addEventListener("load", async () => {
           try {
             const registration = await navigator.serviceWorker.register(
-              "./sw.js?v=20251218.3",
+              "./sw.js?v=20251218.4",
             );
             // Always check for an updated SW on page load (helps avoid stale cached app.js).
             // Note: Some browsers occasionally throw here even when the SW is present; don't treat

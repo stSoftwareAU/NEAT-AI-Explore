@@ -1,0 +1,56 @@
+function assert(condition: unknown, message?: string): asserts condition {
+  if (!condition) throw new Error(message ?? "Assertion failed");
+}
+
+function approxEquals(actual: number, expected: number, tol = 1e-12): void {
+  if (Math.abs(actual - expected) > tol) {
+    throw new Error(`Expected ~${expected} but got ${actual}`);
+  }
+}
+
+import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
+
+Deno.test("computeInboundSynapseImpactAllocation allocates neuron impact across inbound synapses", () => {
+  const res = computeInboundSynapseImpactAllocation({
+    toUuid: "hidden-X",
+    neuronImpact: 0.5,
+    inboundSynapses: [
+      { fromUuid: "a", toUuid: "hidden-X", weight: 2, meanContribution: 10 },
+      { fromUuid: "b", toUuid: "hidden-X", weight: -3, meanContribution: -5 },
+    ],
+  });
+
+  // Scores are |meanContribution|: 10 and 5 => shares 2/3 and 1/3.
+  approxEquals(res.totalScore, 15);
+  assert(res.synapses.length === 2);
+
+  const byFrom = new Map(res.synapses.map((s) => [s.fromUuid, s]));
+  approxEquals(byFrom.get("a")?.share ?? 0, 10 / 15);
+  approxEquals(byFrom.get("b")?.share ?? 0, 5 / 15);
+
+  approxEquals(byFrom.get("a")?.allocatedImpact ?? 0, 0.5 * (10 / 15));
+  approxEquals(byFrom.get("b")?.allocatedImpact ?? 0, 0.5 * (5 / 15));
+
+  // Sum allocated impacts should equal neuron impact.
+  approxEquals(
+    res.synapses.reduce((acc, s) => acc + (s.allocatedImpact ?? 0), 0),
+    0.5,
+  );
+});
+
+Deno.test("computeInboundSynapseImpactAllocation falls back to |weight| when meanContribution missing", () => {
+  const res = computeInboundSynapseImpactAllocation({
+    toUuid: "hidden-X",
+    neuronImpact: 1,
+    inboundSynapses: [
+      { fromUuid: "a", toUuid: "hidden-X", weight: 2 },
+      { fromUuid: "b", toUuid: "hidden-X", weight: -1 },
+    ],
+  });
+
+  // Scores: |2| and |1| => shares 2/3 and 1/3.
+  approxEquals(res.totalScore, 3);
+  const byFrom = new Map(res.synapses.map((s) => [s.fromUuid, s]));
+  approxEquals(byFrom.get("a")?.allocatedImpact ?? 0, 2 / 3);
+  approxEquals(byFrom.get("b")?.allocatedImpact ?? 0, 1 / 3);
+});
