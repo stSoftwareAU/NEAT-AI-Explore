@@ -49,6 +49,14 @@ const TOOLTIPS = {
   "Bias": "Constant value added before the activation function",
   "Impact":
     "Fraction of influence this neuron has on the final output (0-1). Values < 1e-8 are suspiciously low and should be prunable.",
+  "Impact (proxy, grad)":
+    "Viewer-side diagnostic proxy (not the exported impact). Approximates influence to outputs using |weight| and an estimated squash derivative. Useful for spotting problematic non-smooth squashes.",
+  "Squash |d| mean":
+    "Mean absolute derivative of this neuron's squash across recorded samples. Near 0 means the squash is mostly flat/saturated for these samples.",
+  "Squash d≈0 %":
+    "Percentage of recorded samples where the squash derivative magnitude is ~0 (|d| < 1e-6). High values suggest saturation/flat regions.",
+  "Squash warning":
+    "Explains when the squash is non-smooth, piecewise, or otherwise hard to differentiate. This can invalidate gradient-style impact calculations.",
   "Mean Activation": "Average output value across all samples",
   "Activation Range": "Minimum and maximum activation values observed",
   "MAE": "Mean Absolute Error - used in focus neuron ranking",
@@ -57,6 +65,35 @@ const TOOLTIPS = {
   "Max Recon Δ":
     "Maximum reconstruction delta - largest difference between recorded activation and recomputed activation from inputs. High values suggest recording or squash function issues.",
 };
+
+function squashWarningExplanation(note, squash) {
+  const n = (note ?? "").toString();
+  const s = (squash ?? "").toString();
+
+  if (n === "piecewise") {
+    return `Piecewise means the squash is defined by different formulas in different ranges (e.g. HARD_TANH clamps outside [-1, 1]). The derivative changes abruptly at boundaries. (squash: ${s})`;
+  }
+  if (n === "clamped") {
+    return `Clamped means the squash has hit a hard limit, so the local derivative is ~0 beyond the clamp. (squash: ${s})`;
+  }
+  if (n === "kink at 0") {
+    return `Kink at 0 means the derivative is discontinuous at 0 (e.g. RELU/ABS). Small input changes near 0 can flip behaviour. (squash: ${s})`;
+  }
+  if (n === "singular near 0") {
+    return `Singular near 0 means the derivative can blow up near 0 (e.g. SQRT). This can make impact estimates unstable. (squash: ${s})`;
+  }
+  if (n === "undefined for x≤0") {
+    return `Undefined for x≤0 means the squash isn't differentiable/defined in that region (e.g. SQRT(max(0,x))). (squash: ${s})`;
+  }
+  if (n === "non-smooth/branching") {
+    return `Non-smooth/branching squashes (e.g. IF/MIN/MAX/STEP) can change behaviour discontinuously. Derivative-based impact calculations can be misleading. (squash: ${s})`;
+  }
+  if (n === "unknown squash") {
+    return `Unknown squash: the viewer doesn't know the derivative model. Treat any derivative-based diagnostics with caution. (squash: ${s})`;
+  }
+  if (n) return `${n} (squash: ${s})`;
+  return `Non-smooth squash behaviour detected. (squash: ${s})`;
+}
 
 const el = {
   fetchUrl: document.getElementById("fetchUrl"),
@@ -400,6 +437,7 @@ function renderCurrentNeuron(uuid) {
           "Squash warning",
           s.note ?? "non-smooth / branching",
           "error",
+          squashWarningExplanation(s.note, n.squash),
         ]);
       }
     }
@@ -441,7 +479,7 @@ function renderCurrentNeuron(uuid) {
   }
 
   el.neuronProps.innerHTML = "";
-  props.forEach(([label, value, cls]) => {
+  props.forEach(([label, value, cls, valueTitle]) => {
     const dt = document.createElement("dt");
     dt.textContent = label;
     if (TOOLTIPS[label]) {
@@ -451,6 +489,7 @@ function renderCurrentNeuron(uuid) {
     const dd = document.createElement("dd");
     dd.textContent = value;
     if (cls) dd.className = cls;
+    if (valueTitle) dd.title = valueTitle;
     el.neuronProps.appendChild(dt);
     el.neuronProps.appendChild(dd);
   });

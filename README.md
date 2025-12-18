@@ -190,4 +190,4 @@ Then re-run the workflow (or push again to `Develop`).
 
 ## Licence
 
-MIT
+Apache Licence 2.0
