@@ -1,3 +1,13 @@
+.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Deno
+.deno/
+
 # Local snapshot files can be huge.
 snapshot.json
 *.snapshot.json

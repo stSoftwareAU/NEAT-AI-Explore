@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEAT-AI Explore</title>
+    <!-- PWA Meta Tags -->
+    <meta
+      name="description"
+      content="A static viewer for exploring NEAT-AI creature snapshots (neurons, synapses, impacts, and trace navigation)."
+    />
+    <meta name="theme-color" content="#60a5fa" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="NEAT Explore" />
+
+    <!-- Icons and Manifest -->
+    <link rel="icon" type="image/png" href="./icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="appHeader">
+      <h1>NEAT-AI Explore</h1>
+      <div class="headerControls">
+        <input id="fetchUrl" class="input" placeholder="snapshot.json" style="width: 200px" />
+        <button id="fetchBtn" class="button">Fetch</button>
+        <input id="fileInput" type="file" accept="application/json" style="display:none" />
+        <button id="fileBtn" class="button">Browse…</button>
+        <span id="status" class="statusInline"></span>
+      </div>
+    </header>
+
+    <main class="explorer">
+      <!-- Trace breadcrumb at top -->
+      <nav class="traceBar">
+        <span class="traceLabel">Trace:</span>
+        <ol id="traceBreadcrumb" class="breadcrumb"></ol>
+        <button id="traceBackBtn" class="button buttonSmall">← Back</button>
+        <button id="traceClearBtn" class="button buttonSmall buttonSecondary">Clear</button>
+      </nav>
+
+      <!-- Main exploration area: left-to-right flow -->
+      <div class="explorerMain">
+        <!-- Current neuron (left) -->
+        <section class="currentNeuron">
+          <h2 id="currentNeuronTitle">output-0</h2>
+          <dl id="neuronProps" class="propList"></dl>
+        </section>
+
+        <!-- Arrow -->
+        <div class="flowArrow">←</div>
+
+        <!-- Inbound synapses list (right) -->
+        <section class="synapseList">
+          <div class="synapseHeader">
+            <h2>Inbound Synapses <span id="synapseCount" class="badge">0</span></h2>
+            <div class="sortControls">
+              <label>Sort by:</label>
+              <select id="synapseSort" class="select">
+                <option value="impact">Impact ↓ (highest)</option>
+                <option value="impactAsc">Impact ↑ (lowest - prunable?)</option>
+                <option value="mse">MSE (source)</option>
+                <option value="absWeight">|Weight|</option>
+                <option value="absContribution">|Contribution|</option>
+                <option value="weight">Weight</option>
+              </select>
+            </div>
+          </div>
+          <div id="synapseListContainer" class="synapseListScroll"></div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+    <!-- PWA Service Worker Registration -->
+    <script>
+      // Register service worker only if supported (required for PWA install + offline cache).
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", async () => {
+          try {
+            await navigator.serviceWorker.register("./sw.js");
+          } catch (e) {
+            // Non-fatal: app can still run without offline support.
+            console.warn("Service worker registration failed:", e);
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
