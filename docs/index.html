@@ -10,6 +10,7 @@
       content="A static viewer for exploring NEAT-AI creature snapshots (neurons, synapses, impacts, and trace navigation)."
     />
     <meta name="theme-color" content="#60a5fa" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="NEAT Explore" />
@@ -83,7 +84,11 @@
           try {
             const registration = await navigator.serviceWorker.register("./sw.js?v=20251218.2");
             // Always check for an updated SW on page load (helps avoid stale cached app.js).
-            await registration.update();
+            // Note: Some browsers occasionally throw here even when the SW is present; don't treat
+            // that as a fatal registration failure.
+            registration.update().catch((e) => {
+              console.warn("Service worker update check failed (non-fatal):", e);
+            });
 
             // When a new SW takes control, reload once so the latest cached assets are used.
             navigator.serviceWorker.addEventListener("controllerchange", () => {
