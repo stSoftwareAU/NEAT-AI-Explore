@@ -11,17 +11,17 @@
     "input": 2,
     "output": 1,
     "neurons": [
-      {"uuid": "input-0", "type": "input", "squash": "IDENTITY", "bias": 0.0},
-      {"uuid": "input-1", "type": "input", "squash": "IDENTITY", "bias": 0.0},
-      {"uuid": "hidden-0", "type": "hidden", "squash": "TANH", "bias": 0.1},
-      {"uuid": "hidden-1", "type": "hidden", "squash": "RELU", "bias": -0.2},
-      {"uuid": "output-0", "type": "output", "squash": "TANH", "bias": 0.05}
+      { "uuid": "input-0", "type": "input", "squash": "IDENTITY", "bias": 0.0 },
+      { "uuid": "input-1", "type": "input", "squash": "IDENTITY", "bias": 0.0 },
+      { "uuid": "hidden-0", "type": "hidden", "squash": "TANH", "bias": 0.1 },
+      { "uuid": "hidden-1", "type": "hidden", "squash": "RELU", "bias": -0.2 },
+      { "uuid": "output-0", "type": "output", "squash": "TANH", "bias": 0.05 }
     ],
     "synapses": [
-      {"fromUuid": "input-0", "toUuid": "hidden-0", "weight": 0.8},
-      {"fromUuid": "input-1", "toUuid": "hidden-1", "weight": -0.5},
-      {"fromUuid": "hidden-0", "toUuid": "output-0", "weight": 1.2},
-      {"fromUuid": "hidden-1", "toUuid": "output-0", "weight": 0.7}
+      { "fromUuid": "input-0", "toUuid": "hidden-0", "weight": 0.8 },
+      { "fromUuid": "input-1", "toUuid": "hidden-1", "weight": -0.5 },
+      { "fromUuid": "hidden-0", "toUuid": "output-0", "weight": 1.2 },
+      { "fromUuid": "hidden-1", "toUuid": "output-0", "weight": 0.7 }
     ]
   },
   "recording": {
@@ -158,7 +158,7 @@
         "maxValueDelta": 0.001,
         "maxActivationDelta": 0.0005,
         "worstSamples": [
-          {"obsIndex": 0, "valueDelta": 0.001, "activationDelta": 0.0005}
+          { "obsIndex": 0, "valueDelta": 0.001, "activationDelta": 0.0005 }
         ]
       },
       {
@@ -172,7 +172,7 @@
         "maxValueDelta": 0.002,
         "maxActivationDelta": 0.001,
         "worstSamples": [
-          {"obsIndex": 4, "valueDelta": 0.002, "activationDelta": 0.001}
+          { "obsIndex": 4, "valueDelta": 0.002, "activationDelta": 0.001 }
         ]
       }
     ]

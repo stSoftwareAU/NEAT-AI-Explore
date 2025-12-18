@@ -6,7 +6,9 @@ function assertEquals<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {
     throw new Error(
       message ??
-        `Assertion failed: expected ${JSON.stringify(expected)} but got ${JSON.stringify(actual)}`
+        `Assertion failed: expected ${JSON.stringify(expected)} but got ${
+          JSON.stringify(actual)
+        }`,
     );
   }
 }
@@ -23,10 +25,12 @@ Deno.test("docs PWA files exist", async () => {
   const manifestPath = repoPath("docs", "manifest.webmanifest");
   const swPath = repoPath("docs", "sw.js");
   const indexPath = repoPath("docs", "index.html");
+  const impactPath = repoPath("docs", "impact_attribution.js");
 
   await Deno.stat(manifestPath);
   await Deno.stat(swPath);
   await Deno.stat(indexPath);
+  await Deno.stat(impactPath);
 });
 
 Deno.test("manifest icons and screenshots exist on disk", async () => {
@@ -52,17 +56,20 @@ Deno.test("service worker caches the app shell", async () => {
   const sw = await Deno.readTextFile(swPath);
 
   // Basic sanity checks - we want the install-time cache list to include these.
-  for (const mustInclude of [
-    '"./index.html"',
-    '"./styles.css"',
-    '"./app.js"',
-    '"./manifest.webmanifest"',
-    '"./icons/icon-192x192.png"',
-    '"./Tooltips.json"'
-  ]) {
+  for (
+    const mustInclude of [
+      '"./index.html"',
+      '"./styles.css"',
+      '"./app.js"',
+      '"./impact_attribution.js"',
+      '"./manifest.webmanifest"',
+      '"./icons/icon-192x192.png"',
+      '"./Tooltips.json"',
+    ]
+  ) {
     assert(
       sw.includes(mustInclude),
-      `Expected service worker to include ${mustInclude} in STATIC_FILES`
+      `Expected service worker to include ${mustInclude} in STATIC_FILES`,
     );
   }
 });
@@ -71,8 +78,14 @@ Deno.test("app loads Tooltips.json (not aliases.json)", async () => {
   const appPath = repoPath("docs", "app.js");
   const js = await Deno.readTextFile(appPath);
 
-  assert(js.includes("./Tooltips.json"), "Expected docs/app.js to fetch ./Tooltips.json");
-  assert(!js.includes("./aliases.json"), "Expected docs/app.js to not fetch ./aliases.json");
+  assert(
+    js.includes("./Tooltips.json"),
+    "Expected docs/app.js to fetch ./Tooltips.json",
+  );
+  assert(
+    !js.includes("./aliases.json"),
+    "Expected docs/app.js to not fetch ./aliases.json",
+  );
 });
 
 Deno.test("docs/index.html links manifest and registers service worker", async () => {
@@ -84,5 +97,3 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
   assert(html.includes("navigator.serviceWorker.register"));
   assertEquals(html.includes("./sw.js"), true);
 });
-
-

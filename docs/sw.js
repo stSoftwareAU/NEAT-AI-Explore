@@ -7,10 +7,10 @@
  *
  * Note: This PWA is a viewer/debug tool. Offline support is best-effort.
  *
- * Version: 20251218.2
+ * Version: 20251218.3
  */
 
-const VERSION = "20251218.2";
+const VERSION = "20251218.3";
 const STATIC_CACHE = `neat-ai-explore-static-v${VERSION}`;
 const RUNTIME_CACHE = `neat-ai-explore-runtime-v${VERSION}`;
 
@@ -18,6 +18,7 @@ const STATIC_FILES = [
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./impact_attribution.js",
   "./Tooltips.json",
   "./manifest.webmanifest",
   "./icons/icon-72x72.png",
@@ -27,7 +28,7 @@ const STATIC_FILES = [
   "./icons/icon-152x152.png",
   "./icons/icon-192x192.png",
   "./icons/icon-384x384.png",
-  "./icons/icon-512x512.png"
+  "./icons/icon-512x512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -40,7 +41,7 @@ self.addEventListener("install", (event) => {
       const results = await Promise.allSettled(
         STATIC_FILES.map((path) =>
           cache.add(new Request(path, { cache: "reload" }))
-        )
+        ),
       );
 
       const failed = results
@@ -50,11 +51,14 @@ self.addEventListener("install", (event) => {
 
       if (failed.length > 0) {
         // Non-fatal: the app will still run, and runtime caching can fill gaps.
-        console.warn("Service Worker: Some static files failed to cache:", failed);
+        console.warn(
+          "Service Worker: Some static files failed to cache:",
+          failed,
+        );
       }
 
       await self.skipWaiting();
-    })()
+    })(),
   );
 });
 
@@ -65,11 +69,13 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys.map((key) => {
-            if (key !== STATIC_CACHE && key !== RUNTIME_CACHE) return caches.delete(key);
-          })
+            if (key !== STATIC_CACHE && key !== RUNTIME_CACHE) {
+              return caches.delete(key);
+            }
+          }),
         )
       )
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -83,7 +89,8 @@ function isSameOrigin(url) {
 
 function isJsonRequest(request) {
   const url = new URL(request.url);
-  return url.pathname.endsWith(".json") || request.headers.get("accept")?.includes("application/json");
+  return url.pathname.endsWith(".json") ||
+    request.headers.get("accept")?.includes("application/json");
 }
 
 async function cacheFirst(request) {
@@ -129,5 +136,3 @@ self.addEventListener("fetch", (event) => {
   // Everything else (css/js/images/manifest) -> cache first.
   event.respondWith(cacheFirst(request));
 });
-
-

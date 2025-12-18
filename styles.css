@@ -15,11 +15,16 @@
   --warning: #fb923c;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   background: var(--bg);
   color: var(--text);
@@ -86,8 +91,12 @@ html, body {
   margin-left: 8px;
 }
 
-.statusInline.ok { color: var(--positive); }
-.statusInline.bad { color: var(--negative); }
+.statusInline.ok {
+  color: var(--positive);
+}
+.statusInline.bad {
+  color: var(--negative);
+}
 
 /* Explorer layout */
 .explorer {
@@ -129,7 +138,7 @@ html, body {
 }
 
 .breadcrumb li::after {
-  content: '→';
+  content: "→";
   color: var(--muted);
   margin: 0 4px;
 }
@@ -199,10 +208,121 @@ html, body {
   word-break: break-all;
 }
 
-.propList dd.positive { color: var(--positive); }
-.propList dd.negative { color: var(--negative); }
-.propList dd.error { color: var(--error); font-weight: 600; }
-.propList dd.highlight { color: var(--highlight); font-weight: 600; }
+.propList dd.positive {
+  color: var(--positive);
+}
+.propList dd.negative {
+  color: var(--negative);
+}
+.propList dd.error {
+  color: var(--error);
+  font-weight: 600;
+}
+.propList dd.highlight {
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+/* Impact breakdown to outputs (heuristic attribution). */
+.impactBreakdown {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.impactBreakdownHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.impactBreakdownTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.impactBreakdownTruncated {
+  font-size: 11px;
+  color: var(--warning);
+  background: rgba(251, 146, 60, 0.15);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.impactBreakdownNote {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+.impactBreakdownRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.impactBreakdownOut {
+  font-family: ui-monospace, monospace;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.impactBreakdownStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.impactBreakdown .stat {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.impactBreakdownPaths {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 8px 0;
+}
+
+.impactBreakdownPaths li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+
+.impactPath {
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.impactPathScore {
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
 
 /* Flow arrow */
 .flowArrow {
@@ -326,10 +446,20 @@ html, body {
   white-space: nowrap;
 }
 
-.synapseStats .stat.positive { color: var(--positive); }
-.synapseStats .stat.negative { color: var(--negative); }
-.synapseStats .stat.error { color: var(--error); background: rgba(239, 68, 68, 0.15); }
-.synapseStats .stat.highlight { color: var(--highlight); background: rgba(251, 191, 36, 0.15); }
+.synapseStats .stat.positive {
+  color: var(--positive);
+}
+.synapseStats .stat.negative {
+  color: var(--negative);
+}
+.synapseStats .stat.error {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.15);
+}
+.synapseStats .stat.highlight {
+  color: var(--highlight);
+  background: rgba(251, 191, 36, 0.15);
+}
 
 .synapseNav {
   color: var(--accent);

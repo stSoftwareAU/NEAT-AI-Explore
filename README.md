@@ -5,16 +5,19 @@ debug tool for investigating why discovery candidates fail or succeed.
 
 ## GitHub Pages + PWA
 
-This repo is configured to deploy a **Progressive Web App (PWA)** to **GitHub Pages**.
-The published site lives in `docs/` (mirrors the approach used in `../GRQ-health`).
+This repo is configured to deploy a **Progressive Web App (PWA)** to **GitHub
+Pages**. The published site lives in `docs/` (mirrors the approach used in
+`../GRQ-health`).
 
 - **Published folder**: `docs/`
-- **PWA files**: `docs/manifest.webmanifest`, `docs/sw.js`, `docs/icons/*`, `docs/screenshots/*`
+- **PWA files**: `docs/manifest.webmanifest`, `docs/sw.js`, `docs/icons/*`,
+  `docs/screenshots/*`
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
 ## Quick Start
 
-1. **Export a snapshot** from NEAT-AI-Discovery using `export_visualisation_snapshot`:
+1. **Export a snapshot** from NEAT-AI-Discovery using
+   `export_visualisation_snapshot`:
    ```json
    {
      "parquetFile": "/path/to/records.parquet",
@@ -41,7 +44,8 @@ The published site lives in `docs/` (mirrors the approach used in `../GRQ-health
 
 ### Quick Start (GitHub Pages / PWA build)
 
-For local testing of the GitHub Pages site (what actually deploys), serve `docs/`:
+For local testing of the GitHub Pages site (what actually deploys), serve
+`docs/`:
 
 ```bash
 cd docs
@@ -52,12 +56,14 @@ Then open `http://localhost:8000`.
 
 ## Features
 
-- **Trace Explorer**: Click on output neuron → see inbound synapses → click to go
-  upstream → repeat until you reach inputs. Builds a breadcrumb trail.
-- **Synapse Sorting**: Sort inbound synapses by |weight|, weight, or |mean contribution|.
-- **Neuron Details**: Shows type, squash, bias, impact score, and recorded stats.
-- **Reconstruction Checks**: If enabled in export, shows max value/activation deltas
-  to identify recording or squash function mismatches.
+- **Trace Explorer**: Click on output neuron → see inbound synapses → click to
+  go upstream → repeat until you reach inputs. Builds a breadcrumb trail.
+- **Synapse Sorting**: Sort inbound synapses by |weight|, weight, or |mean
+  contribution|.
+- **Neuron Details**: Shows type, squash, bias, impact score, and recorded
+  stats.
+- **Reconstruction Checks**: If enabled in export, shows max value/activation
+  deltas to identify recording or squash function mismatches.
 
 ## Snapshot JSON Format
 
@@ -124,6 +130,7 @@ python scripts/generate_pwa_assets.py
 ```
 
 Outputs:
+
 - `docs/icons/icon-<size>x<size>.png`
 - `docs/screenshots/desktop-screenshot.png`
 - `docs/screenshots/mobile-screenshot.png`
@@ -132,8 +139,7 @@ Last updated: 18-Dec-2025
 
 ## Creating a public GitHub repo (next to `../NEAT-AI`)
 
-This folder already exists at:
-`/Users/nigelleck/Develop/NEAT-AI-Explore`
+This folder already exists at: `/Users/nigelleck/Develop/NEAT-AI-Explore`
 
 To publish it as a **public** GitHub repo:
 
@@ -156,18 +162,21 @@ gh repo create NEAT-AI-Explore --public --source=. --remote=origin --push
 ```
 
 Then enable GitHub Pages:
-- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub Actions**
+
+- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub
+  Actions**
 
 ### Fixing `configure-pages` "HttpError: Not Found" on first deploy
 
-If the workflow fails with:
-`Get Pages site failed ... HttpError: Not Found`
+If the workflow fails with: `Get Pages site failed ... HttpError: Not Found`
 
-It usually means GitHub Pages has not been enabled for the repository yet (or the
-organisation requires it to be enabled manually).
+It usually means GitHub Pages has not been enabled for the repository yet (or
+the organisation requires it to be enabled manually).
 
 Fix:
-- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub Actions**
+
+- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub
+  Actions**
 
 Then re-run the workflow (or push again to `Develop`).
 
