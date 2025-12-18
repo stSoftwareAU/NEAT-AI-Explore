@@ -1,85 +1,97 @@
-name: SemVer bump (PR safety)
+name: Update Package Version
 
 on:
-  pull_request_target:
-    branches: [Develop]
+  pull_request:
     types: [opened, synchronize, reopened]
-
-permissions:
-  contents: write
-  pull-requests: write
+    branches:
+      - Develop
 
 jobs:
-  bump:
+  update-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - name: Checkout PR branch
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.ACTIONS_PUSH }}
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
 
-      - name: Auto-bump patch if version unchanged
-        env:
-          BASE_REF: ${{ github.base_ref }}
+      - name: Check Version Update
+        id: check_version
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
 
-          base_version="$(git show "origin/${BASE_REF}:version.json" | python3 - <<'PY'
-          import json,sys
-          obj=json.load(sys.stdin)
-          print(obj["version"])
-          PY
-          )"
+          # Get the base branch version
+          git fetch origin ${{ github.base_ref }}:${{ github.base_ref }} || true
+          git show origin/${{ github.base_ref }}:version.json > /tmp/base_version.json 2>/dev/null || echo "{}" > /tmp/base_version.json
 
-          head_version="$(python3 - <<'PY'
-          import json
-          with open("version.json","r",encoding="utf-8") as f:
-            obj=json.load(f)
-          print(obj["version"])
-          PY
-          )"
+          BASE_VERSION=$(deno eval "try { const json = JSON.parse(Deno.readTextFileSync('/tmp/base_version.json')); console.log(json.version || ''); } catch { console.log(''); }")
 
-          echo "Base version: ${base_version}"
-          echo "Head version: ${head_version}"
+          # Get the current PR version
+          CURRENT_VERSION=$(deno eval "const json = JSON.parse(Deno.readTextFileSync('version.json')); console.log(json.version)")
 
-          if [ "${base_version}" != "${head_version}" ]; then
-            echo "Version already changed in PR; no bump needed."
-            exit 0
+          echo "Base version: $BASE_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+
+          if [ -z \"$BASE_VERSION\" ]; then
+            echo \"Could not determine base version, skipping update\"
+            echo \"needs_update=false\" >> $GITHUB_OUTPUT
+          elif [ \"$CURRENT_VERSION\" = \"$BASE_VERSION\" ]; then
+            echo \"Version unchanged, will update patch version\"
+            echo \"needs_update=true\" >> $GITHUB_OUTPUT
+            echo \"base_version=$BASE_VERSION\" >> $GITHUB_OUTPUT
+          else
+            echo \"Version has been updated in PR\"
+            echo \"needs_update=false\" >> $GITHUB_OUTPUT
           fi
 
-          bumped="$(python3 - <<'PY'
-          import json,re
-          with open("version.json","r",encoding="utf-8") as f:
-            obj=json.load(f)
-          v=obj.get("version","")
-          m=re.match(r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$", v)
-          if not m:
-            raise SystemExit(f"Invalid SemVer in version.json: {v}")
-          major,minor,patch=map(int,m.groups())
-          patch += 1
-          obj["version"]=f"{major}.{minor}.{patch}"
-          with open("version.json","w",encoding="utf-8") as f:
-            json.dump(obj,f,indent=2)
-            f.write(\"\\n\")
-          print(obj["version"])
-          PY
-          )"
+      - name: Update Patch Version
+        if: steps.check_version.outputs.needs_update == 'true'
+        run: |
+          set -Eeuo pipefail
 
-          echo "Bumped version to ${bumped}"
+          BASE_VERSION="${{ steps.check_version.outputs.base_version }}"
 
-          git status --porcelain
-          if git diff --quiet; then
-            echo "No changes after bump; exiting."
-            exit 0
-          fi
+          # Parse version (e.g., 0.1.0 -> 0.1.1)
+          IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
 
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+          echo "Updating version from $BASE_VERSION to $NEW_VERSION"
+
+          deno eval "
+            const json = JSON.parse(Deno.readTextFileSync('version.json'));
+            json.version = '$NEW_VERSION';
+            Deno.writeTextFileSync('version.json', JSON.stringify(json, null, 2) + '\n');
+          "
+
+          echo "Updated version to: $NEW_VERSION"
+
+      - name: Commit Version Update
+        if: steps.check_version.outputs.needs_update == 'true'
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.json
-          git commit -m "chore(version): bump to ${bumped}"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: auto-increment patch version"
+          fi
+
+      - name: Push Version Update
+        if: steps.check_version.outputs.needs_update == 'true'
+        run: |
+          git push origin || echo "Push failed or no changes to push"
