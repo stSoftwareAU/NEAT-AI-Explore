@@ -29,6 +29,7 @@
  *   synapses: Synapse[],
  *   outputUuids: string[],
  *   neuronImpact?: number | null,
+ *   collectPaths?: boolean,
  *   maxDepth?: number,
  *   maxPaths?: number,
  *   topPathsPerOutput?: number
@@ -36,7 +37,11 @@
  */
 
 /**
- * @typedef {{ path: string[], score: number }} ScoredPath
+ * @typedef {{ fromUuid: string, toUuid: string, weight: number }} PathStep
+ */
+
+/**
+ * @typedef {{ nodes: string[], steps: PathStep[], score: number }} ScoredPath
  */
 
 /**
@@ -47,6 +52,7 @@
  *   allocatedImpact: number | null,
  *   pathCount: number,
  *   topPaths: ScoredPath[]
+ *   paths?: ScoredPath[]
  * }} OutputBreakdown
  */
 
@@ -78,6 +84,7 @@ export function computeImpactBreakdownToOutputs(input) {
     synapses,
     outputUuids,
     neuronImpact = null,
+    collectPaths = false,
     maxDepth = 10,
     maxPaths = 2500,
     topPathsPerOutput = 3,
@@ -108,10 +115,15 @@ export function computeImpactBreakdownToOutputs(input) {
     outgoing.get(s.fromUuid).push(s);
   }
 
-  /** @type {Map<string, {score: number, pathCount: number, topPaths: ScoredPath[]}>} */
+  /** @type {Map<string, {score: number, pathCount: number, topPaths: ScoredPath[], paths?: ScoredPath[]}>} */
   const byOutput = new Map();
   for (const out of outputSet) {
-    byOutput.set(out, { score: 0, pathCount: 0, topPaths: [] });
+    byOutput.set(
+      out,
+      collectPaths
+        ? { score: 0, pathCount: 0, topPaths: [], paths: [] }
+        : { score: 0, pathCount: 0, topPaths: [] },
+    );
   }
 
   let truncated = false;
@@ -119,10 +131,11 @@ export function computeImpactBreakdownToOutputs(input) {
 
   /**
    * @param {string} outputUuid
-   * @param {string[]} path
+   * @param {string[]} nodes
+   * @param {PathStep[]} steps
    * @param {number} score
    */
-  function recordPath(outputUuid, path, score) {
+  function recordPath(outputUuid, nodes, steps, score) {
     const agg = byOutput.get(outputUuid);
     if (!agg) return;
 
@@ -130,10 +143,15 @@ export function computeImpactBreakdownToOutputs(input) {
     agg.pathCount += 1;
 
     // Maintain a small "top N" list by path score.
-    agg.topPaths.push({ path, score });
+    agg.topPaths.push({ nodes, steps, score });
     agg.topPaths.sort((a, b) => b.score - a.score);
     if (agg.topPaths.length > topPathsPerOutput) {
       agg.topPaths.length = topPathsPerOutput;
+    }
+
+    if (collectPaths) {
+      // Bounded by the global enumeration safety limits; store in encounter order.
+      agg.paths?.push({ nodes, steps, score });
     }
   }
 
@@ -141,12 +159,13 @@ export function computeImpactBreakdownToOutputs(input) {
    * Depth-first enumeration of acyclic forward paths.
    *
    * @param {string} node
-   * @param {string[]} path
+   * @param {string[]} nodes
+   * @param {PathStep[]} steps
    * @param {Set<string>} seenOnPath
    * @param {number} score
    * @param {number} depth
    */
-  function dfs(node, path, seenOnPath, score, depth) {
+  function dfs(node, nodes, steps, seenOnPath, score, depth) {
     if (truncated) return;
     if (depth > maxDepth) return;
 
@@ -158,7 +177,7 @@ export function computeImpactBreakdownToOutputs(input) {
         truncated = true;
         return;
       }
-      recordPath(node, path, score);
+      recordPath(node, nodes, steps, score);
       return;
     }
 
@@ -170,16 +189,21 @@ export function computeImpactBreakdownToOutputs(input) {
       if (seenOnPath.has(next)) continue; // avoid cycles
 
       const nextScore = score * Math.abs(s.weight);
-      const nextPath = path.concat([next]);
+      const nextNodes = nodes.concat([next]);
+      const nextSteps = steps.concat([{
+        fromUuid: s.fromUuid,
+        toUuid: s.toUuid,
+        weight: s.weight,
+      }]);
       const nextSeen = new Set(seenOnPath);
       nextSeen.add(next);
 
-      dfs(next, nextPath, nextSeen, nextScore, depth + 1);
+      dfs(next, nextNodes, nextSteps, nextSeen, nextScore, depth + 1);
       if (truncated) return;
     }
   }
 
-  dfs(startUuid, [startUuid], new Set([startUuid]), 1, 0);
+  dfs(startUuid, [startUuid], [], new Set([startUuid]), 1, 0);
 
   let totalScore = 0;
   for (const { score } of byOutput.values()) totalScore += score;
@@ -190,7 +214,7 @@ export function computeImpactBreakdownToOutputs(input) {
     for (const [outputUuid, agg] of byOutput.entries()) {
       if (agg.pathCount <= 0) continue;
       const share = agg.score / totalScore;
-      outputs.push({
+      const out = {
         outputUuid,
         score: agg.score,
         share,
@@ -200,7 +224,9 @@ export function computeImpactBreakdownToOutputs(input) {
             : null,
         pathCount: agg.pathCount,
         topPaths: agg.topPaths,
-      });
+      };
+      if (collectPaths) out.paths = agg.paths ?? [];
+      outputs.push(out);
     }
   }
 

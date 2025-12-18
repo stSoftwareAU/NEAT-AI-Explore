@@ -93,6 +93,36 @@
     </main>
 
     <script type="module" src="./app.js"></script>
+
+    <!-- Impact path inspector modal (for "show your working"). -->
+    <div id="pathModal" class="modal" aria-hidden="true">
+      <div id="pathModalBackdrop" class="modalBackdrop"></div>
+      <div
+        class="modalPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Impact path inspector"
+      >
+        <div class="modalHeader">
+          <div id="pathModalTitle" class="modalTitle">
+            Impact path inspector
+          </div>
+          <button
+            id="pathModalClose"
+            class="button buttonSmall buttonSecondary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <div id="pathModalBody" class="modalBody"></div>
+        <div class="modalFooter">
+          <button id="pathModalMore" class="button buttonSmall" type="button">
+            Show more
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- PWA Service Worker Registration -->
     <script>
       // Register service worker only if supported (required for PWA install + offline cache).

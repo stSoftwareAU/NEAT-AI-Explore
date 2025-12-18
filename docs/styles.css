@@ -323,6 +323,21 @@ html, body {
   padding: 2px 0;
 }
 
+.impactBreakdownBtn {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.impactBreakdownBtn:hover {
+  background: rgba(96, 165, 250, 0.22);
+  border-color: var(--accent);
+}
+
 .impactPath {
   font-family: ui-monospace, monospace;
   overflow: hidden;
@@ -334,6 +349,135 @@ html, body {
 .impactPathScore {
   font-family: ui-monospace, monospace;
   white-space: nowrap;
+}
+
+/* Modal (path inspector). */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 1000;
+}
+
+.modal.isOpen {
+  display: block;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modalPanel {
+  position: relative;
+  width: min(980px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  margin: 12px auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modalTitle {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modalBody {
+  padding: 12px 14px;
+  overflow: auto;
+}
+
+.modalFooter {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modalKvp {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.modalKvp dt {
+  color: var(--muted);
+}
+
+.modalKvp dd {
+  font-family: ui-monospace, monospace;
+  word-break: break-word;
+}
+
+.pathList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pathItem {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.pathItem summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pathItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.pathSummaryPath {
+  font-family: ui-monospace, monospace;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.pathSummaryScore {
+  font-family: ui-monospace, monospace;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.pathDetails {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pathEquation {
+  font-family: ui-monospace, monospace;
+  color: var(--text);
+  margin-top: 6px;
+  word-break: break-word;
 }
 
 /* Flow arrow */

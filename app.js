@@ -19,6 +19,13 @@ let trace = []; // Array of neuron UUIDs
 let uuidToLabel = {}; // "input-N" -> "human-name"
 let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 
+let lastImpactBreakdown = null;
+let lastImpactNeuronUuid = null;
+let lastImpactNeuronImpact = null;
+let lastImpactOutputUuid = null;
+let lastImpactPathPage = 0;
+const IMPACT_PATH_PAGE_SIZE = 200;
+
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
 const IMPACT_SUSPICIOUS_THRESHOLD = 1e-8; // Suspiciously low - should be prunable
@@ -52,6 +59,12 @@ const el = {
   currentNeuronTitle: document.getElementById("currentNeuronTitle"),
   neuronProps: document.getElementById("neuronProps"),
   impactBreakdown: document.getElementById("impactBreakdown"),
+  pathModal: document.getElementById("pathModal"),
+  pathModalBackdrop: document.getElementById("pathModalBackdrop"),
+  pathModalTitle: document.getElementById("pathModalTitle"),
+  pathModalBody: document.getElementById("pathModalBody"),
+  pathModalClose: document.getElementById("pathModalClose"),
+  pathModalMore: document.getElementById("pathModalMore"),
   synapseCount: document.getElementById("synapseCount"),
   synapseSort: document.getElementById("synapseSort"),
   synapseListContainer: document.getElementById("synapseListContainer"),
@@ -403,6 +416,7 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
     synapses,
     outputUuids: outputs,
     neuronImpact: neuronImpact ?? null,
+    collectPaths: true,
     maxDepth: 10,
     maxPaths: 2500,
     topPathsPerOutput: 3,
@@ -417,6 +431,12 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
   const note =
     "Heuristic allocation using |weight| products across forward paths. " +
     "This is shown to explain multi-path fan-out; it isn't a ground-truth per-synapse impact.";
+
+  lastImpactBreakdown = breakdown;
+  lastImpactNeuronUuid = uuid;
+  lastImpactNeuronImpact = neuronImpact ?? null;
+  lastImpactOutputUuid = null;
+  lastImpactPathPage = 0;
 
   const headerHtml = `
     <div class="impactBreakdownHeader">
@@ -444,7 +464,7 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
         (o.topPaths ?? []).map((p) => `
             <li title="Path score: product(|weight|)">
               <span class="impactPath">${
-          escapeHtml(p.path.map(truncateUuid).join(" → "))
+          escapeHtml(p.nodes.map(truncateUuid).join(" → "))
         }</span>
               <span class="impactPathScore">${
           escapeHtml(formatSig(p.score, 3))
@@ -469,6 +489,11 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
           <span class="stat" title="Distinct acyclic forward paths considered">paths: ${
       escapeHtml(String(o.pathCount))
     }</span>
+          <button class="impactBreakdownBtn" type="button" data-output="${
+      escapeHtml(o.outputUuid)
+    }" title="Inspect all paths and calculations">
+            Inspect
+          </button>
         </div>
       </div>
       ${pathsHtml}
@@ -477,7 +502,171 @@ function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
 
   el.impactBreakdown.innerHTML = headerHtml +
     `<div class="impactBreakdownList">${rows}</div>`;
+
+  // Event delegation for the newly-rendered buttons.
+  el.impactBreakdown.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest(".impactBreakdownBtn");
+    if (!btn) return;
+    const outputUuid = btn.getAttribute("data-output");
+    if (!outputUuid) return;
+    openPathModal(outputUuid);
+  };
 }
+
+function openPathModal(outputUuid) {
+  if (!el.pathModal || !el.pathModalBody || !el.pathModalTitle) return;
+  if (!lastImpactBreakdown) return;
+
+  lastImpactOutputUuid = outputUuid;
+  lastImpactPathPage = 0;
+
+  el.pathModal.classList.add("isOpen");
+  el.pathModal.setAttribute("aria-hidden", "false");
+  renderPathModalPage();
+}
+
+function closePathModal() {
+  if (!el.pathModal) return;
+  el.pathModal.classList.remove("isOpen");
+  el.pathModal.setAttribute("aria-hidden", "true");
+}
+
+function renderPathModalPage() {
+  if (!el.pathModalBody || !el.pathModalTitle || !el.pathModalMore) return;
+  if (!lastImpactBreakdown || !lastImpactOutputUuid) return;
+
+  const out = (lastImpactBreakdown.outputs ?? []).find((o) =>
+    o.outputUuid === lastImpactOutputUuid
+  );
+  if (!out) return;
+
+  const paths = (out.paths ?? out.topPaths ?? []).slice().sort((a, b) =>
+    (b.score ?? 0) - (a.score ?? 0)
+  );
+
+  const total = paths.length;
+  const shown = Math.min(
+    total,
+    (lastImpactPathPage + 1) * IMPACT_PATH_PAGE_SIZE,
+  );
+
+  const neuronImpact = lastImpactNeuronImpact;
+  const outputScore = out.score ?? 0;
+  const totalScore = lastImpactBreakdown.totalScore ?? 0;
+  const share = out.share ?? 0;
+  const allocated = typeof neuronImpact === "number" && isFinite(neuronImpact)
+    ? neuronImpact * share
+    : null;
+
+  el.pathModalTitle.textContent = `Impact path inspector: ${
+    truncateUuid(lastImpactNeuronUuid ?? "")
+  } → ${truncateUuid(lastImpactOutputUuid)}`;
+
+  const eqAllocated = allocated != null
+    ? `${formatSig(neuronImpact, 6)} × ${formatSig(share, 6)} = ${
+      formatSig(allocated, 6)
+    }`
+    : "N/A";
+
+  const header = `
+    <dl class="modalKvp">
+      <dt>Neuron</dt>
+      <dd>${escapeHtml(lastImpactNeuronUuid ?? "N/A")}</dd>
+      <dt>Output</dt>
+      <dd>${escapeHtml(lastImpactOutputUuid)}</dd>
+      <dt>Paths enumerated</dt>
+      <dd>${escapeHtml(String(out.pathCount ?? total))}${
+    lastImpactBreakdown.truncated
+      ? ' <span class="impactBreakdownTruncated">truncated</span>'
+      : ""
+  }</dd>
+      <dt>Output score</dt>
+      <dd>${escapeHtml(formatSig(outputScore, 6))}</dd>
+      <dt>Total score</dt>
+      <dd>${escapeHtml(formatSig(totalScore, 6))}</dd>
+      <dt>Share</dt>
+      <dd>${escapeHtml(formatSig(share, 6))} (=${
+    escapeHtml(formatSig(share * 100, 4))
+  }%)</dd>
+      <dt>Allocated impact</dt>
+      <dd>${
+    escapeHtml(allocated != null ? formatSig(allocated, 6) : "N/A")
+  } <span class="pathEquation">(= impact × share: ${
+    escapeHtml(eqAllocated)
+  })</span></dd>
+    </dl>
+    <div class="impactBreakdownNote">
+      Path score per path: <span class="pathEquation">∏ |weight|</span>. Output score: <span class="pathEquation">Σ (path score)</span>. Share: <span class="pathEquation">outputScore / totalScore</span>.
+    </div>
+  `;
+
+  const items = paths.slice(0, shown).map((p, idx) => {
+    const nodes = p.nodes ?? [];
+    const steps = p.steps ?? [];
+    const absWeights = steps.map((s) => Math.abs(s.weight));
+    const recomputed = absWeights.reduce((acc, w) => acc * w, 1);
+    const chain = nodes.map(truncateUuid).join(" → ");
+    const weightStr = steps.map((s) => formatSig(s.weight, 6)).join(", ");
+    const absStr = absWeights.map((w) => formatSig(w, 6)).join(" × ");
+    const eq = absWeights.length > 0
+      ? `${absStr} = ${formatSig(recomputed, 6)}`
+      : `1 = ${formatSig(recomputed, 6)}`;
+
+    return `
+      <details class="pathItem">
+        <summary>
+          <span class="pathSummaryPath">${escapeHtml(chain)}</span>
+          <span class="pathSummaryScore">${
+      escapeHtml(formatSig(p.score, 6))
+    }</span>
+        </summary>
+        <div class="pathDetails">
+          <div>Weights (signed): <span class="pathEquation">${
+      escapeHtml(weightStr || "N/A")
+    }</span></div>
+          <div>Score: <span class="pathEquation">${escapeHtml(eq)}</span></div>
+          <div>Recorded score: <span class="pathEquation">${
+      escapeHtml(formatSig(p.score, 6))
+    }</span> (Δ=${escapeHtml(formatSig((p.score ?? 0) - recomputed, 6))})</div>
+          <div class="impactBreakdownNote">Path #${
+      escapeHtml(String(idx + 1))
+    }</div>
+        </div>
+      </details>
+    `;
+  }).join("");
+
+  el.pathModalBody.innerHTML = header + `<div class="pathList">${items}</div>`;
+
+  // Update "show more" button.
+  if (shown >= total) {
+    el.pathModalMore.style.display = "none";
+  } else {
+    el.pathModalMore.style.display = "";
+    el.pathModalMore.textContent = `Show more (${shown}/${total})`;
+  }
+}
+
+// Modal wiring (close / backdrop / pagination). These are no-ops if the modal
+// isn't present (e.g., older HTML).
+if (el.pathModalBackdrop) {
+  el.pathModalBackdrop.onclick = () => closePathModal();
+}
+if (el.pathModalClose) {
+  el.pathModalClose.onclick = () => closePathModal();
+}
+if (el.pathModalMore) {
+  el.pathModalMore.onclick = () => {
+    lastImpactPathPage += 1;
+    renderPathModalPage();
+  };
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closePathModal();
+});
 
 function getInboundSynapses(toUuid) {
   return synapses.filter((s) => s.toUuid === toUuid);

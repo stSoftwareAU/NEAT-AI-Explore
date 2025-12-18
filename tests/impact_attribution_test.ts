@@ -70,7 +70,7 @@ Deno.test("computeImpactBreakdownToOutputs splits impact across outputs and path
   assert(Math.abs((out1.allocatedImpact ?? 0) - 0.1) < tol);
 
   // Ensure both distinct output-0 paths are present.
-  const out0Paths = new Set(out0.topPaths.map((p) => p.path.join("→")));
+  const out0Paths = new Set(out0.topPaths.map((p) => p.nodes.join("→")));
   assert(out0Paths.has("hidden-A→output-0"));
   assert(out0Paths.has("hidden-A→hidden-B→output-0"));
 });
