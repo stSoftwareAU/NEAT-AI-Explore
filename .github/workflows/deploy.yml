@@ -5,6 +5,8 @@ on:
     branches: [Develop]
     paths:
       - "docs/**"
+      - "scripts/inject_build_id.ts"
+      - "version.json"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 

@@ -21,6 +21,20 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
+Deno.test("version.json exists and is SemVer X.Y.Z", async () => {
+  const versionPath = repoPath("version.json");
+  const obj = JSON.parse(await Deno.readTextFile(versionPath));
+  const v = obj?.version;
+  assert(
+    typeof v === "string",
+    "Expected version.json to have a string 'version'",
+  );
+  assert(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(v),
+    "Expected version.json version to be SemVer X.Y.Z",
+  );
+});
+
 Deno.test("docs PWA files exist", async () => {
   const manifestPath = repoPath("docs", "manifest.webmanifest");
   const swPath = repoPath("docs", "sw.js");

@@ -14,6 +14,19 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   `docs/screenshots/*`
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
+## Versioning (SemVer)
+
+This repo uses **Semantic Versioning** (**SemVer**, `MAJOR.MINOR.PATCH`) as the
+human-facing version number. See [SemVer](https://semver.org/).
+
+- **Source of truth**: `version.json`
+- **PR automation**: if a PR targets `Develop` and does not change
+  `version.json`, a GitHub Action will automatically bump the **patch** version
+  and push it to the PR branch.
+- **Deploy cache busting**: GitHub Pages deploy replaces a `__BUILD_ID__`
+  placeholder in `docs/index.html` and `docs/sw.js` with the commit SHA, so
+  users receive updated assets without needing to clear caches.
+
 ## Quick Start
 
 1. **Export a snapshot** from NEAT-AI-Discovery using
