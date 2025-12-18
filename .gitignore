@@ -1,0 +1,11 @@
+# Local snapshot files can be huge.
+snapshot.json
+*.snapshot.json
+*.snap.json
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
