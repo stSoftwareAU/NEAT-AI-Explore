@@ -57,13 +57,22 @@ Deno.test("service worker caches the app shell", async () => {
     '"./styles.css"',
     '"./app.js"',
     '"./manifest.webmanifest"',
-    '"./icons/icon-192x192.png"'
+    '"./icons/icon-192x192.png"',
+    '"./Tooltips.json"'
   ]) {
     assert(
       sw.includes(mustInclude),
       `Expected service worker to include ${mustInclude} in STATIC_FILES`
     );
   }
+});
+
+Deno.test("app loads Tooltips.json (not aliases.json)", async () => {
+  const appPath = repoPath("docs", "app.js");
+  const js = await Deno.readTextFile(appPath);
+
+  assert(js.includes("./Tooltips.json"), "Expected docs/app.js to fetch ./Tooltips.json");
+  assert(!js.includes("./aliases.json"), "Expected docs/app.js to not fetch ./aliases.json");
 });
 
 Deno.test("docs/index.html links manifest and registers service worker", async () => {

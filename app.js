@@ -14,8 +14,8 @@ let SNAPSHOT = null;
 let synapses = [];
 let neuronsByUuid = new Map();
 let trace = []; // Array of neuron UUIDs
-let aliasToUuid = {};  // "human-name" -> "input-N"
-let uuidToAlias = {};  // "input-N" -> "human-name"
+let uuidToLabel = {};  // "input-N" -> "human-name"
+let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1;      // Highlight if impact > 0.1
@@ -53,26 +53,42 @@ const el = {
 };
 
 // ============================================================================
-// Aliases
+// Input labels and descriptions (Tooltips.json)
 // ============================================================================
 
-async function loadAliases() {
+async function loadInputLabels() {
   try {
-    const res = await fetch('./aliases.json', { cache: 'no-store' });
+    const res = await fetch('./Tooltips.json', { cache: 'no-store' });
     if (!res.ok) return;
-    aliasToUuid = await res.json();
-    uuidToAlias = {};
-    for (const [name, uuid] of Object.entries(aliasToUuid)) {
-      uuidToAlias[uuid] = name;
+    const tooltipsByUuid = await res.json();
+
+    uuidToLabel = {};
+    uuidToDescription = {};
+
+    for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
+      if (!uuid || typeof uuid !== 'string') continue;
+      if (!info || typeof info !== 'object') continue;
+      const label = info.label;
+      const description = info.description;
+      if (typeof label === 'string' && label.trim().length > 0) {
+        uuidToLabel[uuid] = label;
+      }
+      if (typeof description === 'string' && description.trim().length > 0) {
+        uuidToDescription[uuid] = description;
+      }
     }
-    console.log(`Loaded ${Object.keys(uuidToAlias).length} aliases`);
+    console.log(`Loaded ${Object.keys(uuidToLabel).length} input labels`);
   } catch (e) {
-    console.warn('Could not load aliases.json:', e.message);
+    console.warn('Could not load Tooltips.json:', e.message);
   }
 }
 
 function getAlias(uuid) {
-  return uuidToAlias[uuid] ?? null;
+  return uuidToLabel[uuid] ?? null;
+}
+
+function getInputDescription(uuid) {
+  return uuidToDescription[uuid] ?? null;
 }
 
 // ============================================================================
@@ -231,7 +247,11 @@ function renderTrace() {
     const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.textContent = truncateNeuronName(uuid);
-    btn.title = uuid + (getAlias(uuid) ? ` (${getAlias(uuid)})` : '');
+    const alias = getAlias(uuid);
+    const desc = getInputDescription(uuid);
+    btn.title = uuid +
+      (alias ? ` (${alias})` : '') +
+      (desc ? ` — ${desc}` : '');
     btn.onclick = () => navigateTo(uuid);
     li.appendChild(btn);
     el.traceBreadcrumb.appendChild(li);
@@ -261,10 +281,13 @@ function getImpactClass(impact) {
 function renderCurrentNeuron(uuid) {
   const n = neuronsByUuid.get(uuid) ?? { uuid, type: 'input', squash: 'IDENTITY', bias: 0 };
   const alias = getAlias(uuid);
+  const desc = getInputDescription(uuid);
   const isInput = uuid.startsWith('input-');
   
   if (alias) {
-    el.currentNeuronTitle.innerHTML = `<span class="aliasName">${alias}</span><span class="uuidSmall">${uuid}</span>`;
+    el.currentNeuronTitle.innerHTML =
+      `<span class="aliasName" title="${desc ? escapeHtml(desc) : ''}">${escapeHtml(alias)}</span>` +
+      `<span class="uuidSmall">${escapeHtml(uuid)}</span>`;
   } else {
     el.currentNeuronTitle.textContent = uuid;
   }
@@ -393,11 +416,11 @@ function renderSynapseList(toUuid) {
     let nameHtml;
     if (syn.alias) {
       nameHtml = `
-        <span class="neuronAlias">${syn.alias}</span>
-        <span class="neuronUuidSmall">${syn.fromUuid}</span>
+        <span class="neuronAlias" title="${escapeHtml(getInputDescription(syn.fromUuid) ?? '')}">${escapeHtml(syn.alias)}</span>
+        <span class="neuronUuidSmall">${escapeHtml(syn.fromUuid)}</span>
       `;
     } else {
-      nameHtml = `<span class="neuronUuid">${syn.fromUuid}</span>`;
+      nameHtml = `<span class="neuronUuid">${escapeHtml(syn.fromUuid)}</span>`;
     }
 
     const statsHtml = [];
@@ -453,6 +476,15 @@ function formatSig(n, sigFigs = 3) {
   return Number(n.toPrecision(sigFigs)).toString();
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 // ============================================================================
 // Event Listeners
 // ============================================================================
@@ -494,7 +526,7 @@ el.fetchUrl.onkeydown = (e) => {
 // Init
 // ============================================================================
 
-loadAliases().then(() => {
+loadInputLabels().then(() => {
   const params = new URLSearchParams(window.location.search);
   const fileParam = params.get('file');
   if (fileParam) {

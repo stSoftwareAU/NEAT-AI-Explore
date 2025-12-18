@@ -19,7 +19,7 @@ const STATIC_FILES = [
   "./index.html",
   "./styles.css",
   "./app.js",
-  "./aliases.json",
+  "./Tooltips.json",
   "./sample-snapshot.json",
   "./snapshot.json",
   "./manifest.webmanifest",
