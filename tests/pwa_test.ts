@@ -21,6 +21,20 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
+Deno.test("version.json exists and is SemVer X.Y.Z", async () => {
+  const versionPath = repoPath("version.json");
+  const obj = JSON.parse(await Deno.readTextFile(versionPath));
+  const v = obj?.version;
+  assert(
+    typeof v === "string",
+    "Expected version.json to have a string 'version'",
+  );
+  assert(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(v),
+    "Expected version.json version to be SemVer X.Y.Z",
+  );
+});
+
 Deno.test("docs PWA files exist", async () => {
   const manifestPath = repoPath("docs", "manifest.webmanifest");
   const swPath = repoPath("docs", "sw.js");
@@ -59,8 +73,8 @@ Deno.test("service worker caches the app shell", async () => {
   for (
     const mustInclude of [
       '"./index.html"',
-      '"./styles.css"',
-      '"./app.js"',
+      "`./styles.css?v=${VERSION}`",
+      "`./app.js?v=${VERSION}`",
       '"./impact_attribution.js"',
       '"./impact_diagnostics.js"',
       '"./manifest.webmanifest"',
@@ -97,4 +111,16 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
   assert(html.includes("./manifest.webmanifest"));
   assert(html.includes("navigator.serviceWorker.register"));
   assertEquals(html.includes("./sw.js"), true);
+  assert(
+    html.includes("app.js?v=__BUILD_ID__"),
+    "Expected docs/index.html to cache-bust app.js with __BUILD_ID__",
+  );
+  assert(
+    html.includes("styles.css?v=__BUILD_ID__"),
+    "Expected docs/index.html to cache-bust styles.css with __BUILD_ID__",
+  );
+  assert(
+    html.includes("sw.js?v=__BUILD_ID__"),
+    "Expected docs/index.html to cache-bust sw.js with __BUILD_ID__",
+  );
 });
