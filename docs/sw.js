@@ -15,13 +15,10 @@ const STATIC_CACHE = `neat-ai-explore-static-v${VERSION}`;
 const RUNTIME_CACHE = `neat-ai-explore-runtime-v${VERSION}`;
 
 const STATIC_FILES = [
-  "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./Tooltips.json",
-  "./sample-snapshot.json",
-  "./snapshot.json",
   "./manifest.webmanifest",
   "./icons/icon-72x72.png",
   "./icons/icon-96x96.png",
@@ -30,17 +27,34 @@ const STATIC_FILES = [
   "./icons/icon-152x152.png",
   "./icons/icon-192x192.png",
   "./icons/icon-384x384.png",
-  "./icons/icon-512x512.png",
-  "./screenshots/desktop-screenshot.png",
-  "./screenshots/mobile-screenshot.png"
+  "./icons/icon-512x512.png"
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(STATIC_CACHE)
-      .then((cache) => cache.addAll(STATIC_FILES))
-      .then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(STATIC_CACHE);
+
+      // Cache files individually so a single missing/redirected asset does not
+      // break service worker installation (Cache.addAll is all-or-nothing).
+      const results = await Promise.allSettled(
+        STATIC_FILES.map((path) =>
+          cache.add(new Request(path, { cache: "reload" }))
+        )
+      );
+
+      const failed = results
+        .map((r, i) => ({ r, i }))
+        .filter(({ r }) => r.status === "rejected")
+        .map(({ i }) => STATIC_FILES[i]);
+
+      if (failed.length > 0) {
+        // Non-fatal: the app will still run, and runtime caching can fill gaps.
+        console.warn("Service Worker: Some static files failed to cache:", failed);
+      }
+
+      await self.skipWaiting();
+    })()
   );
 });
 
