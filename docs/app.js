@@ -291,6 +291,8 @@ function renderCurrentNeuron(uuid) {
   } else {
     el.currentNeuronTitle.textContent = uuid;
   }
+  // Native tooltips (title) don't reliably show on mobile; keep this for desktop hover anyway.
+  el.currentNeuronTitle.title = desc ?? '';
 
   const stats = getNeuronStats(uuid);
   const impact = getNeuronImpact(uuid);
@@ -328,6 +330,11 @@ function renderCurrentNeuron(uuid) {
       }
     }
     props.push(['Samples', stats.recordCount ?? 'N/A']);
+  }
+
+  // For inputs, show the description as a visible field (tooltips often don't show on touch devices).
+  if (isInput && desc) {
+    props.push(['Description', desc]);
   }
 
   if (!isInput && check) {

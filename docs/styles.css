@@ -205,6 +205,12 @@ html, body {
   word-break: break-all;
 }
 
+/* Allow longer human text (like Tooltips.json descriptions) to wrap naturally. */
+.propList dt:last-of-type + dd,
+.propList dd {
+  white-space: normal;
+}
+
 .propList dd.positive { color: var(--positive); }
 .propList dd.negative { color: var(--negative); }
 .propList dd.error { color: var(--error); font-weight: 600; }

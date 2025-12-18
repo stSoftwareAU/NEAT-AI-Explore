@@ -81,7 +81,14 @@
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", async () => {
           try {
-            await navigator.serviceWorker.register("./sw.js");
+            const registration = await navigator.serviceWorker.register("./sw.js?v=20251218.2");
+            // Always check for an updated SW on page load (helps avoid stale cached app.js).
+            await registration.update();
+
+            // When a new SW takes control, reload once so the latest cached assets are used.
+            navigator.serviceWorker.addEventListener("controllerchange", () => {
+              window.location.reload();
+            });
           } catch (e) {
             // Non-fatal: app can still run without offline support.
             console.warn("Service worker registration failed:", e);

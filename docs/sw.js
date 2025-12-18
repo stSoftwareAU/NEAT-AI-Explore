@@ -7,10 +7,10 @@
  *
  * Note: This PWA is a viewer/debug tool. Offline support is best-effort.
  *
- * Version: 20251218.1
+ * Version: 20251218.2
  */
 
-const VERSION = "20251218.1";
+const VERSION = "20251218.2";
 const STATIC_CACHE = `neat-ai-explore-static-v${VERSION}`;
 const RUNTIME_CACHE = `neat-ai-explore-runtime-v${VERSION}`;
 
