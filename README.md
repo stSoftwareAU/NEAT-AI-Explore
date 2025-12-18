@@ -10,7 +10,7 @@ The published site lives in `docs/` (mirrors the approach used in `../GRQ-health
 
 - **Published folder**: `docs/`
 - **PWA files**: `docs/manifest.webmanifest`, `docs/sw.js`, `docs/icons/*`, `docs/screenshots/*`
-- **Deploy workflow**: `.github/workflows/deploy.yml` (push to `main`)
+- **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
 ## Quick Start
 
@@ -150,8 +150,9 @@ git commit -m "Initial commit"
 gh repo create NEAT-AI-Explore --public --source=. --remote=origin --push
 
 # Option B: manual remote
-# git remote add origin git@github.com:<your-user-or-org>/NEAT-AI-Explore.git
-# git push -u origin main
+# git remote add origin git@github.com:stSoftwareAU/NEAT-AI-Explore.git
+# git branch -M Develop
+# git push -u origin Develop
 ```
 
 Then enable GitHub Pages:
