@@ -24,6 +24,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v1.x
+
+      - name: Inject build ID into docs (cache busting)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          deno run --allow-read --allow-write ./scripts/inject_build_id.ts "${GITHUB_SHA::8}"
+
       - name: Setup Pages
         # Keep this aligned with ../GRQ-health to avoid behavioural differences.
         uses: actions/configure-pages@v4
