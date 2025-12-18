@@ -158,6 +158,19 @@ gh repo create NEAT-AI-Explore --public --source=. --remote=origin --push
 Then enable GitHub Pages:
 - Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub Actions**
 
+### Fixing `configure-pages` "HttpError: Not Found" on first deploy
+
+If the workflow fails with:
+`Get Pages site failed ... HttpError: Not Found`
+
+It usually means GitHub Pages has not been enabled for the repository yet (or the
+organisation requires it to be enabled manually).
+
+Fix:
+- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub Actions**
+
+Then re-run the workflow (or push again to `Develop`).
+
 ## Licence
 
 MIT
