@@ -4,3 +4,7 @@
 !.gitignore
 !.gitattributes
 !.github
+
+# Python build artefacts (local tooling only)
+__pycache__/
+*.pyc
