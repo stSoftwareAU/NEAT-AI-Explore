@@ -1,4 +1,8 @@
-.DS_Store
+# Ignore invisible
+.*
+*~
+!.gitignore
+!.gitattributes
 
 # Python
 .venv/
@@ -7,11 +11,6 @@ __pycache__/
 
 # Deno
 .deno/
-
-# Local snapshot files can be huge.
-snapshot.json
-*.snapshot.json
-*.snap.json
 
 # macOS
 .DS_Store
