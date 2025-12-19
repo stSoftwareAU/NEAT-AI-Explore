@@ -808,3 +808,24 @@ html, body {
     display: none;
   }
 }
+
+/* Preserve notch-safe padding on iPhone-sized viewports.
+   Note: The 520px breakpoint uses `padding: ...` shorthands which would
+   otherwise override the earlier safe-area rules. */
+@supports (padding: env(safe-area-inset-top)) {
+  @media (max-width: 520px) {
+    .appHeader {
+      padding-top: calc(10px + env(safe-area-inset-top));
+      padding-right: calc(14px + env(safe-area-inset-right));
+      padding-bottom: 10px;
+      padding-left: calc(14px + env(safe-area-inset-left));
+    }
+
+    .traceBar {
+      padding-top: 8px;
+      padding-right: calc(14px + env(safe-area-inset-right));
+      padding-bottom: 8px;
+      padding-left: calc(14px + env(safe-area-inset-left));
+    }
+  }
+}

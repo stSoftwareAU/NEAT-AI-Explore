@@ -292,6 +292,10 @@ def generate_screenshots() -> None:
         _placeholder_screenshot(desktop_path, (1280, 720), "Desktop")
         _placeholder_screenshot(mobile_path, (720, 1280), "Mobile")
         _placeholder_screenshot(ipad_path, (820, 1180), "iPad")
+        _placeholder_screenshot(desktop_modal_path, (1280, 720), "Desktop (inbound modal)")
+        _placeholder_screenshot(iphone_path, (390, 844), "iPhone")
+        _placeholder_screenshot(iphone_modal_path, (390, 844), "iPhone (inbound modal)")
+        _placeholder_screenshot(ipad_modal_path, (820, 1180), "iPad (inbound modal)")
         return
 
     port = _free_port()
