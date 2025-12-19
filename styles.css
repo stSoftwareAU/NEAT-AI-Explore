@@ -98,6 +98,41 @@ html, body {
   color: var(--negative);
 }
 
+/* Progress bar for loading large files */
+.progressContainer {
+  width: 120px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.15s ease-out;
+}
+
+.progressBar.indeterminate {
+  width: 30%;
+  animation: progressIndeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes progressIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(250%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 /* Explorer layout */
 .explorer {
   display: flex;
