@@ -52,7 +52,9 @@ human-facing version number. See [SemVer](https://semver.org/).
 
 4. **Load your snapshot**:
    - Use the file picker to load a local JSON file
-   - Or use `?file=./snapshot.json` query parameter
+   - Or use `?snapshotUrl=./snapshot.json` (alias: `?file=...`)
+   - For presigned URLs (recommended): use
+     `?snapshotUrlB64=<base64url(utf8(url))>`
    - Or click "Load ./snapshot.json" if you've placed the file in this directory
 
 ### Quick Start (GitHub Pages / PWA build)

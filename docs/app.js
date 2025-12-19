@@ -1008,10 +1008,47 @@ el.fetchUrl.onkeydown = (e) => {
 
 loadInputLabels().then(() => {
   const params = new URLSearchParams(window.location.search);
-  const fileParam = params.get("file");
-  if (fileParam) {
-    el.fetchUrl.value = fileParam;
-    loadSnapshot(fileParam, fileParam);
+  const snapshotUrlB64Param = params.get("snapshotUrlB64");
+  const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
+    params.get("file");
+
+  function decodeBase64UrlToUtf8(base64Url) {
+    // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
+    // See RFC 4648 §5.
+    try {
+      const base64 = base64Url.replaceAll("-", "+").replaceAll("_", "/");
+      const pad = "=".repeat((4 - (base64.length % 4)) % 4);
+      const bin = atob(base64 + pad);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function isDangerousUrlScheme(s) {
+    const v = String(s ?? "").trim().toLowerCase();
+    return v.startsWith("javascript:") || v.startsWith("data:");
+  }
+
+  let initialUrl = null;
+  let initialLabel = null;
+
+  if (snapshotUrlB64Param) {
+    const decoded = decodeBase64UrlToUtf8(snapshotUrlB64Param);
+    if (decoded && !isDangerousUrlScheme(decoded)) {
+      initialUrl = decoded;
+      initialLabel = decoded;
+    }
+  } else if (snapshotUrlParam && !isDangerousUrlScheme(snapshotUrlParam)) {
+    initialUrl = snapshotUrlParam;
+    initialLabel = snapshotUrlParam;
+  }
+
+  if (initialUrl) {
+    el.fetchUrl.value = initialUrl;
+    loadSnapshot(initialUrl, initialLabel ?? initialUrl);
   } else {
     setStatus("Enter URL or browse for a snapshot JSON");
   }
