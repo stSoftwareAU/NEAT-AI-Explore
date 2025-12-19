@@ -162,7 +162,9 @@ python scripts/generate_pwa_assets.py
 
 Outputs:
 
+- `docs/favicon.ico`
 - `docs/icons/icon-<size>x<size>.png`
+- `docs/icons/icon-source.png`
 - `docs/screenshots/desktop-screenshot.png`
 - `docs/screenshots/mobile-screenshot.png`
 

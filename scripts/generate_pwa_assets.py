@@ -21,7 +21,9 @@ from __future__ import annotations
 import contextlib
 import datetime as _dt
 import http.server
+import math
 import os
+import random
 import socket
 import socketserver
 import threading
@@ -33,7 +35,8 @@ DOCS = ROOT / "docs"
 ICONS_DIR = DOCS / "icons"
 SHOTS_DIR = DOCS / "screenshots"
 
-ICON_SIZES = [72, 96, 128, 144, 152, 192, 384, 512]
+# Extra small sizes are used for traditional browser favicons (tabs/bookmarks).
+ICON_SIZES = [16, 32, 48, 72, 96, 128, 144, 152, 192, 384, 512]
 
 
 def _now_stamp() -> str:
@@ -72,63 +75,145 @@ def _serve_docs(port: int):
 
 
 def generate_icons() -> None:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter
 
     ICONS_DIR.mkdir(parents=True, exist_ok=True)
 
     base_size = 1024
-    bg = (10, 14, 26)  # matches --bg
-    accent = (96, 165, 250)  # matches --accent
-    text = (229, 231, 235)  # matches --text
+    bg_top = (10, 14, 26)  # deep navy
+    bg_bottom = (2, 6, 14)  # abyss
+    accent = (96, 165, 250)  # blue glow
+    accent2 = (45, 212, 191)  # teal glow
 
-    img = Image.new("RGBA", (base_size, base_size), bg)
+    # Deterministic: generated assets should be stable between runs.
+    rng = random.Random(1337)
+
+    # Background gradient (deep sea).
+    img = Image.new("RGBA", (base_size, base_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Simple geometric mark: circle + network-ish nodes.
-    pad = int(base_size * 0.12)
-    draw.ellipse((pad, pad, base_size - pad, base_size - pad), outline=accent, width=int(base_size * 0.04))
+    for y in range(base_size):
+        t = y / (base_size - 1)
+        r = int(bg_top[0] * (1 - t) + bg_bottom[0] * t)
+        g = int(bg_top[1] * (1 - t) + bg_bottom[1] * t)
+        b = int(bg_top[2] * (1 - t) + bg_bottom[2] * t)
+        draw.line((0, y, base_size, y), fill=(r, g, b, 255))
 
-    # Nodes
-    nodes = [
-        (0.35, 0.35),
-        (0.65, 0.35),
-        (0.35, 0.65),
-        (0.65, 0.65),
-        (0.50, 0.50),
+    # Subtle "plankton" specks.
+    for _ in range(600):
+        x = rng.randrange(0, base_size)
+        y = rng.randrange(0, base_size)
+        a = rng.randrange(10, 45)
+        c = rng.choice([accent, accent2, (229, 231, 235)])
+        draw.point((x, y), fill=(c[0], c[1], c[2], a))
+
+    # Explorer "lamp" origin + beam (discovery cone into the network).
+    lamp_x = int(base_size * 0.28)
+    lamp_y = int(base_size * 0.72)
+    beam_tip_x = int(base_size * 0.74)
+    beam_tip_y = int(base_size * 0.36)
+    near_w = int(base_size * 0.08)
+    far_w = int(base_size * 0.42)
+
+    # Beam polygon (a trapezoid).
+    beam_poly = [
+        (lamp_x, lamp_y - near_w // 2),
+        (lamp_x, lamp_y + near_w // 2),
+        (beam_tip_x, beam_tip_y + far_w // 2),
+        (beam_tip_x, beam_tip_y - far_w // 2),
     ]
-    r = int(base_size * 0.03)
+
+    beam_mask = Image.new("L", (base_size, base_size), 0)
+    beam_mask_draw = ImageDraw.Draw(beam_mask)
+    beam_mask_draw.polygon(beam_poly, fill=255)
+    beam_mask = beam_mask.filter(ImageFilter.GaussianBlur(radius=int(base_size * 0.018)))
+
+    beam_overlay = Image.new("RGBA", (base_size, base_size), (0, 0, 0, 0))
+    bo = ImageDraw.Draw(beam_overlay)
+    bo.polygon(beam_poly, fill=(accent2[0], accent2[1], accent2[2], 46))
+    bo.polygon(
+        [
+            (lamp_x, lamp_y - int(near_w * 0.35)),
+            (lamp_x, lamp_y + int(near_w * 0.35)),
+            (beam_tip_x, beam_tip_y + int(far_w * 0.30)),
+            (beam_tip_x, beam_tip_y - int(far_w * 0.30)),
+        ],
+        fill=(accent[0], accent[1], accent[2], 62),
+    )
+    img = Image.alpha_composite(img, beam_overlay)
+    draw = ImageDraw.Draw(img)
+
+    # "Neural net depths": nodes + edges, brighter within the beam.
+    nodes: list[tuple[int, int]] = []
+    for _ in range(34):
+        # Bias nodes toward the mid-right where the beam points.
+        x = int(base_size * (0.26 + 0.66 * rng.random()))
+        y = int(base_size * (0.18 + 0.68 * rng.random()))
+        nodes.append((x, y))
+
+    def _node_brightness(x: int, y: int) -> float:
+        # Deeper = darker, beam = brighter.
+        depth = y / (base_size - 1)
+        in_beam = beam_mask.getpixel((x, y)) / 255.0
+        return max(0.0, min(1.0, (0.22 + 0.65 * in_beam) * (1.0 - 0.35 * depth)))
+
+    # Edges: connect to nearest neighbours.
+    for i, (x1, y1) in enumerate(nodes):
+        dists = []
+        for j, (x2, y2) in enumerate(nodes):
+            if i == j:
+                continue
+            dx = x2 - x1
+            dy = y2 - y1
+            dists.append((dx * dx + dy * dy, j))
+        dists.sort(key=lambda t: t[0])
+        for _, j in dists[:2]:
+            x2, y2 = nodes[j]
+            b = (_node_brightness(x1, y1) + _node_brightness(x2, y2)) / 2
+            a = int(20 + 140 * b)
+            col = (
+                int(accent[0] * b + 229 * (1 - b)),
+                int(accent2[1] * b + 231 * (1 - b)),
+                int(accent[2] * b + 235 * (1 - b)),
+                a,
+            )
+            draw.line((x1, y1, x2, y2), fill=col, width=int(base_size * 0.006))
+
+    # Nodes on top.
     for x, y in nodes:
-        cx = int(base_size * x)
-        cy = int(base_size * y)
-        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=accent)
-
-    # Edges
-    for a, b in [(0, 4), (1, 4), (2, 4), (3, 4), (0, 1), (2, 3)]:
-        x1, y1 = nodes[a]
-        x2, y2 = nodes[b]
-        draw.line(
-            (int(base_size * x1), int(base_size * y1), int(base_size * x2), int(base_size * y2)),
-            fill=(96, 165, 250, 180),
-            width=int(base_size * 0.012),
+        b = _node_brightness(x, y)
+        r = int(base_size * (0.012 + 0.010 * b))
+        fill = (
+            int(accent2[0] * b + 90 * (1 - b)),
+            int(accent2[1] * b + 120 * (1 - b)),
+            int(accent[2] * b + 150 * (1 - b)),
+            int(110 + 145 * b),
         )
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=fill)
 
-    # Title text (best-effort font).
-    title = "NEAT"
-    subtitle = "Explore"
-    try:
-        font_big = ImageFont.truetype("Arial.ttf", int(base_size * 0.14))
-        font_small = ImageFont.truetype("Arial.ttf", int(base_size * 0.09))
-    except Exception:
-        font_big = ImageFont.load_default()
-        font_small = ImageFont.load_default()
-
-    tw, th = draw.textbbox((0, 0), title, font=font_big)[2:]
-    sw, sh = draw.textbbox((0, 0), subtitle, font=font_small)[2:]
-
-    tx = (base_size - tw) // 2
-    ty = int(base_size * 0.70)
-    draw.text((tx, ty), title, fill=text, font=font_big)
-    draw.text(((base_size - sw) // 2, ty + th - int(base_size * 0.02)), subtitle, fill=text, font=font_small)
+    # Lamp "submersible" silhouette.
+    hull_r = int(base_size * 0.055)
+    draw.ellipse(
+        (lamp_x - hull_r, lamp_y - hull_r, lamp_x + hull_r, lamp_y + hull_r),
+        fill=(17, 24, 39, 240),
+        outline=(255, 255, 255, 18),
+        width=max(1, int(base_size * 0.004)),
+    )
+    # Lamp glow.
+    glow_r = int(base_size * 0.030)
+    draw.ellipse(
+        (lamp_x - glow_r, lamp_y - glow_r, lamp_x + glow_r, lamp_y + glow_r),
+        fill=(accent2[0], accent2[1], accent2[2], 210),
+    )
+    # Sonar rings.
+    for k in range(1, 4):
+        rr = int(hull_r * (1.25 + 0.55 * k))
+        aa = max(0, 70 - 14 * k)
+        draw.ellipse(
+            (lamp_x - rr, lamp_y - rr, lamp_x + rr, lamp_y + rr),
+            outline=(accent[0], accent[1], accent[2], aa),
+            width=max(1, int(base_size * 0.004)),
+        )
 
     source_path = ICONS_DIR / "icon-source.png"
     img.save(source_path)
@@ -136,6 +221,14 @@ def generate_icons() -> None:
     for size in ICON_SIZES:
         out = img.resize((size, size), resample=Image.Resampling.LANCZOS)
         out.save(ICONS_DIR / f"icon-{size}x{size}.png")
+
+    # Traditional favicon for browsers (tabs / bookmarks).
+    favicon_path = DOCS / "favicon.ico"
+    img.save(
+        favicon_path,
+        format="ICO",
+        sizes=[(16, 16), (32, 32), (48, 48)],
+    )
 
 
 def _placeholder_screenshot(path: Path, size: tuple[int, int], label: str) -> None:

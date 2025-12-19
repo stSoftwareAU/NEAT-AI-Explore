@@ -40,11 +40,13 @@ Deno.test("docs PWA files exist", async () => {
   const swPath = repoPath("docs", "sw.js");
   const indexPath = repoPath("docs", "index.html");
   const impactPath = repoPath("docs", "impact_attribution.js");
+  const faviconPath = repoPath("docs", "favicon.ico");
 
   await Deno.stat(manifestPath);
   await Deno.stat(swPath);
   await Deno.stat(indexPath);
   await Deno.stat(impactPath);
+  await Deno.stat(faviconPath);
 });
 
 Deno.test("manifest icons and screenshots exist on disk", async () => {
@@ -78,6 +80,7 @@ Deno.test("service worker caches the app shell", async () => {
       '"./impact_attribution.js"',
       '"./impact_diagnostics.js"',
       '"./manifest.webmanifest"',
+      '"./favicon.ico"',
       '"./icons/icon-192x192.png"',
       '"./Tooltips.json"',
     ]
@@ -109,6 +112,16 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
 
   assert(html.includes('rel="manifest"'));
   assert(html.includes("./manifest.webmanifest"));
+  assert(
+    html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
+    'Expected docs/index.html to include a favicon <link rel="icon" ...>',
+  );
+  assert(
+    html.includes("./favicon.ico") ||
+      html.includes('href="favicon.ico"') ||
+      html.includes('href="favicon.ico?'),
+    'Expected docs/index.html to reference "./favicon.ico"',
+  );
   assert(html.includes("navigator.serviceWorker.register"));
   assertEquals(html.includes("./sw.js"), true);
   assert(
