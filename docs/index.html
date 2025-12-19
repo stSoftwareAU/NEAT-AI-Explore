@@ -27,7 +27,11 @@
           style="display: none"
         />
         <button id="fileBtn" class="button">Browse…</button>
-        <div id="progressContainer" class="progressContainer" style="display: none;">
+        <div
+          id="progressContainer"
+          class="progressContainer"
+          style="display: none"
+        >
           <div id="progressBar" class="progressBar"></div>
         </div>
         <span id="status" class="statusInline"></span>
@@ -124,9 +128,10 @@
     <script>
       // Register service worker for PWA offline support.
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=__BUILD_ID__").catch((err) => {
-          console.warn("SW registration failed:", err);
-        });
+        navigator.serviceWorker.register("./sw.js?v=__BUILD_ID__")
+          .catch((err) => {
+            console.warn("SW registration failed:", err);
+          });
       }
     </script>
   </body>

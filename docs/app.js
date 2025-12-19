@@ -619,7 +619,7 @@ function renderCurrentNeuron(uuid) {
     el.neuronProps.appendChild(dd);
   });
 
-  renderImpactBreakdown(uuid, n.type, impact);
+  renderImpactBreakdown(uuid, impact);
   renderImpactDiagnosticsPanel(uuid, n.type);
 }
 
@@ -690,7 +690,7 @@ function renderImpactDiagnosticsPanel(uuid, neuronType) {
   `;
 }
 
-function renderImpactBreakdown(uuid, neuronType, neuronImpact) {
+function renderImpactBreakdown(uuid, neuronImpact) {
   if (!el.impactBreakdown) return;
 
   const inbound = getInboundSynapses(uuid);

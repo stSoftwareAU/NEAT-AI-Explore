@@ -190,9 +190,11 @@ export function computeImpactBreakdownToOutputs(input) {
 
       const nextScore = score * Math.abs(s.weight);
       const nextNodes = nodes.concat([next]);
-      const nextSteps = steps.concat([
-        { fromUuid: s.fromUuid, toUuid: s.toUuid, weight: s.weight },
-      ]);
+      const nextSteps = steps.concat([{
+        fromUuid: s.fromUuid,
+        toUuid: s.toUuid,
+        weight: s.weight,
+      }]);
       const nextSeen = new Set(seenOnPath);
       nextSeen.add(next);
 
