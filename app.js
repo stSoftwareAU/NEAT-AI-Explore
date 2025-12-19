@@ -100,6 +100,8 @@ const el = {
   fetchBtn: document.getElementById("fetchBtn"),
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
+  progressContainer: document.getElementById("progressContainer"),
+  progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
   traceBreadcrumb: document.getElementById("traceBreadcrumb"),
   traceBackBtn: document.getElementById("traceBackBtn"),
@@ -167,6 +169,39 @@ function setStatus(msg, kind = "") {
   el.status.className = "statusInline " + kind;
 }
 
+/**
+ * Show the progress bar.
+ * @param {boolean} indeterminate - If true, show pulsing animation (unknown size).
+ */
+function showProgress(indeterminate = false) {
+  if (!el.progressContainer || !el.progressBar) return;
+  el.progressContainer.style.display = "";
+  el.progressBar.style.width = indeterminate ? "" : "0%";
+  if (indeterminate) {
+    el.progressBar.classList.add("indeterminate");
+  } else {
+    el.progressBar.classList.remove("indeterminate");
+  }
+}
+
+/**
+ * Update the progress bar percentage.
+ * @param {number} percent - Progress percentage (0-100).
+ */
+function updateProgress(percent) {
+  if (!el.progressBar) return;
+  el.progressBar.classList.remove("indeterminate");
+  el.progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+}
+
+/**
+ * Hide the progress bar.
+ */
+function hideProgress() {
+  if (!el.progressContainer) return;
+  el.progressContainer.style.display = "none";
+}
+
 async function fetchJson(url) {
   let res;
   try {
@@ -185,14 +220,68 @@ async function fetchJson(url) {
 
   const ce = (res.headers.get("content-encoding") ?? "").toLowerCase();
   const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+  const contentLength = res.headers.get("content-length");
+  const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
   const looksGz = String(url).toLowerCase().includes(".gz") ||
     ct.includes("gzip") || ct.includes("application/x-gzip");
 
-  // If S3 serves Content-Encoding: gzip then fetch transparently decompresses and res.json() works.
-  if (ce.includes("gzip")) return res.json();
+  // If S3 serves Content-Encoding: gzip then fetch transparently decompresses.
+  // We still want to show progress, so we stream it.
+  const needsClientDecompress = looksGz && !ce.includes("gzip");
 
-  // If the object is a raw .gz payload (no Content-Encoding), decompress in-browser.
-  if (looksGz) {
+  // Stream the response to track download progress.
+  if (res.body && (totalBytes || needsClientDecompress)) {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let receivedBytes = 0;
+
+    // Show indeterminate if we don't know the size
+    if (totalBytes) {
+      showProgress(false);
+      updateProgress(0);
+    } else {
+      showProgress(true);
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      receivedBytes += value.length;
+      if (totalBytes) {
+        updateProgress((receivedBytes / totalBytes) * 100);
+      }
+    }
+
+    // Combine chunks into a single buffer
+    const allChunks = new Uint8Array(receivedBytes);
+    let position = 0;
+    for (const chunk of chunks) {
+      allChunks.set(chunk, position);
+      position += chunk.length;
+    }
+
+    // Decompress if needed
+    if (needsClientDecompress) {
+      if (typeof DecompressionStream === "undefined") {
+        throw new Error(
+          "Snapshot appears to be gzipped (.gz) but this browser can't decompress it. Re-upload with Content-Encoding: gzip and Content-Type: application/json, or upload an uncompressed .json.",
+        );
+      }
+      const stream = new Blob([allChunks]).stream().pipeThrough(
+        new DecompressionStream("gzip"),
+      );
+      const text = await new Response(stream).text();
+      return JSON.parse(text);
+    }
+
+    // Parse JSON from the raw bytes
+    const text = new TextDecoder().decode(allChunks);
+    return JSON.parse(text);
+  }
+
+  // Fallback: no streaming (e.g., body unavailable)
+  if (looksGz && !ce.includes("gzip")) {
     if (typeof DecompressionStream === "undefined") {
       throw new Error(
         "Snapshot appears to be gzipped (.gz) but this browser can't decompress it. Re-upload with Content-Encoding: gzip and Content-Type: application/json, or upload an uncompressed .json.",
@@ -244,7 +333,11 @@ function normaliseCreature(snapshot) {
 async function loadSnapshot(source, label) {
   try {
     setStatus(`Loading ${label}...`);
+    if (typeof source === "string") {
+      showProgress(true); // Show indeterminate until we get content-length
+    }
     const obj = typeof source === "string" ? await fetchJson(source) : source;
+    hideProgress();
     SNAPSHOT = obj;
     const creature = normaliseCreature(obj);
 
@@ -292,6 +385,7 @@ async function loadSnapshot(source, label) {
     trace = [];
     navigateTo(startUuid);
   } catch (e) {
+    hideProgress();
     setStatus(e.message, "bad");
     console.error(e);
   }
@@ -1004,9 +1098,11 @@ el.fileInput.onchange = async () => {
   if (!file) return;
   try {
     setStatus(`Reading ${file.name}...`);
+    showProgress(true); // Indeterminate for local file reading
     let obj;
     if (file.name.toLowerCase().endsWith(".gz")) {
       if (typeof DecompressionStream === "undefined") {
+        hideProgress();
         throw new Error(
           "This snapshot is gzipped (.gz) but this browser can't decompress it. Export/upload an uncompressed .json, or use a browser with DecompressionStream support.",
         );
@@ -1021,8 +1117,10 @@ el.fileInput.onchange = async () => {
       const text = await file.text();
       obj = JSON.parse(text);
     }
+    hideProgress();
     await loadSnapshot(obj, file.name);
   } catch (e) {
+    hideProgress();
     setStatus(e.message, "bad");
   }
 };

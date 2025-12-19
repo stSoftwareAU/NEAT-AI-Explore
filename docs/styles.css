@@ -38,7 +38,6 @@ html, body {
   padding: 12px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-  gap: 12px;
 }
 
 .appHeader h1 {
@@ -50,7 +49,6 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .input, .select {
@@ -60,10 +58,6 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
-}
-
-.input {
-  width: min(420px, 60vw);
 }
 
 .button {
@@ -104,11 +98,46 @@ html, body {
   color: var(--negative);
 }
 
+/* Progress bar for loading large files */
+.progressContainer {
+  width: 120px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.15s ease-out;
+}
+
+.progressBar.indeterminate {
+  width: 30%;
+  animation: progressIndeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes progressIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(250%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 /* Explorer layout */
 .explorer {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 53px);
+  height: calc(100vh - 53px);
 }
 
 /* Trace bar */
@@ -212,12 +241,6 @@ html, body {
 .propList dd {
   font-family: ui-monospace, monospace;
   word-break: break-all;
-}
-
-/* Allow longer human text (like Tooltips.json descriptions) to wrap naturally. */
-.propList dt:last-of-type + dd,
-.propList dd {
-  white-space: normal;
 }
 
 .propList dd.positive {
@@ -682,79 +705,4 @@ html, body {
 .synapseStats .stat.suspicious {
   color: var(--warning);
   background: rgba(251, 146, 60, 0.15);
-}
-
-/* ============================================================================
- * Responsive layout
- * ============================================================================
- *
- * Phone: stack panels vertically and make controls tap-friendly.
- * Tablet: slightly tighter paddings and allow header to wrap.
- */
-
-@media (max-width: 980px) {
-  .currentNeuron {
-    width: 300px;
-    min-width: 260px;
-    padding: 16px;
-  }
-
-  .synapseHeader {
-    padding: 10px 14px;
-  }
-}
-
-@media (max-width: 760px) {
-  .appHeader {
-    align-items: flex-start;
-    padding: 12px 14px;
-  }
-
-  .headerControls {
-    justify-content: flex-start;
-  }
-
-  .statusInline {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .traceBar {
-    padding: 8px 14px;
-  }
-
-  .explorerMain {
-    flex-direction: column;
-  }
-
-  .currentNeuron {
-    width: 100%;
-    min-width: 0;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 38vh;
-  }
-
-  .flowArrow {
-    width: 100%;
-    height: 28px;
-    font-size: 18px;
-  }
-
-  .synapseListScroll {
-    padding: 8px 10px;
-  }
-
-  .synapseRow {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .synapseStats {
-    justify-content: flex-start;
-  }
-
-  .synapseNav {
-    display: none;
-  }
 }

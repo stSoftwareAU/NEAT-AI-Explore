@@ -4,23 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NEAT-AI Explore</title>
-    <!-- PWA Meta Tags -->
-    <meta
-      name="description"
-      content="A static viewer for exploring NEAT-AI creature snapshots (neurons, synapses, impacts, and trace navigation)."
-    />
-    <meta name="theme-color" content="#60a5fa" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="NEAT Explore" />
-
-    <!-- Icons and Manifest -->
-    <link rel="icon" type="image/png" href="./icons/icon-192x192.png" />
-    <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-
     <link rel="stylesheet" href="./styles.css?v=__BUILD_ID__" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#0a0e1a" />
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
   </head>
   <body>
     <header class="appHeader">
@@ -40,6 +27,9 @@
           style="display: none"
         />
         <button id="fileBtn" class="button">Browse…</button>
+        <div id="progressContainer" class="progressContainer" style="display: none;">
+          <div id="progressBar" class="progressBar"></div>
+        </div>
         <span id="status" class="statusInline"></span>
       </div>
     </header>
@@ -130,36 +120,12 @@
         </div>
       </div>
     </div>
-    <!-- PWA Service Worker Registration -->
-    <script>
-      // Register service worker only if supported (required for PWA install + offline cache).
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", async () => {
-          try {
-            const registration = await navigator.serviceWorker.register(
-              "./sw.js?v=__BUILD_ID__",
-            );
-            // Always check for an updated SW on page load (helps avoid stale cached app.js).
-            // Note: Some browsers occasionally throw here even when the SW is present; don't treat
-            // that as a fatal registration failure.
-            registration.update().catch((e) => {
-              console.warn(
-                "Service worker update check failed (non-fatal):",
-                e,
-              );
-            });
 
-            // When a new SW takes control, reload once so the latest cached assets are used.
-            navigator.serviceWorker.addEventListener(
-              "controllerchange",
-              () => {
-                window.location.reload();
-              },
-            );
-          } catch (e) {
-            // Non-fatal: app can still run without offline support.
-            console.warn("Service worker registration failed:", e);
-          }
+    <script>
+      // Register service worker for PWA offline support.
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./sw.js?v=__BUILD_ID__").catch((err) => {
+          console.warn("SW registration failed:", err);
         });
       }
     </script>

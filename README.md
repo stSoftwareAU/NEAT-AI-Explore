@@ -3,7 +3,7 @@
 A static HTML/JS/CSS viewer for exploring NEAT-AI creature snapshots. This is a
 debug tool for investigating why discovery candidates fail or succeed.
 
-[Example](https://stsoftwareau.github.io/NEAT-AI-Explore/?snapshotUrl=https://stsoftwareau.github.io/NEAT-AI-Explore/snapshot.json)
+[Example](https://stsoftwareau.github.io/NEAT-AI-Explore/?snapshotUrl=https://stsoftwareau.github.io/NEAT-AI-Explore/snapshot.json.gz)
 ## GitHub Pages + PWA
 
 This repo is configured to deploy a **Progressive Web App (PWA)** to **GitHub
