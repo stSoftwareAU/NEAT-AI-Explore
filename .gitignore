@@ -3,18 +3,4 @@
 *~
 !.gitignore
 !.gitattributes
-
-# Python
-.venv/
-__pycache__/
-*.pyc
-
-# Deno
-.deno/
-
-# macOS
-.DS_Store
-
-# Editor
-.vscode/
-.idea/
+!.github
