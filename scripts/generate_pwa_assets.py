@@ -5,6 +5,7 @@ Creates:
 - docs/icons/icon-<size>x<size>.png
 - docs/screenshots/desktop-screenshot.png
 - docs/screenshots/mobile-screenshot.png
+  - plus extra screenshots used by the README (iPhone/iPad + modal views)
 
 If Playwright is installed, screenshots are captured from a real browser by
 starting a local web server and opening the app. If not, placeholder screenshots
@@ -269,9 +270,18 @@ def _placeholder_screenshot(path: Path, size: tuple[int, int], label: str) -> No
 def generate_screenshots() -> None:
     """
     Try to capture real screenshots using Playwright; otherwise make placeholders.
+
+    Note: We keep `desktop-screenshot.png` and `mobile-screenshot.png` because the
+    web manifest references them. Additional screenshots are for documentation.
     """
     desktop_path = SHOTS_DIR / "desktop-screenshot.png"
     mobile_path = SHOTS_DIR / "mobile-screenshot.png"
+    ipad_path = SHOTS_DIR / "ipad-screenshot.png"
+
+    desktop_modal_path = SHOTS_DIR / "desktop-inbound-modal.png"
+    iphone_path = SHOTS_DIR / "iphone-screenshot.png"
+    iphone_modal_path = SHOTS_DIR / "iphone-inbound-modal.png"
+    ipad_modal_path = SHOTS_DIR / "ipad-inbound-modal.png"
 
     # Always ensure output dir exists.
     SHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -281,24 +291,84 @@ def generate_screenshots() -> None:
     except Exception:
         _placeholder_screenshot(desktop_path, (1280, 720), "Desktop")
         _placeholder_screenshot(mobile_path, (720, 1280), "Mobile")
+        _placeholder_screenshot(ipad_path, (820, 1180), "iPad")
         return
 
     port = _free_port()
     with _serve_docs(port) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 720})
-            page.goto(url, wait_until="networkidle")
-            page.wait_for_timeout(300)
-            page.screenshot(path=str(desktop_path), full_page=True)
 
+            def load_app(page, viewport_label: str) -> None:
+                # Use an explicit URL parameter so the screenshots are stable even
+                # if the app default changes in future.
+                page.goto(url + "?snapshotUrl=./snapshot.json.gz", wait_until="domcontentloaded")
+                # Wait until the app reports a successful load.
+                page.wait_for_function(
+                    "() => document.getElementById('status')?.classList.contains('ok')",
+                    timeout=60_000,
+                )
+                # Give the layout a beat to settle.
+                page.wait_for_timeout(250)
+
+                # Sanity check for responsiveness: avoid obvious horizontal overflow.
+                # We don't fail the script if this trips; screenshots still help debug.
+                try:
+                    overflow = page.evaluate(
+                        "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2",
+                    )
+                    if overflow:
+                        print(f"Warning: horizontal overflow detected in {viewport_label}")
+                except Exception:
+                    pass
+
+            def open_inbound_modal(page) -> None:
+                # "Inspect" button is created once a neuron is rendered.
+                page.click(".impactBreakdownBtn")
+                page.wait_for_selector("#pathModal.isOpen", timeout=10_000)
+                page.wait_for_timeout(150)
+
+            # Desktop (manifest)
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            load_app(page, "Desktop")
+            page.screenshot(path=str(desktop_path), full_page=True)
+            open_inbound_modal(page)
+            page.screenshot(path=str(desktop_modal_path), full_page=True)
+
+            # Mobile (manifest) - keep existing dimensions for manifest metadata.
             page = browser.new_page(
                 viewport={"width": 720, "height": 1280},
                 user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
             )
-            page.goto(url, wait_until="networkidle")
-            page.wait_for_timeout(300)
+            load_app(page, "Mobile")
             page.screenshot(path=str(mobile_path), full_page=True)
+
+            # iPhone (README)
+            page = browser.new_page(
+                viewport={"width": 390, "height": 844},
+                device_scale_factor=3,
+                is_mobile=True,
+                has_touch=True,
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            )
+            load_app(page, "iPhone")
+            page.screenshot(path=str(iphone_path), full_page=True)
+            open_inbound_modal(page)
+            page.screenshot(path=str(iphone_modal_path), full_page=True)
+
+            # iPad (README)
+            page = browser.new_page(
+                viewport={"width": 820, "height": 1180},
+                device_scale_factor=2,
+                is_mobile=True,
+                has_touch=True,
+                user_agent="Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            )
+            load_app(page, "iPad")
+            page.screenshot(path=str(ipad_path), full_page=True)
+            open_inbound_modal(page)
+            page.screenshot(path=str(ipad_modal_path), full_page=True)
+
             browser.close()
 
 

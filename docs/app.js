@@ -37,6 +37,11 @@ let lastInboundToUuid = null;
 let lastInboundPage = 0;
 const INBOUND_PAGE_SIZE = 200;
 
+// Default snapshot used when the app is opened without a URL parameter.
+// This keeps the PWA immediately usable on iPhone/iPad without needing a file
+// picker (which can be awkward in standalone mode).
+const DEFAULT_SNAPSHOT_URL = "./snapshot.json.gz";
+
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
 const IMPACT_SUSPICIOUS_THRESHOLD = 1e-8; // Suspiciously low - should be prunable
@@ -1087,7 +1092,7 @@ function escapeHtml(s) {
 // ============================================================================
 
 el.fetchBtn.onclick = () => {
-  const url = el.fetchUrl.value.trim() || "./snapshot.json";
+  const url = el.fetchUrl.value.trim() || DEFAULT_SNAPSHOT_URL;
   loadSnapshot(url, url);
 };
 
@@ -1186,6 +1191,8 @@ loadInputLabels().then(() => {
     el.fetchUrl.value = initialUrl;
     loadSnapshot(initialUrl, initialLabel ?? initialUrl);
   } else {
-    setStatus("Enter URL or browse for a snapshot JSON");
+    el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
+    setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
+    loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
   }
 });

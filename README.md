@@ -59,6 +59,12 @@ human-facing version number. See [SemVer](https://semver.org/).
      `?snapshotUrlB64=<base64url(utf8(url))>`
    - Or copy your snapshot to `docs/` and click "Fetch" with the default path
 
+### Default snapshot (PWA-friendly)
+
+When opened with **no query parameters**, the app now **auto-loads**
+`./snapshot.json.gz`. This makes the installed PWA usable on iPhone/iPad without
+needing the file picker.
+
 ### Loading snapshots from S3 (presigned URLs)
 
 If you load a snapshot via a presigned S3 URL from GitHub Pages, the S3 bucket
@@ -88,6 +94,53 @@ Also note:
   stats.
 - **Reconstruction Checks**: If enabled in export, shows max value/activation
   deltas to identify recording or squash function mismatches.
+
+## What the Explorer shows (example snapshot)
+
+This repo ships with an example snapshot at `docs/snapshot.json.gz`.
+
+Some interesting findings from that snapshot:
+
+- **output-0 is dominated by a single upstream hidden neuron**:
+  `hidden-discovery-739a5119-b981-4ae6-91d1-ca8cc33abc5a → output-0` receives
+  ~74.6% of the inbound allocated impact (using the viewer’s heuristic
+  allocation).
+- **A second hidden neuron is the next biggest contributor**:
+  `hidden-discovery-6aae3201-115b-4dc4-beee-2d7428399e14 → output-0` receives
+  ~14.1% of the inbound allocated impact.
+- **There are prunable candidates**: ~7.6% of non-input neurons have exported
+  impact < 1e-8 (highlighted as “suspicious” in the UI).
+
+Snapshot metadata:
+
+- **exportedAt**: 20251219T043800Z
+- **discoveryVersion**: 0.2.12
+- **Network size**: 471 neurons, 16,719 synapses
+
+## Responsiveness (PWA screenshots)
+
+These screenshots are generated from a real browser at iPhone/iPad/desktop
+viewports (see `scripts/generate_pwa_assets.py`).
+
+### iPhone (neurons)
+
+![iPhone screenshot](docs/screenshots/iphone-screenshot.png)
+
+### iPhone (inbound impact allocation modal)
+
+![iPhone inbound modal](docs/screenshots/iphone-inbound-modal.png)
+
+### iPad (neurons)
+
+![iPad screenshot](docs/screenshots/ipad-screenshot.png)
+
+### iPad (inbound impact allocation modal)
+
+![iPad inbound modal](docs/screenshots/ipad-inbound-modal.png)
+
+### Desktop (inbound impact allocation modal)
+
+![Desktop inbound modal](docs/screenshots/desktop-inbound-modal.png)
 
 ## Direction terminology (to avoid confusion)
 
@@ -166,7 +219,12 @@ Outputs:
 - `docs/icons/icon-<size>x<size>.png`
 - `docs/icons/icon-source.png`
 - `docs/screenshots/desktop-screenshot.png`
+- `docs/screenshots/desktop-inbound-modal.png`
 - `docs/screenshots/mobile-screenshot.png`
+- `docs/screenshots/iphone-screenshot.png`
+- `docs/screenshots/iphone-inbound-modal.png`
+- `docs/screenshots/ipad-screenshot.png`
+- `docs/screenshots/ipad-inbound-modal.png`
 
 Last updated: 20-Dec-2025
 

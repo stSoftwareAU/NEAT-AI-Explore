@@ -137,7 +137,9 @@ html, body {
 .explorer {
   display: flex;
   flex-direction: column;
+  /* iOS Safari/PWA: prefer dynamic viewport units where available. */
   height: calc(100vh - 53px);
+  height: calc(100dvh - 53px);
 }
 
 /* Trace bar */
@@ -705,4 +707,104 @@ html, body {
 .synapseStats .stat.suspicious {
   color: var(--warning);
   background: rgba(251, 146, 60, 0.15);
+}
+
+/* ==========================================================================
+   Responsiveness (iPhone / iPad / desktop)
+   ========================================================================== */
+
+@supports (padding: env(safe-area-inset-top)) {
+  .appHeader {
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-left: calc(20px + env(safe-area-inset-left));
+    padding-right: calc(20px + env(safe-area-inset-right));
+  }
+  .traceBar {
+    padding-left: calc(20px + env(safe-area-inset-left));
+    padding-right: calc(20px + env(safe-area-inset-right));
+  }
+}
+
+@media (max-width: 900px) {
+  .appHeader {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .headerControls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* Make the URL input usable on narrow screens. */
+  #fetchUrl.input {
+    flex: 1 1 260px;
+    min-width: 180px;
+  }
+
+  .traceBar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* Stack panels vertically to avoid horizontal scrolling on iPhone PWA. */
+  .explorerMain {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .currentNeuron {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 46vh;
+  }
+
+  .flowArrow {
+    display: none;
+  }
+
+  .synapseHeader {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sortControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 520px) {
+  .appHeader {
+    padding: 10px 14px;
+  }
+
+  .traceBar {
+    padding: 8px 14px;
+  }
+
+  .synapseHeader {
+    padding: 10px 14px;
+  }
+
+  .currentNeuron {
+    padding: 14px;
+  }
+
+  /* Reduce row density + prevent grid overflow on very narrow screens. */
+  .synapseRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .synapseStats {
+    justify-content: flex-start;
+  }
+
+  .synapseNav {
+    display: none;
+  }
 }

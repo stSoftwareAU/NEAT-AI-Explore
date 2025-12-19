@@ -94,6 +94,7 @@ function isSameOrigin(url) {
 function isJsonRequest(request) {
   const url = new URL(request.url);
   return url.pathname.endsWith(".json") ||
+    url.pathname.endsWith(".json.gz") ||
     request.headers.get("accept")?.includes("application/json");
 }
 
