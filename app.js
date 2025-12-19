@@ -168,8 +168,44 @@ function setStatus(msg, kind = "") {
 }
 
 async function fetchJson(url) {
-  const res = await fetch(url, { cache: "no-store" });
+  let res;
+  try {
+    res = await fetch(url, { cache: "no-store" });
+  } catch (e) {
+    // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
+    // fetch() rejects with TypeError("Failed to fetch") in that case.
+    if (e?.message === "Failed to fetch") {
+      throw new Error(
+        "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
+      );
+    }
+    throw e;
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const ce = (res.headers.get("content-encoding") ?? "").toLowerCase();
+  const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+  const looksGz = String(url).toLowerCase().includes(".gz") ||
+    ct.includes("gzip") || ct.includes("application/x-gzip");
+
+  // If S3 serves Content-Encoding: gzip then fetch transparently decompresses and res.json() works.
+  if (ce.includes("gzip")) return res.json();
+
+  // If the object is a raw .gz payload (no Content-Encoding), decompress in-browser.
+  if (looksGz) {
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error(
+        "Snapshot appears to be gzipped (.gz) but this browser can't decompress it. Re-upload with Content-Encoding: gzip and Content-Type: application/json, or upload an uncompressed .json.",
+      );
+    }
+    const buf = await res.arrayBuffer();
+    const stream = new Blob([buf]).stream().pipeThrough(
+      new DecompressionStream("gzip"),
+    );
+    const text = await new Response(stream).text();
+    return JSON.parse(text);
+  }
+
   return res.json();
 }
 
@@ -968,8 +1004,23 @@ el.fileInput.onchange = async () => {
   if (!file) return;
   try {
     setStatus(`Reading ${file.name}...`);
-    const text = await file.text();
-    const obj = JSON.parse(text);
+    let obj;
+    if (file.name.toLowerCase().endsWith(".gz")) {
+      if (typeof DecompressionStream === "undefined") {
+        throw new Error(
+          "This snapshot is gzipped (.gz) but this browser can't decompress it. Export/upload an uncompressed .json, or use a browser with DecompressionStream support.",
+        );
+      }
+      const buf = await file.arrayBuffer();
+      const stream = new Blob([buf]).stream().pipeThrough(
+        new DecompressionStream("gzip"),
+      );
+      const text = await new Response(stream).text();
+      obj = JSON.parse(text);
+    } else {
+      const text = await file.text();
+      obj = JSON.parse(text);
+    }
     await loadSnapshot(obj, file.name);
   } catch (e) {
     setStatus(e.message, "bad");
