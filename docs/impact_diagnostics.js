@@ -1,12 +1,4 @@
 /**
- * NOTE:
- * This is a verbatim copy of ../impact_diagnostics.js.
- *
- * The deployed GitHub Pages site serves from docs/, so we cannot import from
- * ../ at runtime. Keep this file in sync with the repo-root version.
- */
-
-/**
  * Impact diagnostics (viewer-side heuristics).
  *
  * Goal:
@@ -176,6 +168,63 @@ export function squashDerivative(squash, x) {
     default:
       return { d: null, nonSmooth: true, note: "unknown squash" };
   }
+}
+
+/**
+ * Explain the gradient-proxy "working" for a neuron's outgoing synapses.
+ *
+ * term = sens(to) * |weight| * mean|d_squash(to)|
+ *
+ * @param {{
+ *   fromUuid: string,
+ *   synapses: Synapse[],
+ *   neuronsByUuid: Map<string, { uuid: string, type?: string, squash?: string }>,
+ *   proxySens: Map<string, number>,
+ *   squashStats: Map<string, { meanAbsD: number, nonSmooth: boolean, note?: string }>
+ * }} input
+ * @returns {Array<{
+ *   toUuid: string,
+ *   weight: number,
+ *   toSquash: string,
+ *   toMeanAbsD: number | null,
+ *   toNonSmooth: boolean,
+ *   toNote?: string,
+ *   toSens: number | null,
+ *   term: number | null
+ * }>}
+ */
+export function computeOutgoingProxyTerms(input) {
+  const { fromUuid, synapses, neuronsByUuid, proxySens, squashStats } = input ??
+    {};
+  if (
+    !fromUuid || !Array.isArray(synapses) || !neuronsByUuid || !proxySens ||
+    !squashStats
+  ) return [];
+
+  const outs = synapses.filter((s) => s.fromUuid === fromUuid);
+  return outs.map((s) => {
+    const to = s.toUuid;
+    const n = neuronsByUuid.get(to);
+    const toSquash = (n?.squash ?? "IDENTITY").toString();
+    const st = squashStats.get(to);
+    const toMeanAbsD = st ? st.meanAbsD : null;
+    const toNonSmooth = st ? !!st.nonSmooth : false;
+    const toNote = st?.note;
+    const toSens = proxySens.get(to);
+    const term = typeof toSens === "number" && typeof toMeanAbsD === "number"
+      ? toSens * Math.abs(s.weight) * toMeanAbsD
+      : null;
+    return {
+      toUuid: to,
+      weight: s.weight,
+      toSquash,
+      toMeanAbsD,
+      toNonSmooth,
+      toNote,
+      toSens: typeof toSens === "number" ? toSens : null,
+      term,
+    };
+  }).sort((a, b) => (b.term ?? 0) - (a.term ?? 0));
 }
 
 /**
@@ -360,63 +409,4 @@ export function computeGradientProxyImpact(input) {
   }
 
   return score;
-}
-
-/**
- * Explain the gradient-proxy "working" for a neuron's outgoing synapses.
- *
- * term = sens(to) * |weight| * mean|d_squash(to)|
- *
- * @param {{
- *   fromUuid: string,
- *   synapses: Synapse[],
- *   neuronsByUuid: Map<string, { uuid: string, type?: string, squash?: string }>,
- *   proxySens: Map<string, number>,
- *   squashStats: Map<string, { meanAbsD: number, nonSmooth: boolean, note?: string }>
- * }} input
- * @returns {Array<{
- *   toUuid: string,
- *   weight: number,
- *   toSquash: string,
- *   toMeanAbsD: number | null,
- *   toNonSmooth: boolean,
- *   toNote?: string,
- *   toSens: number | null,
- *   term: number | null
- * }>}
- */
-export function computeOutgoingProxyTerms(input) {
-  const { fromUuid, synapses, neuronsByUuid, proxySens, squashStats } = input ??
-    {};
-  if (
-    !fromUuid || !Array.isArray(synapses) || !neuronsByUuid || !proxySens ||
-    !squashStats
-  ) {
-    return [];
-  }
-
-  const outs = synapses.filter((s) => s.fromUuid === fromUuid);
-  return outs.map((s) => {
-    const to = s.toUuid;
-    const n = neuronsByUuid.get(to);
-    const toSquash = (n?.squash ?? "IDENTITY").toString();
-    const st = squashStats.get(to);
-    const toMeanAbsD = st ? st.meanAbsD : null;
-    const toNonSmooth = st ? !!st.nonSmooth : false;
-    const toNote = st?.note;
-    const toSens = proxySens.get(to);
-    const term = typeof toSens === "number" && typeof toMeanAbsD === "number"
-      ? toSens * Math.abs(s.weight) * toMeanAbsD
-      : null;
-    return {
-      toUuid: to,
-      weight: s.weight,
-      toSquash,
-      toMeanAbsD,
-      toNonSmooth,
-      toNote,
-      toSens: typeof toSens === "number" ? toSens : null,
-      term,
-    };
-  }).sort((a, b) => (b.term ?? 0) - (a.term ?? 0));
 }

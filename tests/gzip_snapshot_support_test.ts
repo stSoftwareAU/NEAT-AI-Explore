@@ -11,15 +11,14 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("app supports loading gzipped snapshots (.json.gz)", async () => {
-  for (const p of [repoPath("app.js"), repoPath("docs", "app.js")]) {
-    const js = await Deno.readTextFile(p);
-    assert(
-      js.includes('new DecompressionStream("gzip")'),
-      `Expected ${p} to use DecompressionStream('gzip') for .gz snapshots`,
-    );
-    assert(
-      js.includes(".arrayBuffer()"),
-      `Expected ${p} to read gz payloads via arrayBuffer()`,
-    );
-  }
+  const p = repoPath("docs", "app.js");
+  const js = await Deno.readTextFile(p);
+  assert(
+    js.includes('new DecompressionStream("gzip")'),
+    `Expected ${p} to use DecompressionStream('gzip') for .gz snapshots`,
+  );
+  assert(
+    js.includes(".arrayBuffer()"),
+    `Expected ${p} to read gz payloads via arrayBuffer()`,
+  );
 });

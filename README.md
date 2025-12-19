@@ -4,15 +4,19 @@ A static HTML/JS/CSS viewer for exploring NEAT-AI creature snapshots. This is a
 debug tool for investigating why discovery candidates fail or succeed.
 
 [Example](https://stsoftwareau.github.io/NEAT-AI-Explore/?snapshotUrl=https://stsoftwareau.github.io/NEAT-AI-Explore/snapshot.json.gz)
+
 ## GitHub Pages + PWA
 
 This repo is configured to deploy a **Progressive Web App (PWA)** to **GitHub
 Pages**. The published site lives in `docs/` (mirrors the approach used in
 `../GRQ-health`).
 
-- **Published folder**: `docs/`
+- **Published folder**: `docs/` (contains `index.html`, `app.js`, `styles.css`,
+  etc.)
 - **PWA files**: `docs/manifest.webmanifest`, `docs/sw.js`, `docs/icons/*`,
   `docs/screenshots/*`
+- **Shared JS modules**: `impact_attribution.js` and `impact_diagnostics.js`
+  live at the repo root (used by tests) and are copied to `docs/` for deployment
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
 ## Versioning (SemVer)
@@ -40,13 +44,10 @@ human-facing version number. See [SemVer](https://semver.org/).
    }
    ```
 
-2. **Serve this directory** with any HTTP server:
+2. **Serve the `docs/` folder** with any HTTP server:
    ```bash
-   # Python 3
+   cd docs
    python3 -m http.server 8000
-
-   # Node.js (npx)
-   npx serve .
    ```
 
 3. **Open in browser**: `http://localhost:8000`
@@ -56,7 +57,7 @@ human-facing version number. See [SemVer](https://semver.org/).
    - Or use `?snapshotUrl=./snapshot.json` (alias: `?file=...`)
    - For presigned URLs (recommended): use
      `?snapshotUrlB64=<base64url(utf8(url))>`
-   - Or click "Load ./snapshot.json" if you've placed the file in this directory
+   - Or copy your snapshot to `docs/` and click "Fetch" with the default path
 
 ### Loading snapshots from S3 (presigned URLs)
 
@@ -75,18 +76,6 @@ Also note:
     `Content-Type: application/json` so browsers transparently decompress, or
   - Ensure your browser supports `DecompressionStream` (the app will decompress
     `.gz` client-side when possible).
-
-### Quick Start (GitHub Pages / PWA build)
-
-For local testing of the GitHub Pages site (what actually deploys), serve
-`docs/`:
-
-```bash
-cd docs
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000`.
 
 ## Features
 
@@ -177,7 +166,7 @@ Outputs:
 - `docs/screenshots/desktop-screenshot.png`
 - `docs/screenshots/mobile-screenshot.png`
 
-Last updated: 18-Dec-2025
+Last updated: 20-Dec-2025
 
 ## Creating a public GitHub repo (next to `../NEAT-AI`)
 
