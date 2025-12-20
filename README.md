@@ -65,6 +65,14 @@ When opened with **no query parameters**, the app now **auto-loads**
 `snapshot.json.gz`. This makes the installed PWA usable on iPhone/iPad without
 needing the file picker.
 
+### Tooltips (single-file snapshots)
+
+The viewer can display human-friendly observation names and descriptions using a
+`tooltips` object embedded in the snapshot (e.g.
+`snapshot.tooltips["input-0"] =
+{ label, description }`). This avoids needing a
+separate `Tooltips.json` file.
+
 ### Loading snapshots from S3 (presigned URLs)
 
 If you load a snapshot via a presigned S3 URL from GitHub Pages, the S3 bucket
@@ -230,7 +238,7 @@ Last updated: 20-Dec-2025
 
 ## Creating a public GitHub repo (next to `../NEAT-AI`)
 
-This folder already exists at: `/Users/nigelleck/Develop/NEAT-AI-Explore`
+This folder already exists at: `~/Develop/NEAT-AI-Explore`
 
 To publish it as a **public** GitHub repo:
 
@@ -238,7 +246,7 @@ To publish it as a **public** GitHub repo:
 2. From this directory:
 
 ```bash
-cd /Users/nigelleck/Develop/NEAT-AI-Explore
+cd ~/Develop/NEAT-AI-Explore
 git init
 git add .
 git commit -m "Initial commit"

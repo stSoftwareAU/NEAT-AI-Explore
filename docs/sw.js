@@ -20,8 +20,6 @@ const STATIC_FILES = [
   `./app.js?v=${VERSION}`,
   "./impact_attribution.js",
   "./impact_diagnostics.js",
-  "./vendor/fflate.browser.js",
-  "./Tooltips.json",
   "./manifest.webmanifest",
   "./favicon.ico",
   "./icons/icon-72x72.png",

@@ -129,33 +129,31 @@ const el = {
 };
 
 // ============================================================================
-// Input labels and descriptions (Tooltips.json)
+// Input labels and descriptions (from snapshot.tooltips)
 // ============================================================================
 
-async function loadInputLabels() {
-  try {
-    const res = await fetch("./Tooltips.json", { cache: "no-store" });
-    if (!res.ok) return;
-    const tooltipsByUuid = await res.json();
-
+function loadInputLabelsFromSnapshot(snapshot) {
+  const tooltipsByUuid = snapshot?.tooltips ?? snapshot?.meta?.tooltips ?? null;
+  if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
     uuidToLabel = {};
     uuidToDescription = {};
+    return;
+  }
 
-    for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
-      if (!uuid || typeof uuid !== "string") continue;
-      if (!info || typeof info !== "object") continue;
-      const label = info.label;
-      const description = info.description;
-      if (typeof label === "string" && label.trim().length > 0) {
-        uuidToLabel[uuid] = label;
-      }
-      if (typeof description === "string" && description.trim().length > 0) {
-        uuidToDescription[uuid] = description;
-      }
+  uuidToLabel = {};
+  uuidToDescription = {};
+
+  for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
+    if (!uuid || typeof uuid !== "string") continue;
+    if (!info || typeof info !== "object") continue;
+    const label = info.label;
+    const description = info.description;
+    if (typeof label === "string" && label.trim().length > 0) {
+      uuidToLabel[uuid] = label;
     }
-    console.log(`Loaded ${Object.keys(uuidToLabel).length} input labels`);
-  } catch (e) {
-    console.warn("Could not load Tooltips.json:", e.message);
+    if (typeof description === "string" && description.trim().length > 0) {
+      uuidToDescription[uuid] = description;
+    }
   }
 }
 
@@ -371,6 +369,7 @@ async function loadSnapshot(source, label) {
     const obj = typeof source === "string" ? await fetchJson(source) : source;
     hideProgress();
     SNAPSHOT = obj;
+    loadInputLabelsFromSnapshot(SNAPSHOT);
     const creature = normaliseCreature(obj);
 
     const neuronCount = (creature.neurons ?? []).filter((n) =>
@@ -555,6 +554,16 @@ function renderCurrentNeuron(uuid) {
   const desc = getInputDescription(uuid);
   const isInput = uuid.startsWith("input-");
 
+  // Ensure we have a dedicated description block under the neuron title.
+  // iOS Safari/PWA doesn't reliably show `title` tooltips on tap.
+  let descEl = document.getElementById("currentNeuronDesc");
+  if (!descEl && el.currentNeuronTitle?.parentElement) {
+    descEl = document.createElement("div");
+    descEl.id = "currentNeuronDesc";
+    descEl.className = "neuronDescription";
+    el.currentNeuronTitle.insertAdjacentElement("afterend", descEl);
+  }
+
   if (alias) {
     el.currentNeuronTitle.innerHTML =
       `<span class="aliasName" title="${desc ? escapeHtml(desc) : ""}">${
@@ -563,6 +572,16 @@ function renderCurrentNeuron(uuid) {
       `<span class="uuidSmall">${escapeHtml(uuid)}</span>`;
   } else {
     el.currentNeuronTitle.textContent = uuid;
+  }
+
+  if (descEl) {
+    if (desc && String(desc).trim().length > 0) {
+      descEl.textContent = String(desc).trim();
+      descEl.style.display = "";
+    } else {
+      descEl.textContent = "";
+      descEl.style.display = "none";
+    }
   }
 
   const stats = getNeuronStats(uuid);
@@ -1302,55 +1321,50 @@ el.fetchUrl.onkeydown = (e) => {
 // Init
 // ============================================================================
 
-initTouchTooltips();
+const params = new URLSearchParams(window.location.search);
+const snapshotUrlB64Param = params.get("snapshotUrlB64");
+const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
+  params.get("file");
 
-loadInputLabels().then(() => {
-  const params = new URLSearchParams(window.location.search);
-  const snapshotUrlB64Param = params.get("snapshotUrlB64");
-  const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
-    params.get("file");
-
-  function decodeBase64UrlToUtf8(base64Url) {
-    // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
-    // See RFC 4648 §5.
-    try {
-      const base64 = base64Url.replaceAll("-", "+").replaceAll("_", "/");
-      const pad = "=".repeat((4 - (base64.length % 4)) % 4);
-      const bin = atob(base64 + pad);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return new TextDecoder().decode(bytes);
-    } catch (_e) {
-      return null;
-    }
+function decodeBase64UrlToUtf8(base64Url) {
+  // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
+  // See RFC 4648 §5.
+  try {
+    const base64 = base64Url.replaceAll("-", "+").replaceAll("_", "/");
+    const pad = "=".repeat((4 - (base64.length % 4)) % 4);
+    const bin = atob(base64 + pad);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch (_e) {
+    return null;
   }
+}
 
-  function isDangerousUrlScheme(s) {
-    const v = String(s ?? "").trim().toLowerCase();
-    return v.startsWith("javascript:") || v.startsWith("data:");
+function isDangerousUrlScheme(s) {
+  const v = String(s ?? "").trim().toLowerCase();
+  return v.startsWith("javascript:") || v.startsWith("data:");
+}
+
+let initialUrl = null;
+let initialLabel = null;
+
+if (snapshotUrlB64Param) {
+  const decoded = decodeBase64UrlToUtf8(snapshotUrlB64Param);
+  if (decoded && !isDangerousUrlScheme(decoded)) {
+    initialUrl = decoded;
+    initialLabel = decoded;
   }
+} else if (snapshotUrlParam && !isDangerousUrlScheme(snapshotUrlParam)) {
+  initialUrl = snapshotUrlParam;
+  initialLabel = snapshotUrlParam;
+}
 
-  let initialUrl = null;
-  let initialLabel = null;
-
-  if (snapshotUrlB64Param) {
-    const decoded = decodeBase64UrlToUtf8(snapshotUrlB64Param);
-    if (decoded && !isDangerousUrlScheme(decoded)) {
-      initialUrl = decoded;
-      initialLabel = decoded;
-    }
-  } else if (snapshotUrlParam && !isDangerousUrlScheme(snapshotUrlParam)) {
-    initialUrl = snapshotUrlParam;
-    initialLabel = snapshotUrlParam;
-  }
-
-  if (initialUrl) {
-    const url = normaliseSnapshotUrl(initialUrl);
-    el.fetchUrl.value = url;
-    loadSnapshot(url, initialLabel ?? url);
-  } else {
-    el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-    setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
-    loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
-  }
-});
+if (initialUrl) {
+  el.fetchUrl.value = initialUrl;
+  loadSnapshot(initialUrl, initialLabel ?? initialUrl);
+} else {
+  el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
+  setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
+  loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+}

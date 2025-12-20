@@ -697,62 +697,17 @@ html, body {
   color: var(--text);
 }
 
-/* Touch tooltip panel (iPhone/iPad): press-and-hold shows this. */
-.touchTooltip {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  z-index: 2000;
-  background: var(--panel);
+/* Neuron label/description block under the title (mobile-friendly). */
+.neuronDescription {
+  margin: -8px 0 12px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  display: none;
-  max-height: 40vh;
-  overflow: auto;
-}
-
-.touchTooltip.isOpen {
-  display: block;
-}
-
-.touchTooltipHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.touchTooltipTitle {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.touchTooltipClose {
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  font-size: 12px;
-}
-
-.touchTooltipBody {
-  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
   line-height: 1.35;
   white-space: pre-wrap;
-}
-
-@supports (padding: env(safe-area-inset-bottom)) {
-  .touchTooltip {
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    left: calc(12px + env(safe-area-inset-left));
-    right: calc(12px + env(safe-area-inset-right));
-  }
+  word-break: break-word;
 }
 
 /* Suspicious - very low impact that should be prunable */
