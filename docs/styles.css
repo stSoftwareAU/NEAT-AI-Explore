@@ -697,6 +697,64 @@ html, body {
   color: var(--text);
 }
 
+/* Touch tooltip panel (iPhone/iPad): press-and-hold shows this. */
+.touchTooltip {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2000;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  display: none;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.touchTooltip.isOpen {
+  display: block;
+}
+
+.touchTooltipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.touchTooltipTitle {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.touchTooltipClose {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.touchTooltipBody {
+  padding: 10px 12px;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .touchTooltip {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+  }
+}
+
 /* Suspicious - very low impact that should be prunable */
 .suspicious {
   border-color: var(--warning) !important;
@@ -753,16 +811,34 @@ html, body {
     overflow: auto;
   }
 
+  /* iOS UX: avoid nested scroll areas (panel-within-panel scrolling). Let the
+     main area scroll as a single surface. */
   .currentNeuron {
     width: 100%;
     min-width: 0;
     border-right: none;
     border-bottom: 1px solid var(--border);
-    max-height: 46vh;
+    max-height: none;
+    overflow: visible;
   }
 
   .flowArrow {
     display: none;
+  }
+
+  .synapseList {
+    overflow: visible;
+  }
+
+  .synapseListScroll {
+    overflow: visible;
+    flex: 0 0 auto;
+    padding: 8px 12px;
+  }
+
+  /* Smooth momentum scrolling where supported. */
+  .explorerMain {
+    -webkit-overflow-scrolling: touch;
   }
 
   .synapseHeader {
@@ -779,6 +855,49 @@ html, body {
 @media (max-width: 520px) {
   .appHeader {
     padding: 10px 14px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .appHeader h1 {
+    /* Keep the title tidy on iPhone (no 3-line wrap). */
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .headerControls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  #fetchUrl.input {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  #fetchBtn.button,
+  #fileBtn.button {
+    flex: 1 1 calc(50% - 3px);
+    padding: 6px 10px;
+  }
+
+  .progressContainer {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .statusInline {
+    flex: 1 1 100%;
+    margin-left: 0;
+    word-break: break-word;
   }
 
   .traceBar {

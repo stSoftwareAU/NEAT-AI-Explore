@@ -28,4 +28,20 @@ Deno.test("styles include mobile breakpoints for iPhone/iPad", async () => {
     css.includes(".headerControls") && css.includes("flex-wrap: wrap"),
     `Expected ${p} to allow header controls to wrap on small screens`,
   );
+
+  // Avoid nested scroll areas on iOS (confusing in Safari/PWA).
+  assert(
+    css.includes(".synapseListScroll") && css.includes("overflow: visible"),
+    `Expected ${p} to disable inner synapse list scrolling on mobile`,
+  );
+
+  // iPhone tidy header: keep title to one line and stack controls cleanly.
+  assert(
+    css.includes("@media (max-width: 520px)"),
+    `Expected ${p} to include a max-width: 520px breakpoint`,
+  );
+  assert(
+    css.includes("text-overflow: ellipsis"),
+    `Expected ${p} to ellipsise the header title on iPhone`,
+  );
 });
