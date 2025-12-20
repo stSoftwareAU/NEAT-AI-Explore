@@ -35,11 +35,11 @@ Deno.test("app supports snapshotUrl and snapshotUrlB64 query parameters", async 
   );
 });
 
-Deno.test("app defaults to loading ./snapshot.json.gz", async () => {
+Deno.test("app defaults to loading snapshot.json.gz (no leading ./)", async () => {
   const p = repoPath("docs", "app.js");
   const js = await Deno.readTextFile(p);
   assert(
-    js.includes('const DEFAULT_SNAPSHOT_URL = "./snapshot.json.gz";'),
-    `Expected ${p} to define DEFAULT_SNAPSHOT_URL as ./snapshot.json.gz`,
+    js.includes('const DEFAULT_SNAPSHOT_URL = "snapshot.json.gz";'),
+    `Expected ${p} to define DEFAULT_SNAPSHOT_URL as snapshot.json.gz`,
   );
 });

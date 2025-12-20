@@ -40,7 +40,9 @@ const INBOUND_PAGE_SIZE = 200;
 // Default snapshot used when the app is opened without a URL parameter.
 // This keeps the PWA immediately usable on iPhone/iPad without needing a file
 // picker (which can be awkward in standalone mode).
-const DEFAULT_SNAPSHOT_URL = "./snapshot.json.gz";
+// Note: avoid a leading "./" because some static hosts treat "/./file" as a
+// distinct path (and may 404) rather than normalising it.
+const DEFAULT_SNAPSHOT_URL = "snapshot.json.gz";
 
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
@@ -205,10 +207,51 @@ function hideProgress() {
   el.progressContainer.style.display = "none";
 }
 
+async function gunzipToText(gzBytes) {
+  // Prefer the native streaming API when available (modern Chromium/Firefox).
+  // Some Safari/iOS builds still lack DecompressionStream, so fall back to a
+  // small JS implementation (vendored in ./vendor/fflate.browser.js).
+  if (typeof DecompressionStream !== "undefined") {
+    try {
+      const stream = new Blob([gzBytes]).stream().pipeThrough(
+        new DecompressionStream("gzip"),
+      );
+      return await new Response(stream).text();
+    } catch (_e) {
+      // Fall through to JS gunzip.
+    }
+  }
+
+  try {
+    const { gunzipSync } = await import("./vendor/fflate.browser.js");
+    const out = gunzipSync(gzBytes);
+    return new TextDecoder().decode(out);
+  } catch (_e) {
+    throw new Error(
+      "This snapshot is gzipped (.gz) but this browser can't decompress it. Export/upload an uncompressed .json, or use a browser with gzip support.",
+    );
+  }
+}
+
+function normaliseSnapshotUrl(inputUrl) {
+  const raw = String(inputUrl ?? "").trim();
+  if (!raw) return raw;
+
+  // Don't touch absolute URLs (including blob: for file picker flows).
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return raw;
+
+  // Normalise dot-segments for relative paths. Some hosts/CDNs treat "/./x" as
+  // a different resource path rather than normalising it.
+  let u = raw;
+  while (u.startsWith("./")) u = u.slice(2);
+  u = u.replaceAll("/./", "/");
+  return u;
+}
+
 async function fetchJson(url) {
   let res;
   try {
-    res = await fetch(url, { cache: "no-store" });
+    res = await fetch(normaliseSnapshotUrl(url), { cache: "no-store" });
   } catch (e) {
     // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
     // fetch() rejects with TypeError("Failed to fetch") in that case.
@@ -266,15 +309,7 @@ async function fetchJson(url) {
 
     // Decompress if needed
     if (needsClientDecompress) {
-      if (typeof DecompressionStream === "undefined") {
-        throw new Error(
-          "Snapshot appears to be gzipped (.gz) but this browser can't decompress it. Re-upload with Content-Encoding: gzip and Content-Type: application/json, or upload an uncompressed .json.",
-        );
-      }
-      const stream = new Blob([allChunks]).stream().pipeThrough(
-        new DecompressionStream("gzip"),
-      );
-      const text = await new Response(stream).text();
+      const text = await gunzipToText(allChunks);
       return JSON.parse(text);
     }
 
@@ -285,16 +320,8 @@ async function fetchJson(url) {
 
   // Fallback: no streaming (e.g., body unavailable)
   if (looksGz && !ce.includes("gzip")) {
-    if (typeof DecompressionStream === "undefined") {
-      throw new Error(
-        "Snapshot appears to be gzipped (.gz) but this browser can't decompress it. Re-upload with Content-Encoding: gzip and Content-Type: application/json, or upload an uncompressed .json.",
-      );
-    }
-    const buf = await res.arrayBuffer();
-    const stream = new Blob([buf]).stream().pipeThrough(
-      new DecompressionStream("gzip"),
-    );
-    const text = await new Response(stream).text();
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const text = await gunzipToText(buf);
     return JSON.parse(text);
   }
 
@@ -1107,11 +1134,148 @@ function escapeHtml(s) {
 }
 
 // ============================================================================
+// Tooltips (mobile)
+// ============================================================================
+
+function initTouchTooltips() {
+  // iOS Safari/PWA does not reliably show `title` tooltips on tap.
+  // Provide press-and-hold tooltips on touch devices, without stealing normal taps.
+  const isTouch = (() => {
+    try {
+      return (navigator.maxTouchPoints ?? 0) > 0 ||
+        window.matchMedia?.("(hover: none)")?.matches === true;
+    } catch (_e) {
+      return false;
+    }
+  })();
+
+  if (!isTouch) return;
+
+  let tooltipEl = document.getElementById("touchTooltip");
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = "touchTooltip";
+    tooltipEl.className = "touchTooltip";
+    tooltipEl.setAttribute("role", "dialog");
+    tooltipEl.setAttribute("aria-live", "polite");
+    tooltipEl.innerHTML = `
+      <div class="touchTooltipHeader">
+        <div class="touchTooltipTitle">Tip</div>
+        <button type="button" class="touchTooltipClose">Close</button>
+      </div>
+      <div class="touchTooltipBody"></div>
+    `;
+    document.body.appendChild(tooltipEl);
+
+    tooltipEl.querySelector(".touchTooltipClose")?.addEventListener(
+      "click",
+      () => hideTouchTooltip(),
+    );
+  }
+
+  const bodyEl = tooltipEl.querySelector(".touchTooltipBody");
+
+  function showTouchTooltip(text) {
+    if (!tooltipEl || !bodyEl) return;
+    const msg = String(text ?? "").trim();
+    if (!msg) return;
+    bodyEl.textContent = msg;
+    tooltipEl.classList.add("isOpen");
+  }
+
+  function hideTouchTooltip() {
+    tooltipEl?.classList.remove("isOpen");
+  }
+
+  // Press-and-hold detection.
+  let pressTimer = null;
+  let shownForTarget = null;
+  let suppressClickUntil = 0;
+
+  function findTooltipTarget(startEl) {
+    let n = startEl;
+    while (n && n !== document.body) {
+      if (n?.getAttribute && n.hasAttribute("title")) {
+        const t = n.getAttribute("title");
+        if (t && t.trim().length > 0) return n;
+      }
+      n = n.parentElement;
+    }
+    return null;
+  }
+
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (pressTimer) clearTimeout(pressTimer);
+      shownForTarget = null;
+
+      const target = findTooltipTarget(e.target);
+      if (!target) return;
+
+      // Long-press shows the tooltip; short tap continues normal behaviour.
+      pressTimer = setTimeout(() => {
+        shownForTarget = target;
+        suppressClickUntil = Date.now() + 650;
+        showTouchTooltip(target.getAttribute("title"));
+      }, 450);
+    },
+    { passive: true, capture: true },
+  );
+
+  document.addEventListener(
+    "touchmove",
+    () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+    },
+    { passive: true, capture: true },
+  );
+
+  document.addEventListener(
+    "touchend",
+    () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+    },
+    { passive: true, capture: true },
+  );
+
+  // If we just showed a tooltip, suppress the follow-up click so we don't
+  // accidentally trigger navigation (e.g. tapping a stat inside a synapse row).
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (Date.now() > suppressClickUntil) return;
+      const target = findTooltipTarget(e.target);
+      if (!target) return;
+      if (shownForTarget && target === shownForTarget) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    { capture: true },
+  );
+
+  // Tap anywhere outside the tooltip to close it.
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!tooltipEl?.classList.contains("isOpen")) return;
+      if (tooltipEl.contains(e.target)) return;
+      hideTouchTooltip();
+    },
+    { passive: true },
+  );
+}
+
+// ============================================================================
 // Event Listeners
 // ============================================================================
 
 el.fetchBtn.onclick = () => {
-  const url = el.fetchUrl.value.trim() || DEFAULT_SNAPSHOT_URL;
+  const raw = el.fetchUrl.value.trim() || DEFAULT_SNAPSHOT_URL;
+  const url = normaliseSnapshotUrl(raw);
   loadSnapshot(url, url);
 };
 
@@ -1125,17 +1289,8 @@ el.fileInput.onchange = async () => {
     showProgress(true); // Indeterminate for local file reading
     let obj;
     if (file.name.toLowerCase().endsWith(".gz")) {
-      if (typeof DecompressionStream === "undefined") {
-        hideProgress();
-        throw new Error(
-          "This snapshot is gzipped (.gz) but this browser can't decompress it. Export/upload an uncompressed .json, or use a browser with DecompressionStream support.",
-        );
-      }
-      const buf = await file.arrayBuffer();
-      const stream = new Blob([buf]).stream().pipeThrough(
-        new DecompressionStream("gzip"),
-      );
-      const text = await new Response(stream).text();
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const text = await gunzipToText(buf);
       obj = JSON.parse(text);
     } else {
       const text = await file.text();

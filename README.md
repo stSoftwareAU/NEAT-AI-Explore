@@ -62,7 +62,7 @@ human-facing version number. See [SemVer](https://semver.org/).
 ### Default snapshot (PWA-friendly)
 
 When opened with **no query parameters**, the app now **auto-loads**
-`./snapshot.json.gz`. This makes the installed PWA usable on iPhone/iPad without
+`snapshot.json.gz`. This makes the installed PWA usable on iPhone/iPad without
 needing the file picker.
 
 ### Tooltips (single-file snapshots)
