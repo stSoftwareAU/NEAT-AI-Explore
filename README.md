@@ -238,7 +238,7 @@ Last updated: 20-Dec-2025
 
 ## Creating a public GitHub repo (next to `../NEAT-AI`)
 
-This folder already exists at: `/Users/nigelleck/Develop/NEAT-AI-Explore`
+This folder already exists at: `~/Develop/NEAT-AI-Explore`
 
 To publish it as a **public** GitHub repo:
 
@@ -246,7 +246,7 @@ To publish it as a **public** GitHub repo:
 2. From this directory:
 
 ```bash
-cd /Users/nigelleck/Develop/NEAT-AI-Explore
+cd ~/Develop/NEAT-AI-Explore
 git init
 git add .
 git commit -m "Initial commit"
