@@ -82,7 +82,6 @@ Deno.test("service worker caches the app shell", async () => {
       '"./manifest.webmanifest"',
       '"./favicon.ico"',
       '"./icons/icon-192x192.png"',
-      '"./Tooltips.json"',
     ]
   ) {
     assert(
@@ -92,13 +91,18 @@ Deno.test("service worker caches the app shell", async () => {
   }
 });
 
-Deno.test("app loads Tooltips.json (not aliases.json)", async () => {
+Deno.test("app loads tooltips from snapshot (not Tooltips.json)", async () => {
   const appPath = repoPath("docs", "app.js");
   const js = await Deno.readTextFile(appPath);
 
   assert(
-    js.includes("./Tooltips.json"),
-    "Expected docs/app.js to fetch ./Tooltips.json",
+    !js.includes("./Tooltips.json"),
+    "Expected docs/app.js to not fetch ./Tooltips.json",
+  );
+  assert(
+    js.includes("snapshot?.tooltips") ||
+      js.includes("loadInputLabelsFromSnapshot"),
+    "Expected docs/app.js to read tooltips from the snapshot payload",
   );
   assert(
     !js.includes("./aliases.json"),
