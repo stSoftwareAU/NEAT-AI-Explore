@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Quality gate for NEAT-AI Explore.
+#
+# Runs the same checks you want in CI/PR review:
+# - Update Deno (best-effort; doesn't fail if Deno is managed by brew/asdf)
+# - Format check
+# - Lint
+# - Tests
+#
+# Last updated: 21-Dec-2025
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+echo "==> Deno version"
+deno --version
+
+echo ""
+echo "==> Updating Deno (best-effort)"
+if deno upgrade; then
+  echo "Deno upgrade: ok"
+else
+  echo "Deno upgrade: skipped/failed (continuing)"
+fi
+
+echo ""
+echo "==> Format (check)"
+deno fmt --check
+
+echo ""
+echo "==> Lint"
+deno lint
+
+echo ""
+echo "==> Tests"
+deno test -A
+
+echo ""
+echo "==> OK"
+

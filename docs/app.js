@@ -107,6 +107,7 @@ const el = {
   fetchBtn: document.getElementById("fetchBtn"),
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
+  themeToggle: document.getElementById("themeToggle"),
   progressContainer: document.getElementById("progressContainer"),
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
@@ -246,6 +247,107 @@ function normaliseSnapshotUrl(inputUrl) {
   while (u.startsWith("./")) u = u.slice(2);
   u = u.replaceAll("/./", "/");
   return u;
+}
+
+// ============================================================================
+// Theme mode (Light/Dark/Auto)
+// ============================================================================
+
+const THEME_STORAGE_KEY = "themeMode";
+
+function getSystemTheme() {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
+      ? "dark"
+      : "light";
+  } catch (_e) {
+    return "light";
+  }
+}
+
+function setThemeColourForMode(mode) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const resolved = mode === "auto" ? getSystemTheme() : mode;
+  // Keep this simple: align the browser UI colour with the page background.
+  meta.setAttribute("content", resolved === "dark" ? "#0a0e1a" : "#f5f7fb");
+}
+
+function applyThemeMode(mode) {
+  const m = String(mode ?? "auto");
+  const root = document.documentElement;
+  if (m === "dark" || m === "light") {
+    root.setAttribute("data-theme", m);
+  } else {
+    root.removeAttribute("data-theme");
+  }
+  setThemeColourForMode(m);
+
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, m);
+  } catch (_e) {
+    // Ignore storage failures (private mode / blocked storage).
+  }
+}
+
+function themeModeLabel(mode) {
+  if (mode === "light") return "Light";
+  if (mode === "dark") return "Dark";
+  return "Auto";
+}
+
+function themeModeGlyph(mode) {
+  if (mode === "light") return "☀";
+  if (mode === "dark") return "☾";
+  return "A";
+}
+
+function cycleThemeMode(current) {
+  if (current === "auto") return "light";
+  if (current === "light") return "dark";
+  return "auto";
+}
+
+function initThemeMode() {
+  const btn = el.themeToggle;
+  if (!btn) return;
+
+  let saved = "auto";
+  try {
+    saved = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
+  } catch (_e) {
+    saved = "auto";
+  }
+  if (saved !== "auto" && saved !== "light" && saved !== "dark") saved = "auto";
+
+  applyThemeMode(saved);
+
+  const updateButton = (mode) => {
+    btn.textContent = themeModeGlyph(mode);
+    btn.title = `Theme: ${themeModeLabel(mode)} (tap to cycle)`;
+    btn.setAttribute("aria-label", btn.title);
+  };
+
+  updateButton(saved);
+
+  btn.addEventListener("click", () => {
+    const current = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
+    const next = cycleThemeMode(current);
+    applyThemeMode(next);
+    updateButton(next);
+  });
+
+  // Keep Auto mode in sync with OS theme changes.
+  try {
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    mql?.addEventListener?.("change", () => {
+      // Only applies to Auto mode (no explicit data-theme override).
+      const mode = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
+      if (mode === "auto") setThemeColourForMode("auto");
+    });
+  } catch (_e) {
+    // No-op.
+  }
 }
 
 async function fetchJson(url) {
@@ -1325,6 +1427,9 @@ const params = new URLSearchParams(window.location.search);
 const snapshotUrlB64Param = params.get("snapshotUrlB64");
 const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
   params.get("file");
+
+initThemeMode();
+initTouchTooltips();
 
 function decodeBase64UrlToUtf8(base64Url) {
   // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
