@@ -257,10 +257,27 @@ const THEME_STORAGE_KEY = "themeMode";
 const THEME_COLOUR_LIGHT = "#f5f7fb";
 const THEME_COLOUR_DARK = "#0a0e1a";
 
+// In privacy modes, localStorage can be blocked (throws on access). We keep an
+// in-memory fallback so the theme toggle can still cycle within the current
+// session, even if we cannot persist it across reloads.
+let themeModeMemory = "auto";
+let themeCanPersist = false;
+
 function normaliseThemeMode(mode) {
   const m = String(mode ?? "auto");
   if (m === "auto" || m === "light" || m === "dark") return m;
   return "auto";
+}
+
+function canUseLocalStorage() {
+  try {
+    const k = "__neat_theme_test__";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    return true;
+  } catch (_e) {
+    return false;
+  }
 }
 
 function safeGetThemeMode() {
@@ -295,6 +312,8 @@ function setThemeColourForMode(mode) {
 
 function applyThemeMode(mode) {
   const m = normaliseThemeMode(mode);
+  themeModeMemory = m;
+
   const root = document.documentElement;
   if (m === "dark" || m === "light") {
     root.setAttribute("data-theme", m);
@@ -303,10 +322,13 @@ function applyThemeMode(mode) {
   }
   setThemeColourForMode(m);
 
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, m);
-  } catch (_e) {
-    // Ignore storage failures (private mode / blocked storage).
+  if (themeCanPersist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, m);
+    } catch (_e) {
+      // Storage can become unavailable (private mode / blocked storage).
+      themeCanPersist = false;
+    }
   }
 }
 
@@ -332,7 +354,8 @@ function initThemeMode() {
   const btn = el.themeToggle;
   if (!btn) return;
 
-  const saved = safeGetThemeMode();
+  themeCanPersist = canUseLocalStorage();
+  const saved = themeCanPersist ? safeGetThemeMode() : "auto";
 
   applyThemeMode(saved);
 
@@ -342,13 +365,13 @@ function initThemeMode() {
     btn.setAttribute("aria-label", btn.title);
   };
 
-  updateButton(saved);
+  updateButton(themeModeMemory);
 
   btn.addEventListener("click", () => {
-    const current = safeGetThemeMode();
-    const next = cycleThemeMode(current);
+    // Use in-memory state so we can still cycle when localStorage is blocked.
+    const next = cycleThemeMode(themeModeMemory);
     applyThemeMode(next);
-    updateButton(next);
+    updateButton(themeModeMemory);
   });
 
   // Keep Auto mode in sync with OS theme changes.
@@ -356,8 +379,7 @@ function initThemeMode() {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
     mql?.addEventListener?.("change", () => {
       // Only applies to Auto mode (no explicit data-theme override).
-      const mode = safeGetThemeMode();
-      if (mode === "auto") setThemeColourForMode("auto");
+      if (themeModeMemory === "auto") setThemeColourForMode("auto");
     });
   } catch (_e) {
     // No-op.

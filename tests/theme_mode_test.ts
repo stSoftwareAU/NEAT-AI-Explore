@@ -53,14 +53,21 @@ Deno.test("PWA supports light/dark/auto theme mode", async () => {
     `Expected ${appPath} to include a safeGetThemeMode() helper (private browsing can throw on localStorage access)`,
   );
   assert(
-    /btn\.addEventListener\("click",\s*\(\)\s*=>\s*\{\s*const current = safeGetThemeMode\(\)/s
-      .test(js),
-    `Expected ${appPath} click handler to read theme mode via safeGetThemeMode()`,
+    js.includes("themeModeMemory"),
+    `Expected ${appPath} to include an in-memory theme mode fallback (localStorage can be blocked)`,
   );
   assert(
-    /addEventListener\?\.\("change",\s*\(\)\s*=>\s*\{[\s\S]*?safeGetThemeMode\(\)/s
+    !/btn\.addEventListener\("click",[\s\S]*?safeGetThemeMode\(\)/s.test(js),
+    `Expected ${appPath} click handler to avoid reading theme mode from localStorage each click (blocked storage makes it stick)`,
+  );
+  assert(
+    /btn\.addEventListener\("click",[\s\S]*?cycleThemeMode\(themeModeMemory\)/s
       .test(js),
-    `Expected ${appPath} prefers-colour-scheme change handler to read theme mode via safeGetThemeMode()`,
+    `Expected ${appPath} click handler to cycle from an in-memory theme mode state`,
+  );
+  assert(
+    !/addEventListener\?\.\("change",[\s\S]*?safeGetThemeMode\(\)/s.test(js),
+    `Expected ${appPath} prefers-colour-scheme change handler to avoid reading theme mode from localStorage (it can be blocked)`,
   );
   assert(
     js.includes("data-theme") || js.includes("dataset.theme"),
