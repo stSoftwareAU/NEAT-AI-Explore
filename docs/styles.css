@@ -133,7 +133,7 @@ html, body {
   gap: 6px;
 }
 
-.themeToggle {
+.button.themeToggle {
   width: 38px;
   min-width: 38px;
   padding: 6px 0;
