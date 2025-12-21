@@ -6,7 +6,13 @@
     <title>NEAT-AI Explore</title>
     <link rel="stylesheet" href="./styles.css?v=__BUILD_ID__" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="theme-color" content="#0a0e1a" />
+    <!-- Match the CSS default (light) and override via prefers-colour-scheme. -->
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="theme-color"
+      content="#0a0e1a"
+      media="(prefers-color-scheme: dark)"
+    />
     <link rel="icon" href="./favicon.ico" />
     <link
       rel="icon"

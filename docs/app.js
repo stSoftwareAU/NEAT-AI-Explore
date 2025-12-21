@@ -254,6 +254,25 @@ function normaliseSnapshotUrl(inputUrl) {
 // ============================================================================
 
 const THEME_STORAGE_KEY = "themeMode";
+const THEME_COLOUR_LIGHT = "#f5f7fb";
+const THEME_COLOUR_DARK = "#0a0e1a";
+
+function normaliseThemeMode(mode) {
+  const m = String(mode ?? "auto");
+  if (m === "auto" || m === "light" || m === "dark") return m;
+  return "auto";
+}
+
+function safeGetThemeMode() {
+  try {
+    return normaliseThemeMode(
+      localStorage.getItem(THEME_STORAGE_KEY) ?? "auto",
+    );
+  } catch (_e) {
+    // Some browsers throw on localStorage access in strict privacy modes.
+    return "auto";
+  }
+}
 
 function getSystemTheme() {
   try {
@@ -266,15 +285,16 @@ function getSystemTheme() {
 }
 
 function setThemeColourForMode(mode) {
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (!meta) return;
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (!metas?.length) return;
   const resolved = mode === "auto" ? getSystemTheme() : mode;
   // Keep this simple: align the browser UI colour with the page background.
-  meta.setAttribute("content", resolved === "dark" ? "#0a0e1a" : "#f5f7fb");
+  const colour = resolved === "dark" ? THEME_COLOUR_DARK : THEME_COLOUR_LIGHT;
+  for (const meta of metas) meta.setAttribute("content", colour);
 }
 
 function applyThemeMode(mode) {
-  const m = String(mode ?? "auto");
+  const m = normaliseThemeMode(mode);
   const root = document.documentElement;
   if (m === "dark" || m === "light") {
     root.setAttribute("data-theme", m);
@@ -312,13 +332,7 @@ function initThemeMode() {
   const btn = el.themeToggle;
   if (!btn) return;
 
-  let saved = "auto";
-  try {
-    saved = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
-  } catch (_e) {
-    saved = "auto";
-  }
-  if (saved !== "auto" && saved !== "light" && saved !== "dark") saved = "auto";
+  const saved = safeGetThemeMode();
 
   applyThemeMode(saved);
 
@@ -331,7 +345,7 @@ function initThemeMode() {
   updateButton(saved);
 
   btn.addEventListener("click", () => {
-    const current = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
+    const current = safeGetThemeMode();
     const next = cycleThemeMode(current);
     applyThemeMode(next);
     updateButton(next);
@@ -342,7 +356,7 @@ function initThemeMode() {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
     mql?.addEventListener?.("change", () => {
       // Only applies to Auto mode (no explicit data-theme override).
-      const mode = localStorage.getItem(THEME_STORAGE_KEY) ?? "auto";
+      const mode = safeGetThemeMode();
       if (mode === "auto") setThemeColourForMode("auto");
     });
   } catch (_e) {
