@@ -1,10 +1,86 @@
 :root {
+  /* Theme (auto): default to light, override to dark via prefers-color-scheme. */
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panelHover: #eef2ff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: rgba(17, 24, 39, 0.12);
+
+  /* Reusable tinted surfaces (avoid hard-coding white overlays). */
+  --surfaceSoft: rgba(17, 24, 39, 0.06);
+  --surfaceSofter: rgba(17, 24, 39, 0.04);
+  --buttonSecondaryBg: rgba(17, 24, 39, 0.05);
+  --progressTrackBg: rgba(17, 24, 39, 0.12);
+
+  --accent: #2563eb;
+  --accentHover: #1d4ed8;
+  --positive: #059669;
+  --negative: #dc2626;
+  --error: #dc2626;
+  --highlight: #b45309;
+  --trace: #b45309;
+  --warning: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --panelHover: #1a2332;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --border: rgba(255, 255, 255, 0.08);
+
+    --surfaceSoft: rgba(255, 255, 255, 0.05);
+    --surfaceSofter: rgba(255, 255, 255, 0.03);
+    --buttonSecondaryBg: rgba(255, 255, 255, 0.05);
+    --progressTrackBg: rgba(255, 255, 255, 0.1);
+
+    --accent: #60a5fa;
+    --accentHover: #93c5fd;
+    --positive: #34d399;
+    --negative: #f87171;
+    --error: #ef4444;
+    --highlight: #fbbf24;
+    --trace: #fbbf24;
+    --warning: #fb923c;
+  }
+}
+
+/* Explicit overrides (Light/Dark) take precedence over system auto mode. */
+:root[data-theme="light"] {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panelHover: #eef2ff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: rgba(17, 24, 39, 0.12);
+  --surfaceSoft: rgba(17, 24, 39, 0.06);
+  --surfaceSofter: rgba(17, 24, 39, 0.04);
+  --buttonSecondaryBg: rgba(17, 24, 39, 0.05);
+  --progressTrackBg: rgba(17, 24, 39, 0.12);
+  --accent: #2563eb;
+  --accentHover: #1d4ed8;
+  --positive: #059669;
+  --negative: #dc2626;
+  --error: #dc2626;
+  --highlight: #b45309;
+  --trace: #b45309;
+  --warning: #b45309;
+}
+
+:root[data-theme="dark"] {
   --bg: #0a0e1a;
   --panel: #111827;
   --panelHover: #1a2332;
   --text: #e5e7eb;
   --muted: #9ca3af;
   --border: rgba(255, 255, 255, 0.08);
+  --surfaceSoft: rgba(255, 255, 255, 0.05);
+  --surfaceSofter: rgba(255, 255, 255, 0.03);
+  --buttonSecondaryBg: rgba(255, 255, 255, 0.05);
+  --progressTrackBg: rgba(255, 255, 255, 0.1);
   --accent: #60a5fa;
   --accentHover: #93c5fd;
   --positive: #34d399;
@@ -51,6 +127,23 @@ html, body {
   gap: 8px;
 }
 
+.browseGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button.themeToggle {
+  width: 38px;
+  min-width: 38px;
+  padding: 6px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
 .input, .select {
   padding: 6px 10px;
   border-radius: 6px;
@@ -82,7 +175,7 @@ html, body {
 }
 
 .buttonSecondary {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--buttonSecondaryBg);
 }
 
 .statusInline {
@@ -102,7 +195,7 @@ html, body {
 .progressContainer {
   width: 120px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--progressTrackBg);
   border-radius: 3px;
   overflow: hidden;
   margin-left: 8px;
@@ -327,7 +420,7 @@ html, body {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surfaceSoft);
   border-radius: 4px;
   white-space: nowrap;
 }
@@ -459,7 +552,7 @@ html, body {
 .pathItem {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surfaceSofter);
   overflow: hidden;
 }
 
@@ -622,7 +715,7 @@ html, body {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surfaceSoft);
   border-radius: 4px;
   white-space: nowrap;
 }
@@ -703,7 +796,61 @@ html, body {
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surfaceSofter);
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Touch tooltip UI (press-and-hold on mobile). */
+.touchTooltip {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  z-index: 9999;
+  display: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.touchTooltip.isOpen {
+  display: block;
+}
+
+.touchTooltipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surfaceSofter);
+}
+
+.touchTooltipTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.touchTooltipClose {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: var(--buttonSecondaryBg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.touchTooltipBody {
+  padding: 10px 12px;
   color: var(--muted);
   line-height: 1.35;
   white-space: pre-wrap;
@@ -836,10 +983,24 @@ html, body {
     min-width: 0;
   }
 
-  #fetchBtn.button,
-  #fileBtn.button {
-    flex: 1 1 calc(50% - 3px);
+  /* Keep controls compact: Fetch row, then Browse + Theme together. */
+  #fetchBtn.button {
+    flex: 1 1 100%;
     padding: 6px 10px;
+  }
+
+  .browseGroup {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  #fileBtn.button {
+    flex: 1 1 auto;
+    padding: 6px 10px;
+  }
+
+  #themeToggle.themeToggle {
+    flex: 0 0 auto;
   }
 
   .progressContainer {

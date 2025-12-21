@@ -107,6 +107,7 @@ const el = {
   fetchBtn: document.getElementById("fetchBtn"),
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
+  themeToggle: document.getElementById("themeToggle"),
   progressContainer: document.getElementById("progressContainer"),
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
@@ -246,6 +247,143 @@ function normaliseSnapshotUrl(inputUrl) {
   while (u.startsWith("./")) u = u.slice(2);
   u = u.replaceAll("/./", "/");
   return u;
+}
+
+// ============================================================================
+// Theme mode (Light/Dark/Auto)
+// ============================================================================
+
+const THEME_STORAGE_KEY = "themeMode";
+const THEME_COLOUR_LIGHT = "#f5f7fb";
+const THEME_COLOUR_DARK = "#0a0e1a";
+
+// In privacy modes, localStorage can be blocked (throws on access). We keep an
+// in-memory fallback so the theme toggle can still cycle within the current
+// session, even if we cannot persist it across reloads.
+let themeModeMemory = "auto";
+let themeCanPersist = false;
+
+function normaliseThemeMode(mode) {
+  const m = String(mode ?? "auto");
+  if (m === "auto" || m === "light" || m === "dark") return m;
+  return "auto";
+}
+
+function canUseLocalStorage() {
+  try {
+    const k = "__neat_theme_test__";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function safeGetThemeMode() {
+  try {
+    return normaliseThemeMode(
+      localStorage.getItem(THEME_STORAGE_KEY) ?? "auto",
+    );
+  } catch (_e) {
+    // Some browsers throw on localStorage access in strict privacy modes.
+    return "auto";
+  }
+}
+
+function getSystemTheme() {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
+      ? "dark"
+      : "light";
+  } catch (_e) {
+    return "light";
+  }
+}
+
+function setThemeColourForMode(mode) {
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (!metas?.length) return;
+  const resolved = mode === "auto" ? getSystemTheme() : mode;
+  // Keep this simple: align the browser UI colour with the page background.
+  const colour = resolved === "dark" ? THEME_COLOUR_DARK : THEME_COLOUR_LIGHT;
+  for (const meta of metas) meta.setAttribute("content", colour);
+}
+
+function applyThemeMode(mode) {
+  const m = normaliseThemeMode(mode);
+  themeModeMemory = m;
+
+  const root = document.documentElement;
+  if (m === "dark" || m === "light") {
+    root.setAttribute("data-theme", m);
+  } else {
+    root.removeAttribute("data-theme");
+  }
+  setThemeColourForMode(m);
+
+  if (themeCanPersist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, m);
+    } catch (_e) {
+      // Storage can become unavailable (private mode / blocked storage).
+      themeCanPersist = false;
+    }
+  }
+}
+
+function themeModeLabel(mode) {
+  if (mode === "light") return "Light";
+  if (mode === "dark") return "Dark";
+  return "Auto";
+}
+
+function themeModeGlyph(mode) {
+  if (mode === "light") return "☀";
+  if (mode === "dark") return "☾";
+  return "A";
+}
+
+function cycleThemeMode(current) {
+  if (current === "auto") return "light";
+  if (current === "light") return "dark";
+  return "auto";
+}
+
+function initThemeMode() {
+  const btn = el.themeToggle;
+  if (!btn) return;
+
+  themeCanPersist = canUseLocalStorage();
+  const saved = themeCanPersist ? safeGetThemeMode() : "auto";
+
+  applyThemeMode(saved);
+
+  const updateButton = (mode) => {
+    btn.textContent = themeModeGlyph(mode);
+    btn.title = `Theme: ${themeModeLabel(mode)} (tap to cycle)`;
+    btn.setAttribute("aria-label", btn.title);
+  };
+
+  updateButton(themeModeMemory);
+
+  btn.addEventListener("click", () => {
+    // Use in-memory state so we can still cycle when localStorage is blocked.
+    const next = cycleThemeMode(themeModeMemory);
+    applyThemeMode(next);
+    updateButton(themeModeMemory);
+  });
+
+  // Keep Auto mode in sync with OS theme changes.
+  try {
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    mql?.addEventListener?.("change", () => {
+      // Only applies to Auto mode (no explicit data-theme override).
+      if (themeModeMemory === "auto") setThemeColourForMode("auto");
+    });
+  } catch (_e) {
+    // No-op.
+  }
 }
 
 async function fetchJson(url) {
@@ -1325,6 +1463,9 @@ const params = new URLSearchParams(window.location.search);
 const snapshotUrlB64Param = params.get("snapshotUrlB64");
 const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
   params.get("file");
+
+initThemeMode();
+initTouchTooltips();
 
 function decodeBase64UrlToUtf8(base64Url) {
   // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
