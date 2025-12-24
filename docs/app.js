@@ -89,11 +89,17 @@ function squashWarningExplanation(note, squash) {
   if (n === "singular near 0") {
     return `Singular near 0 means the derivative can blow up near 0 (e.g. SQRT). This can make impact estimates unstable. (squash: ${s})`;
   }
+  if (n === "singular near asymptote") {
+    return `Singular near asymptote means the derivative can blow up near an asymptote (e.g. TAN near π/2 + kπ). This can make impact estimates unstable. (squash: ${s})`;
+  }
   if (n === "undefined for x≤0") {
     return `Undefined for x≤0 means the squash isn't differentiable/defined in that region (e.g. SQRT(max(0,x))). (squash: ${s})`;
   }
   if (n === "non-smooth/branching") {
     return `Non-smooth/branching squashes (e.g. IF/MIN/MAX/STEP) can change behaviour discontinuously. Derivative-based impact calculations can be misleading. (squash: ${s})`;
+  }
+  if (n === "unsupported activation model") {
+    return `Unsupported activation model: this activation isn't a simple scalar squash of a pre-activation (e.g. HYPOT/MEAN style). The viewer can't model its derivative reliably. Treat derivative-based diagnostics with caution. (squash: ${s})`;
   }
   if (n === "unknown squash") {
     return `Unknown squash: the viewer doesn't know the derivative model. Treat any derivative-based diagnostics with caution. (squash: ${s})`;

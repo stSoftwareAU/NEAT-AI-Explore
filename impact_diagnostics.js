@@ -74,8 +74,18 @@ export function squashDerivative(squash, x) {
       const y = 1 / (1 + Math.exp(-x));
       return { d: y * (1 - y), nonSmooth: false };
     }
+    case "BIPOLAR_SIGMOID": {
+      // f(x) = 2/(1+exp(-x)) - 1 ; f'(x) = (1 - f(x)^2)/2
+      const y = 2 / (1 + Math.exp(-x)) - 1;
+      return { d: (1 - y * y) / 2, nonSmooth: false };
+    }
     case "HARD_TANH": {
       // Typical hard-tanh clamp to [-1, 1]
+      if (x <= -1 || x >= 1) return { d: 0, nonSmooth: true, note: "clamped" };
+      return { d: 1, nonSmooth: true, note: "piecewise" };
+    }
+    case "CLIPPED": {
+      // Alias for HARD_TANH in NEAT-AI.
       if (x <= -1 || x >= 1) return { d: 0, nonSmooth: true, note: "clamped" };
       return { d: 1, nonSmooth: true, note: "piecewise" };
     }
@@ -83,6 +93,11 @@ export function squashDerivative(squash, x) {
       return { d: x > 0 ? 1 : 0, nonSmooth: true, note: "kink at 0" };
     case "LEAKYRELU":
       return { d: x > 0 ? 1 : 0.01, nonSmooth: true, note: "kink at 0" };
+    case "RELU6": {
+      // f(x)=clamp(x, 0, 6). Discontinuous derivative at 0 and 6.
+      if (x <= 0 || x >= 6) return { d: 0, nonSmooth: true, note: "clamped" };
+      return { d: 1, nonSmooth: true, note: "piecewise" };
+    }
     case "ELU": {
       const a = 1;
       return {
@@ -106,6 +121,11 @@ export function squashDerivative(squash, x) {
       const y = 1 / (1 + Math.exp(-x));
       return { d: y, nonSmooth: false };
     }
+    case "SOFTSIGN": {
+      // f(x) = x / (1 + |x|) ; f'(x) = 1 / (1 + |x|)^2
+      const denom = 1 + Math.abs(x);
+      return { d: 1 / (denom * denom), nonSmooth: false };
+    }
     case "ARCTAN":
     case "ARCTANH":
     case "ARCTAN_": {
@@ -113,6 +133,21 @@ export function squashDerivative(squash, x) {
     }
     case "COSINE":
       return { d: -Math.sin(x), nonSmooth: false };
+    case "SINE":
+    case "SINUSOID":
+      return { d: Math.cos(x), nonSmooth: false };
+    case "TAN": {
+      // f(x)=tan(x) ; f'(x)=sec^2(x)=1/cos^2(x)
+      const c = Math.cos(x);
+      if (Math.abs(c) < 1e-12) {
+        return { d: null, nonSmooth: true, note: "singular near asymptote" };
+      }
+      return {
+        d: 1 / (c * c),
+        nonSmooth: true,
+        note: "singular near asymptote",
+      };
+    }
     case "ABSOLUTE":
     case "ABS": {
       // |x| ; derivative is sign(x) except at 0 (undefined).
@@ -144,11 +179,46 @@ export function squashDerivative(squash, x) {
       return { d: y, nonSmooth: false };
     }
     case "COMPLEMENT":
+    case "INVERSE":
       // Common meaning: 1 - x
       return { d: -1, nonSmooth: false };
     case "BENT_IDENTITY": {
       // f(x)= (sqrt(x^2+1)-1)/2 + x ; f'(x)= x/(2*sqrt(x^2+1)) + 1
       return { d: 1 + x / (2 * Math.sqrt(x * x + 1)), nonSmooth: false };
+    }
+    case "CUBE":
+      // f(x)=x^3 ; f'(x)=3x^2
+      return { d: 3 * x * x, nonSmooth: false };
+    case "SQUARE":
+      // f(x)=x^2 ; f'(x)=2x
+      return { d: 2 * x, nonSmooth: false };
+    case "GAUSSIAN": {
+      // f(x)=exp(-x^2) ; f'(x)=-2x*exp(-x^2)
+      const xx = Math.max(-100, Math.min(100, x));
+      return { d: -2 * xx * Math.exp(-xx * xx), nonSmooth: false };
+    }
+    case "ISRU": {
+      // f(x)= x / sqrt(1 + αx^2) ; f'(x) = (1 + αx^2)^(-3/2), α=1
+      const denom = 1 + x * x;
+      return { d: Math.pow(denom, -1.5), nonSmooth: false };
+    }
+    case "SWISH": {
+      // Swish (SiLU): f(x)=x*sigmoid(x) ; f'(x) = sigmoid(x) + x*sigmoid(x)*(1-sigmoid(x))
+      const sig = 1 / (1 + Math.exp(-x));
+      return { d: sig + x * sig * (1 - sig), nonSmooth: false };
+    }
+    case "GELU": {
+      // Approx GELU derivative, matching NEAT-AI's implementation:
+      // f(x) = 0.5*x*(1+tanh(√(2/π) * (x + 0.044715*x^3)))
+      // f'(x) = cdf + pdf (see NEAT-AI GELU.derivative)
+      const inner = Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3));
+      const tanhInner = Math.tanh(inner);
+      const cdf = 0.5 * (1 + tanhInner);
+      const pdf = (0.5 * x * (1 - tanhInner * tanhInner)) *
+        Math.sqrt(2 / Math.PI) *
+        (1 + 3 * 0.044715 * x * x);
+      const d = cdf + pdf;
+      return { d: Number.isFinite(d) ? d : 0, nonSmooth: false };
     }
     case "MISH": {
       // d/dx [ x * tanh(softplus(x)) ]
@@ -160,9 +230,31 @@ export function squashDerivative(squash, x) {
       // d = tsp + x * (1 - tsp^2) * sig
       return { d: tsp + x * (1 - tsp * tsp) * sig, nonSmooth: false };
     }
+    case "STDINVERSE": {
+      // NOTE: NEAT-AI's StdInverse class has historical inconsistency between
+      // squash and derivative. For diagnostics, we mirror its derivative:
+      // f'(x) = -sign(x) / (1 + |x|)^2
+      if (x === 0) return { d: null, nonSmooth: true, note: "kink at 0" };
+      const denom = 1 + Math.abs(x);
+      return {
+        d: -Math.sign(x) / (denom * denom),
+        nonSmooth: true,
+        note: "kink at 0",
+      };
+    }
+    case "HYPOT":
+    case "HYPOTV2":
+    case "MEAN":
+      // These are aggregator-style activations (not a simple scalar squash of a
+      // pre-activation). The viewer's pre-activation reconstruction model doesn't
+      // apply cleanly.
+      return { d: null, nonSmooth: true, note: "unsupported activation model" };
     case "MIN":
+    case "MINIMUM":
     case "MAX":
+    case "MAXIMUM":
     case "IF":
+    case "BIPOLAR":
     case "STEP":
       return { d: null, nonSmooth: true, note: "non-smooth/branching" };
     default:

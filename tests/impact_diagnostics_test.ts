@@ -24,6 +24,82 @@ Deno.test("squashDerivative TANH is 1 - tanh^2", () => {
   approx(r.d, 1 - t * t);
 });
 
+Deno.test("squashDerivative SWISH matches NEAT-AI derivative", () => {
+  const x = 0.7;
+  const sig = 1 / (1 + Math.exp(-x));
+  const expected = sig + x * sig * (1 - sig);
+
+  const r = squashDerivative("Swish", x);
+  assert(r.note !== "unknown squash", "SWISH should be recognised");
+  assert(r.nonSmooth === false, "SWISH should be treated as smooth");
+  assert(typeof r.d === "number" && Number.isFinite(r.d));
+  approx(r.d, expected, 1e-12);
+});
+
+Deno.test("viewer recognises all NEAT-AI activation names (24-Dec-2025)", () => {
+  // Keep this list in sync with ../NEAT-AI/src/methods/activations/Activations.ts
+  // (but do not import it here, so this repo stays standalone on CI).
+  const names = [
+    // activations/types/*
+    "ABSOLUTE",
+    "ArcTan",
+    "BENT_IDENTITY",
+    "BIPOLAR",
+    "BIPOLAR_SIGMOID",
+    "COMPLEMENT",
+    "Cosine",
+    "Cube",
+    "ELU",
+    "Exponential",
+    "GAUSSIAN",
+    "GELU",
+    "HARD_TANH",
+    "IDENTITY",
+    "ISRU",
+    "LeakyReLU",
+    "LOGISTIC",
+    "LogSigmoid",
+    "Mish",
+    "ReLU",
+    "ReLU6",
+    "SELU",
+    "SINE",
+    "SOFTSIGN",
+    "Softplus",
+    "SQRT",
+    "SQUARE",
+    "StdInverse",
+    "STEP",
+    "Swish",
+    "TAN",
+    "TANH",
+
+    // activations/aggregate/*
+    "IF",
+    "MAXIMUM",
+    "MINIMUM",
+
+    // deprecated (still registered in Activations)
+    "HYPOT",
+    "HYPOTv2",
+    "MEAN",
+
+    // Common NEAT-AI aliases
+    "CLIPPED",
+    "INVERSE",
+    "SINUSOID",
+    "RELU",
+  ];
+
+  for (const name of names) {
+    const r = squashDerivative(name, 0.123);
+    assert(
+      r.note !== "unknown squash",
+      `Expected ${name} to be recognised (note=${r.note})`,
+    );
+  }
+});
+
 Deno.test("gradient proxy matches a simple 1-edge network", () => {
   // hidden -> output (w=2), output squash identity
   const neuronsByUuid = new Map([
