@@ -30,8 +30,12 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
   // Toggle-to-close must work on touch devices. `touchstart` fires before `click`,
   // so we must not clear the "currently shown for" state during `touchstart`,
   // otherwise the click handler can never detect a second tap on the same target.
-  const touchstartIdx = js.indexOf('document.addEventListener(\n    "touchstart"');
-  const findTargetIdx = js.indexOf("const target = findTooltipTarget(e.target);");
+  const touchstartIdx = js.indexOf(
+    'document.addEventListener(\n    "touchstart"',
+  );
+  const findTargetIdx = js.indexOf(
+    "const target = findTooltipTarget(e.target);",
+  );
   assert(
     touchstartIdx >= 0 && findTargetIdx > touchstartIdx,
     `Expected ${appPath} to include a touchstart handler that looks up tooltip targets`,
@@ -60,7 +64,9 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
   // When a tooltip is open, touching a tooltip target should not be treated as an
   // "outside" touch-close event, otherwise a tap-to-toggle will close on touchstart
   // then immediately re-open on click.
-  const outsideTouchIdx = js.indexOf("// Tap anywhere outside the tooltip to close it.");
+  const outsideTouchIdx = js.indexOf(
+    "// Tap anywhere outside the tooltip to close it.",
+  );
   assert(
     outsideTouchIdx >= 0,
     `Expected ${appPath} to include the outside-touch close handler`,
@@ -80,6 +86,7 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
   );
   const outsideGuardIdx = js.indexOf(
     "if (findTooltipTarget(e.target)) return;",
+    outsideClickIdx,
   );
   assert(
     outsideGuardIdx > outsideClickIdx,
