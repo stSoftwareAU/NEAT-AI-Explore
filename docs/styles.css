@@ -190,6 +190,10 @@ html, body {
 .statusInline.bad {
   color: var(--negative);
 }
+.statusInline.warn {
+  /* Used for non-fatal states (e.g., loaded from cache while offline). */
+  color: #f59e0b;
+}
 
 /* Progress bar for loading large files */
 .progressContainer {
@@ -922,6 +926,20 @@ html, body {
 
 .hasTooltip:hover {
   color: var(--text);
+}
+
+/* Touch devices (iOS Safari/PWA): press-and-hold tooltips should not also
+   trigger text selection/callouts on the underlying element. */
+@media (hover: none) {
+  .hasTooltip,
+  .synapseStats .stat,
+  .impactBreakdown .stat,
+  .neuronAlias,
+  .aliasName {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 /* Neuron label/description block under the title (mobile-friendly). */

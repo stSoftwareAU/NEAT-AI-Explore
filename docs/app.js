@@ -422,10 +422,28 @@ function initThemeMode() {
   }
 }
 
-async function fetchJson(url) {
-  let res;
+function isSameOriginUrl(url) {
   try {
-    res = await fetch(normaliseSnapshotUrl(url), { cache: "no-store" });
+    const u = new URL(String(url), window.location.href);
+    return u.origin === window.location.origin;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function fetchJson(url) {
+  const u = normaliseSnapshotUrl(url);
+  const canUseCacheFallback = isSameOriginUrl(u) &&
+    typeof caches !== "undefined" &&
+    typeof caches.match === "function";
+
+  let res;
+  let usedCache = false;
+  let cacheReason = "";
+
+  // Network-first: always attempt the fresh version when possible.
+  try {
+    res = await fetch(u, { cache: "no-store" });
   } catch (e) {
     // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
     // fetch() rejects with TypeError("Failed to fetch") in that case.
@@ -434,9 +452,43 @@ async function fetchJson(url) {
         "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
       );
     }
-    throw e;
+
+    // Offline/unstable network: fall back to Cache Storage when available.
+    if (canUseCacheFallback) {
+      const cached = await caches.match(u);
+      if (cached) {
+        res = cached;
+        usedCache = true;
+        cacheReason = "offline";
+      }
+    }
+
+    if (!res) throw e;
   }
+
+  // If the network returned an error (e.g., 503), try cache fallback (same-origin only).
+  if (res && !res.ok && canUseCacheFallback) {
+    const failedStatus = res.status;
+    const cached = await caches.match(u);
+    if (cached) {
+      res = cached;
+      usedCache = true;
+      cacheReason = `HTTP ${failedStatus}`;
+    }
+  }
+
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Best-effort: store the successful response so the app remains usable offline,
+  // even when the Service Worker isn't ready yet.
+  if (!usedCache && res.ok && canUseCacheFallback) {
+    try {
+      const cache = await caches.open("neat-ai-explore-snapshots");
+      cache.put(u, res.clone());
+    } catch (_e) {
+      // Non-fatal: caching can fail in some privacy modes.
+    }
+  }
 
   const ce = (res.headers.get("content-encoding") ?? "").toLowerCase();
   const ct = (res.headers.get("content-type") ?? "").toLowerCase();
@@ -484,22 +536,32 @@ async function fetchJson(url) {
     // Decompress if needed
     if (needsClientDecompress) {
       const text = await gunzipToText(allChunks);
-      return JSON.parse(text);
+      const obj = JSON.parse(text);
+      if (usedCache) obj.__loadedFromCache = cacheReason || true;
+      return obj;
     }
 
     // Parse JSON from the raw bytes
     const text = new TextDecoder().decode(allChunks);
-    return JSON.parse(text);
+    const obj = JSON.parse(text);
+    if (usedCache) obj.__loadedFromCache = cacheReason || true;
+    return obj;
   }
 
   // Fallback: no streaming (e.g., body unavailable)
   if (looksGz && !ce.includes("gzip")) {
     const buf = new Uint8Array(await res.arrayBuffer());
     const text = await gunzipToText(buf);
-    return JSON.parse(text);
+    const obj = JSON.parse(text);
+    if (usedCache) obj.__loadedFromCache = cacheReason || true;
+    return obj;
   }
 
-  return res.json();
+  const obj = await res.json();
+  if (usedCache && obj && typeof obj === "object") {
+    obj.__loadedFromCache = cacheReason || true;
+  }
+  return obj;
 }
 
 function normaliseCreature(snapshot) {
@@ -542,6 +604,10 @@ async function loadSnapshot(source, label) {
     }
     const obj = typeof source === "string" ? await fetchJson(source) : source;
     hideProgress();
+    const loadedFromCache = obj && typeof obj === "object" &&
+      obj.__loadedFromCache != null;
+    if (loadedFromCache) delete obj.__loadedFromCache;
+
     SNAPSHOT = obj;
     loadInputLabelsFromSnapshot(SNAPSHOT);
     const creature = normaliseCreature(obj);
@@ -551,9 +617,11 @@ async function loadSnapshot(source, label) {
     ).length;
     const inputCount = creature.input ?? 0;
 
+    const baseStatus =
+      `Observations: ${inputCount.toLocaleString()}, Neurons: ${neuronCount.toLocaleString()} & Synapses: ${synapses.length.toLocaleString()}`;
     setStatus(
-      `Observations: ${inputCount.toLocaleString()}, Neurons: ${neuronCount.toLocaleString()} & Synapses: ${synapses.length.toLocaleString()}`,
-      "ok",
+      loadedFromCache ? `${baseStatus} (cached)` : baseStatus,
+      loadedFromCache ? "warn" : "ok",
     );
 
     const outputs = (creature.neurons ?? []).filter((n) => n.type === "output");
