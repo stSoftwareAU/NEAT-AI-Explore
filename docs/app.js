@@ -1429,6 +1429,15 @@ function initTouchTooltips() {
       const target = findTooltipTarget(e.target);
       if (!target) return;
 
+      // If a long-press just opened a tooltip, iOS will often fire a follow-up
+      // click on release. During the suppression window, do not toggle/close the
+      // tooltip; just swallow the click to prevent accidental actions.
+      if (Date.now() < suppressClickUntil) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
       // Toggle: tapping the same target closes the tooltip.
       if (
         shownForTarget && target === shownForTarget &&
@@ -1443,22 +1452,6 @@ function initTouchTooltips() {
       // Don't let the click bubble and trigger row navigation underneath.
       e.preventDefault();
       e.stopPropagation();
-    },
-    { capture: true },
-  );
-
-  // If we just showed a tooltip, suppress the follow-up click so we don't
-  // accidentally trigger navigation (e.g. tapping a stat inside a synapse row).
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (Date.now() > suppressClickUntil) return;
-      const target = findTooltipTarget(e.target);
-      if (!target) return;
-      if (shownForTarget && target === shownForTarget) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
     },
     { capture: true },
   );

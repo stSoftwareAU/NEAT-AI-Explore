@@ -36,6 +36,11 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
       js.includes('classList?.contains("stat")'),
     `Expected ${appPath} to scope tap-to-show tooltips to known tooltip elements`,
   );
+  assert(
+    js.includes("suppressClickUntil") &&
+      js.includes("Date.now() < suppressClickUntil"),
+    `Expected ${appPath} to suppress click toggling within suppressClickUntil window`,
+  );
 
   const cssPath = repoPath("docs", "styles.css");
   const css = await Deno.readTextFile(cssPath);
