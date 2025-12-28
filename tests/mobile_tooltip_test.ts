@@ -26,6 +26,21 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
     js.includes("touchTooltip"),
     `Expected ${appPath} to create a tooltip UI container`,
   );
+
+  // Toggle-to-close must work on touch devices. `touchstart` fires before `click`,
+  // so we must not clear the "currently shown for" state during `touchstart`,
+  // otherwise the click handler can never detect a second tap on the same target.
+  const touchstartIdx = js.indexOf('document.addEventListener(\n    "touchstart"');
+  const findTargetIdx = js.indexOf("const target = findTooltipTarget(e.target);");
+  assert(
+    touchstartIdx >= 0 && findTargetIdx > touchstartIdx,
+    `Expected ${appPath} to include a touchstart handler that looks up tooltip targets`,
+  );
+  const between = js.slice(touchstartIdx, findTargetIdx);
+  assert(
+    !between.includes("shownForTarget = null"),
+    `Expected ${appPath} not to clear shownForTarget during touchstart (would break toggle-to-close)`,
+  );
   assert(
     js.includes('document.addEventListener(\n    "click"') ||
       js.includes('document.addEventListener("click"'),
@@ -40,6 +55,23 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
     js.includes("suppressClickUntil") &&
       js.includes("Date.now() < suppressClickUntil"),
     `Expected ${appPath} to suppress click toggling within suppressClickUntil window`,
+  );
+
+  // When a tooltip is open, touching a tooltip target should not be treated as an
+  // "outside" touch-close event, otherwise a tap-to-toggle will close on touchstart
+  // then immediately re-open on click.
+  const outsideTouchIdx = js.indexOf("// Tap anywhere outside the tooltip to close it.");
+  assert(
+    outsideTouchIdx >= 0,
+    `Expected ${appPath} to include the outside-touch close handler`,
+  );
+  const outsideTouchGuardIdx = js.indexOf(
+    "if (findTooltipTarget(e.target)) return;",
+    outsideTouchIdx,
+  );
+  assert(
+    outsideTouchGuardIdx > outsideTouchIdx,
+    `Expected ${appPath} outside-touch close handler to ignore tooltip targets (avoid close-then-reopen race)`,
   );
   const outsideClickIdx = js.indexOf("Support outside-click close as well");
   assert(

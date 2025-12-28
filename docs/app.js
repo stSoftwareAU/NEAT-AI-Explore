@@ -1388,7 +1388,6 @@ function initTouchTooltips() {
     "touchstart",
     (e) => {
       if (pressTimer) clearTimeout(pressTimer);
-      shownForTarget = null;
 
       const target = findTooltipTarget(e.target);
       if (!target) return;
@@ -1462,6 +1461,9 @@ function initTouchTooltips() {
     (e) => {
       if (!tooltipEl?.classList.contains("isOpen")) return;
       if (tooltipEl.contains(e.target)) return;
+      // If the touch is on a known tooltip target, let the tap-to-toggle handler
+      // manage it. Otherwise, we'd close on touchstart then re-open on click.
+      if (findTooltipTarget(e.target)) return;
       hideTouchTooltip();
     },
     { passive: true },
