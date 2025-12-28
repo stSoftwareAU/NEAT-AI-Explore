@@ -199,3 +199,77 @@ Deno.test("summariseSeriesStats computes basic stats", async () => {
   assert(s.p99 > 1.5, "Expected p99 to be near the upper end");
   assert(s.p01 < -1.5, "Expected p01 to be near the lower end");
 });
+
+Deno.test("summariseDeadZoneStats detects clamp and dead ReLU rates", async () => {
+  // Use dynamic import here because some editor linters can lag behind JS
+  // named export discovery, even though Deno's runtime/type-checker is fine.
+  // (Keeps `deno lint` happy in this repo.)
+  const mod = (await import("../impact_diagnostics.js")) as unknown as Record<
+    string,
+    unknown
+  >;
+  const summariseDeadZoneStats = mod.summariseDeadZoneStats as
+    | ((squash: string, preActs: number[]) => {
+      n: number;
+      fracClamped: number | null;
+      fracAtZero: number | null;
+      nonFiniteCount: number;
+      firstNonFiniteIndex: number | null;
+    })
+    | undefined;
+
+  assert(
+    typeof summariseDeadZoneStats === "function",
+    "Expected summariseDeadZoneStats to be a function export",
+  );
+
+  // HARD_TANH clamps outside [-1, 1].
+  const hard = summariseDeadZoneStats("HARD_TANH", [
+    -2,
+    -1,
+    -0.5,
+    0,
+    0.2,
+    1,
+    2,
+  ]);
+  assert(hard.n === 7);
+  // clamped: -2, -1, 1, 2 => 4/7
+  approx(hard.fracClamped ?? 0, 4 / 7, 1e-12);
+
+  // RELU is "dead" when pre-activation <= 0 (activation becomes 0).
+  const relu = summariseDeadZoneStats("ReLU", [-2, -1, 0, 0.1, 2]);
+  assert(relu.n === 5);
+  approx(relu.fracAtZero ?? 0, 3 / 5, 1e-12);
+});
+
+Deno.test("summariseErrorConcentration flags heavy-tail distributions", async () => {
+  // Use dynamic import here for the same reason as summariseSeriesStats above.
+  const mod = (await import("../impact_diagnostics.js")) as unknown as Record<
+    string,
+    unknown
+  >;
+  const summariseErrorConcentration = mod.summariseErrorConcentration as
+    | ((contrib: number[], options?: { topK?: number }) => {
+      n: number;
+      total: number;
+      topK: { index: number; value: number; shareOfTotal: number }[];
+      topKShare: number;
+    })
+    | undefined;
+
+  assert(
+    typeof summariseErrorConcentration === "function",
+    "Expected summariseErrorConcentration to be a function export",
+  );
+
+  // One obs dominates total squared error.
+  const s = summariseErrorConcentration([100, 1, 1, 1, 1], { topK: 2 });
+  assert(s.total > 0);
+  assert(s.topK.length === 2);
+  // Top-1 share should be very high.
+  assert(
+    (s.topK[0]?.shareOfTotal ?? 0) > 0.9,
+    "Expected the top observation to dominate total error",
+  );
+});

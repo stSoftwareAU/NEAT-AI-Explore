@@ -170,6 +170,128 @@ export function summariseSeriesStats(arr, options = {}) {
 }
 
 /**
+ * Summarise pre-activation dead zones / clamp behaviour for common squashes.
+ *
+ * This is used by the Issues tab to quickly spot:
+ * - Hard clamps (HARD_TANH / CLIPPED / RELU6) where large fractions of samples
+ *   are in the flat/clamped region.
+ * - Dead ReLUs (RELU / LeakyReLU) where many samples are at/below 0.
+ *
+ * Notes:
+ * - We intentionally keep this conservative and cheap (single pass).
+ * - We treat non-finite values as an issue and report the first offending index.
+ *
+ * @param {string} squash
+ * @param {number[]} preActs
+ * @returns {{
+ *   n: number,
+ *   fracClamped: number | null,
+ *   fracAtZero: number | null,
+ *   nonFiniteCount: number,
+ *   firstNonFiniteIndex: number | null,
+ * }}
+ */
+export function summariseDeadZoneStats(squash, preActs) {
+  const s = String(squash ?? "IDENTITY").toUpperCase();
+  const arr = Array.isArray(preActs) ? preActs : [];
+
+  let n = 0;
+  let clamped = 0;
+  let atZero = 0;
+  let nonFiniteCount = 0;
+  let firstNonFiniteIndex = null;
+
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (typeof v !== "number" || !isFinite(v)) {
+      nonFiniteCount += 1;
+      if (firstNonFiniteIndex == null) firstNonFiniteIndex = i;
+      continue;
+    }
+    n += 1;
+
+    if (s === "HARD_TANH" || s === "CLIPPED") {
+      if (v <= -1 || v >= 1) clamped += 1;
+    } else if (s === "RELU6") {
+      if (v <= 0 || v >= 6) clamped += 1;
+    }
+
+    if (s === "RELU" || s === "LEAKYRELU") {
+      // For RELU, activation is 0 when pre-activation <= 0.
+      // For LeakyReLU, the "dead-ish" region is also pre-activation <= 0.
+      if (v <= 0) atZero += 1;
+    }
+  }
+
+  const fracClamped = (s === "HARD_TANH" || s === "CLIPPED" || s === "RELU6")
+    ? (n > 0 ? clamped / n : 0)
+    : null;
+  const fracAtZero = (s === "RELU" || s === "LEAKYRELU")
+    ? (n > 0 ? atZero / n : 0)
+    : null;
+
+  return { n, fracClamped, fracAtZero, nonFiniteCount, firstNonFiniteIndex };
+}
+
+/**
+ * Summarise how concentrated a non-negative series is (e.g., per-observation
+ * squared error contributions).
+ *
+ * This helps catch heavy-tail failure modes where a handful of observations
+ * dominate MSE, masking broader model issues.
+ *
+ * @param {number[]} contributions
+ * @param {{ topK?: number }} [options]
+ * @returns {{
+ *   n: number,
+ *   total: number,
+ *   topK: { index: number, value: number, shareOfTotal: number }[],
+ *   topKShare: number,
+ * }}
+ */
+export function summariseErrorConcentration(contributions, options = {}) {
+  const arr = Array.isArray(contributions) ? contributions : [];
+  const k = Math.max(1, Math.floor(options.topK ?? 8));
+
+  let total = 0;
+  /** @type {{ index: number, value: number }[]} */
+  const top = [];
+
+  function insertTop(item) {
+    // Keep `top` sorted ascending by value (smallest first).
+    let lo = 0;
+    let hi = top.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (top[mid].value <= item.value) lo = mid + 1;
+      else hi = mid;
+    }
+    top.splice(lo, 0, item);
+    if (top.length > k) top.shift();
+  }
+
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (typeof v !== "number" || !isFinite(v) || v < 0) continue;
+    total += v;
+    if (top.length < k || v > top[0].value) insertTop({ index: i, value: v });
+  }
+
+  // Sort descending for presentation.
+  top.sort((a, b) => b.value - a.value);
+
+  const denom = total > 0 ? total : 1;
+  const topK = top.map((t) => ({
+    index: t.index,
+    value: t.value,
+    shareOfTotal: t.value / denom,
+  }));
+  const topKShare = topK.reduce((acc, t) => acc + t.shareOfTotal, 0);
+
+  return { n: arr.length, total, topK, topKShare };
+}
+
+/**
  * Basic squashes + derivatives. Where we don't know the precise NEAT-AI
  * behaviour, we keep it conservative and mark as non-smooth/unknown.
  *

@@ -353,6 +353,131 @@ html, body {
   font-weight: 600;
 }
 
+/* Tabs (Details / Issues / Candidates) */
+.tabRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.tabBtn {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--buttonSecondaryBg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tabBtn.isActive {
+  border-color: var(--accent);
+  background: rgba(96, 165, 250, 0.18);
+}
+
+.tabPanel {
+  display: none;
+}
+
+.tabPanel.isActive {
+  display: block;
+}
+
+/* Candidate/issue panels */
+.panelSectionTitle {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.issueList, .candidateList {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.issueRow, .candidateRow {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surfaceSofter);
+  cursor: pointer;
+}
+
+.issueRow:hover, .candidateRow:hover {
+  background: var(--panelHover);
+}
+
+.issueRowTitle, .candidateRowTitle {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.candidateDiagram {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.candidateDiagramText {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  fill: var(--text);
+}
+
+.candidateDiagramGhost {
+  stroke: var(--warning);
+  stroke-dasharray: 5 4;
+  fill: transparent;
+}
+
+.candidateDiagramOldEdge {
+  stroke: var(--warning);
+  stroke-width: 3;
+  opacity: 0.7;
+}
+
+.candidateDiagramNewEdge {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+  opacity: 0.95;
+}
+
+.candidateDiagramNode {
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.candidateDiffGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.candidateDiffGrid dt {
+  color: var(--muted);
+}
+
+.candidateDiffGrid dd {
+  font-family: ui-monospace, monospace;
+  word-break: break-word;
+}
+
 /* Impact breakdown to outputs (heuristic attribution). */
 .impactBreakdown {
   margin-top: 16px;
@@ -680,6 +805,15 @@ html, body {
 .synapseRow.inTrace {
   border-color: var(--trace);
   background: rgba(251, 191, 36, 0.08);
+}
+
+.synapseRow.candidateReplaceEdge {
+  border-color: var(--warning);
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.synapseRow.candidateReplaceEdge:hover {
+  border-color: var(--warning);
 }
 
 .synapseFrom {
