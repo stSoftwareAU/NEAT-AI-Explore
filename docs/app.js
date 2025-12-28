@@ -431,6 +431,15 @@ function isSameOriginUrl(url) {
   }
 }
 
+function maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason) {
+  // Strict mode: `JSON.parse()` (and `res.json()`) can return `null` or a
+  // primitive. Only objects can be annotated safely.
+  if (usedCache && obj && typeof obj === "object") {
+    obj.__loadedFromCache = cacheReason || true;
+  }
+  return obj;
+}
+
 async function fetchJson(url) {
   const u = normaliseSnapshotUrl(url);
   const canUseCacheFallback = isSameOriginUrl(u) &&
@@ -537,15 +546,13 @@ async function fetchJson(url) {
     if (needsClientDecompress) {
       const text = await gunzipToText(allChunks);
       const obj = JSON.parse(text);
-      if (usedCache) obj.__loadedFromCache = cacheReason || true;
-      return obj;
+      return maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason);
     }
 
     // Parse JSON from the raw bytes
     const text = new TextDecoder().decode(allChunks);
     const obj = JSON.parse(text);
-    if (usedCache) obj.__loadedFromCache = cacheReason || true;
-    return obj;
+    return maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason);
   }
 
   // Fallback: no streaming (e.g., body unavailable)
@@ -553,15 +560,11 @@ async function fetchJson(url) {
     const buf = new Uint8Array(await res.arrayBuffer());
     const text = await gunzipToText(buf);
     const obj = JSON.parse(text);
-    if (usedCache) obj.__loadedFromCache = cacheReason || true;
-    return obj;
+    return maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason);
   }
 
   const obj = await res.json();
-  if (usedCache && obj && typeof obj === "object") {
-    obj.__loadedFromCache = cacheReason || true;
-  }
-  return obj;
+  return maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason);
 }
 
 function normaliseCreature(snapshot) {

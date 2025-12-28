@@ -17,8 +17,14 @@ Deno.test("service worker registers (and is awaited) before app auto-load runs (
   // We want SW registration to begin before the app module executes, otherwise
   // the default snapshot auto-fetch can run before the SW is ready, leading to
   // a first-load fetch failure that succeeds on manual retry.
+  //
+  // Regression guard (Issue #23, 29-Dec-2025): `navigator.serviceWorker.ready`
+  // never rejects and can wait indefinitely if installation/activation fails.
+  // We must use a timeout so the app still starts in degraded mode.
   const swRegisterIdx = html.indexOf("navigator.serviceWorker.register");
   const swReadyIdx = html.indexOf("navigator.serviceWorker.ready");
+  const promiseRaceIdx = html.indexOf("Promise.race");
+  const setTimeoutIdx = html.indexOf("setTimeout");
   const appImportIdx = html.indexOf('import("./app.js?v=__BUILD_ID__")');
 
   assert(
@@ -28,6 +34,14 @@ Deno.test("service worker registers (and is awaited) before app auto-load runs (
   assert(
     swReadyIdx !== -1,
     "Expected index.html to await navigator.serviceWorker.ready",
+  );
+  assert(
+    promiseRaceIdx !== -1,
+    "Expected index.html to use Promise.race for SW readiness timeout",
+  );
+  assert(
+    setTimeoutIdx !== -1,
+    "Expected index.html to use setTimeout for SW readiness timeout",
   );
   assert(
     appImportIdx !== -1,
@@ -41,5 +55,9 @@ Deno.test("service worker registers (and is awaited) before app auto-load runs (
   assert(
     swReadyIdx < appImportIdx,
     "Expected service worker readiness to be awaited before importing app.js",
+  );
+  assert(
+    promiseRaceIdx < appImportIdx,
+    "Expected SW readiness timeout logic to occur before importing app.js",
   );
 });
