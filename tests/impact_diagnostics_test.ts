@@ -158,3 +158,44 @@ Deno.test("gradient proxy matches a simple 1-edge network", () => {
   assert(terms.length === 1);
   approx(terms[0].term ?? 0, 2);
 });
+
+Deno.test("summariseSeriesStats computes basic stats", async () => {
+  // Use a dynamic import here because some editor linters can lag behind JS
+  // named export discovery, even though Deno's runtime/type-checker is fine.
+  const mod = await import("../impact_diagnostics.js") as unknown as Record<
+    string,
+    unknown
+  >;
+  const summariseSeriesStats = mod.summariseSeriesStats as
+    | ((arr: number[], options?: { sampleSize?: number }) => {
+      n: number;
+      mean: number;
+      std: number;
+      min: number;
+      max: number;
+      meanAbs: number;
+      maxAbs: number;
+      p01: number;
+      p50: number;
+      p99: number;
+    })
+    | undefined;
+
+  assert(
+    typeof summariseSeriesStats === "function",
+    "Expected summariseSeriesStats to be a function export",
+  );
+
+  const s = summariseSeriesStats([-2, -1, 0, 1, 2], { sampleSize: 32 });
+  assert(s.n === 5);
+  approx(s.mean, 0, 1e-12);
+  approx(s.min, -2, 1e-12);
+  approx(s.max, 2, 1e-12);
+  approx(s.meanAbs, 1.2, 1e-12);
+  approx(s.maxAbs, 2, 1e-12);
+
+  // Percentiles are exact here because we sample the full array.
+  approx(s.p50, 0, 1e-12);
+  assert(s.p99 > 1.5, "Expected p99 to be near the upper end");
+  assert(s.p01 < -1.5, "Expected p01 to be near the lower end");
+});

@@ -26,6 +26,16 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
     js.includes("touchTooltip"),
     `Expected ${appPath} to create a tooltip UI container`,
   );
+  assert(
+    js.includes('document.addEventListener(\n    "click"') ||
+      js.includes('document.addEventListener("click"'),
+    `Expected ${appPath} to listen for click events (tap-to-show tooltips)`,
+  );
+  assert(
+    js.includes("isKnownTooltipEl") || js.includes("hasTooltip") ||
+      js.includes('classList?.contains("stat")'),
+    `Expected ${appPath} to scope tap-to-show tooltips to known tooltip elements`,
+  );
 
   const cssPath = repoPath("docs", "styles.css");
   const css = await Deno.readTextFile(cssPath);

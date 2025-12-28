@@ -19,6 +19,7 @@ import {
   computeOutgoingProxyTerms,
   computePreActivations,
   computeSquashDerivativeStats,
+  summariseSeriesStats,
 } from "./impact_diagnostics.js";
 
 let SNAPSHOT = null;
@@ -31,6 +32,7 @@ let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 let DIAG_PRE = new Map();
 let DIAG_SQUASH = new Map();
 let DIAG_PROXY = new Map();
+let DIAG_PRE_STATS = new Map();
 
 let lastInboundAllocation = null;
 let lastInboundToUuid = null;
@@ -54,6 +56,14 @@ const TOOLTIPS = {
   "Type": "Neuron type: input, hidden, output, or constant",
   "Squash": "Activation function applied to the weighted sum of inputs",
   "Bias": "Constant value added before the activation function",
+  "Pre-activation mean":
+    "Pre-activation (net input) mean across samples. Pre-activation is the value before the squash: z = bias + Σ(weighted inputs).",
+  "Pre-activation range":
+    "Minimum and maximum pre-activation (net input) observed before the squash is applied.",
+  "Pre-activation p99":
+    "Approximate 99th percentile of pre-activation (net input). Large magnitudes often indicate saturation/clamping or numerical blow-ups upstream.",
+  "Pre-activation |x| max":
+    "Maximum absolute pre-activation (net input). Useful for spotting extreme values that can explode errors.",
   "Impact":
     "Fraction of influence this neuron has on the final output (0-1). Values < 1e-8 are suspiciously low and should be prunable.",
   "Impact (proxy, grad)":
@@ -539,6 +549,12 @@ async function loadSnapshot(source, label) {
         derivedSynapses,
         recordingNeurons,
       });
+      DIAG_PRE_STATS = new Map(
+        Array.from(DIAG_PRE.entries()).map(([uuid, arr]) => [
+          uuid,
+          summariseSeriesStats(arr, { sampleSize: 512 }),
+        ]),
+      );
       DIAG_SQUASH = computeSquashDerivativeStats({
         neuronsByUuid,
         preActivations: DIAG_PRE,
@@ -553,6 +569,7 @@ async function loadSnapshot(source, label) {
     } catch (e) {
       console.warn("Impact diagnostics failed (non-fatal):", e);
       DIAG_PRE = new Map();
+      DIAG_PRE_STATS = new Map();
       DIAG_SQUASH = new Map();
       DIAG_PROXY = new Map();
     }
@@ -749,6 +766,17 @@ function renderCurrentNeuron(uuid) {
 
   // Impact diagnostics: show-your-working-style evidence for squash issues.
   if (!isInput) {
+    const preStats = DIAG_PRE_STATS.get(uuid);
+    if (preStats && preStats.n > 0) {
+      props.push(["Pre-activation mean", formatSig(preStats.mean, 4)]);
+      props.push([
+        "Pre-activation range",
+        `${formatSig(preStats.min, 4)} → ${formatSig(preStats.max, 4)}`,
+      ]);
+      props.push(["Pre-activation p99", formatSig(preStats.p99, 4)]);
+      props.push(["Pre-activation |x| max", formatSig(preStats.maxAbs, 4)]);
+    }
+
     const proxy = DIAG_PROXY.get(uuid);
     if (typeof proxy === "number" && isFinite(proxy)) {
       props.push(["Impact (proxy, grad)", formatSig(proxy, 3)]);
@@ -1283,7 +1311,8 @@ function escapeHtml(s) {
 
 function initTouchTooltips() {
   // iOS Safari/PWA does not reliably show `title` tooltips on tap.
-  // Provide press-and-hold tooltips on touch devices, without stealing normal taps.
+  // Provide tap + press-and-hold tooltips on touch devices, without stealing
+  // normal taps for unrelated controls.
   const isTouch = (() => {
     try {
       return (navigator.maxTouchPoints ?? 0) > 0 ||
@@ -1339,7 +1368,14 @@ function initTouchTooltips() {
   function findTooltipTarget(startEl) {
     let n = startEl;
     while (n && n !== document.body) {
-      if (n?.getAttribute && n.hasAttribute("title")) {
+      // Only treat known tooltip affordances as tooltip targets. Many controls
+      // (buttons, inputs) have titles but still need to behave normally on tap.
+      const isKnownTooltipEl = n.classList?.contains("hasTooltip") ||
+        n.classList?.contains("stat") ||
+        n.classList?.contains("neuronAlias") ||
+        n.classList?.contains("aliasName");
+
+      if (isKnownTooltipEl && n?.getAttribute && n.hasAttribute("title")) {
         const t = n.getAttribute("title");
         if (t && t.trim().length > 0) return n;
       }
@@ -1385,6 +1421,32 @@ function initTouchTooltips() {
     { passive: true, capture: true },
   );
 
+  // iPhone Safari can be inconsistent about long-press and `title`. Make tap the
+  // primary way to open tooltips for stat chips / labelled properties.
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = findTooltipTarget(e.target);
+      if (!target) return;
+
+      // Toggle: tapping the same target closes the tooltip.
+      if (
+        shownForTarget && target === shownForTarget &&
+        tooltipEl?.classList.contains("isOpen")
+      ) {
+        hideTouchTooltip();
+      } else {
+        shownForTarget = target;
+        showTouchTooltip(target.getAttribute("title"));
+      }
+
+      // Don't let the click bubble and trigger row navigation underneath.
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true },
+  );
+
   // If we just showed a tooltip, suppress the follow-up click so we don't
   // accidentally trigger navigation (e.g. tapping a stat inside a synapse row).
   document.addEventListener(
@@ -1410,6 +1472,18 @@ function initTouchTooltips() {
       hideTouchTooltip();
     },
     { passive: true },
+  );
+
+  // Some iOS flows fire `click` without a preceding touchstart (e.g., assistive
+  // tech). Support outside-click close as well.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (!tooltipEl?.classList.contains("isOpen")) return;
+      if (tooltipEl.contains(e.target)) return;
+      hideTouchTooltip();
+    },
+    { capture: true },
   );
 }
 

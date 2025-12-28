@@ -53,6 +53,123 @@ function summariseDerivative(arr) {
 }
 
 /**
+ * Summarise a numeric series (e.g., pre-activations) so we can spot scale issues.
+ *
+ * Terminology:
+ * - "Pre-activation" (aka "net input") is the value before the squash/activation:
+ *   \(z = b + \sum_i w_i x_i\)
+ *
+ * Notes:
+ * - Percentiles are approximate when the series is long; we take an evenly spaced
+ *   sample to keep this fast in the browser.
+ *
+ * @param {number[]} arr
+ * @param {{ sampleSize?: number }} [options]
+ * @returns {{
+ *   n: number,
+ *   mean: number,
+ *   std: number,
+ *   min: number,
+ *   max: number,
+ *   meanAbs: number,
+ *   maxAbs: number,
+ *   p01: number,
+ *   p50: number,
+ *   p99: number,
+ * }}
+ */
+export function summariseSeriesStats(arr, options = {}) {
+  const sampleSize = Math.max(8, Math.floor(options.sampleSize ?? 512));
+  if (!Array.isArray(arr) || arr.length === 0) {
+    return {
+      n: 0,
+      mean: 0,
+      std: 0,
+      min: 0,
+      max: 0,
+      meanAbs: 0,
+      maxAbs: 0,
+      p01: 0,
+      p50: 0,
+      p99: 0,
+    };
+  }
+
+  // Welford online mean/variance + min/max.
+  let n = 0;
+  let mean = 0;
+  let m2 = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  let sumAbs = 0;
+  let maxAbs = 0;
+
+  for (const v of arr) {
+    if (typeof v !== "number" || !isFinite(v)) continue;
+    n += 1;
+    const delta = v - mean;
+    mean += delta / n;
+    const delta2 = v - mean;
+    m2 += delta * delta2;
+    if (v < min) min = v;
+    if (v > max) max = v;
+    const av = Math.abs(v);
+    sumAbs += av;
+    if (av > maxAbs) maxAbs = av;
+  }
+
+  const variance = n > 1 ? (m2 / (n - 1)) : 0;
+  const std = Math.sqrt(Math.max(0, variance));
+  const meanAbs = n > 0 ? (sumAbs / n) : 0;
+
+  // Percentiles (approx): evenly spaced downsample then sort.
+  const take = Math.min(sampleSize, arr.length);
+  /** @type {number[]} */
+  const sample = [];
+  if (take === arr.length) {
+    for (const v of arr) {
+      if (typeof v === "number" && isFinite(v)) sample.push(v);
+    }
+  } else {
+    const step = arr.length / take;
+    for (let i = 0; i < take; i++) {
+      const idx = Math.min(arr.length - 1, Math.floor(i * step));
+      const v = arr[idx];
+      if (typeof v === "number" && isFinite(v)) sample.push(v);
+    }
+  }
+  sample.sort((a, b) => a - b);
+
+  function q(p) {
+    if (sample.length === 0) return 0;
+    const t = Math.max(0, Math.min(1, p));
+    const pos = (sample.length - 1) * t;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    if (lo === hi) return sample[lo];
+    const w = pos - lo;
+    return sample[lo] * (1 - w) + sample[hi] * w;
+  }
+
+  const p01 = q(0.01);
+  const p50 = q(0.5);
+  const p99 = q(0.99);
+
+  return {
+    n,
+    mean,
+    std,
+    min: isFinite(min) ? min : 0,
+    max: isFinite(max) ? max : 0,
+    meanAbs,
+    maxAbs,
+    p01,
+    p50,
+    p99,
+  };
+}
+
+/**
  * Basic squashes + derivatives. Where we don't know the precise NEAT-AI
  * behaviour, we keep it conservative and mark as non-smooth/unknown.
  *
