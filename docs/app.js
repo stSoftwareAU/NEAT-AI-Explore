@@ -19,6 +19,9 @@ import {
   computeOutgoingProxyTerms,
   computePreActivations,
   computeSquashDerivativeStats,
+  summariseDeadZoneStats,
+  summariseErrorConcentration,
+  summariseSeriesStats,
 } from "./impact_diagnostics.js";
 
 let SNAPSHOT = null;
@@ -31,6 +34,19 @@ let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 let DIAG_PRE = new Map();
 let DIAG_SQUASH = new Map();
 let DIAG_PROXY = new Map();
+let DIAG_PRE_STATS = new Map();
+let DIAG_DEADZONES = new Map();
+let DIAG_NONFINITE = new Map();
+let DIAG_ERROR_TAIL = new Map();
+let DIAG_INPUTS = {
+  constantInputs: [],
+  correlatedPairs: [],
+  candidateCoverage: [],
+};
+
+let DISCOVERY_CANDIDATES = [];
+let selectedCandidateKey = null;
+let currentNeuronTab = "details"; // details | issues | candidates
 
 let lastInboundAllocation = null;
 let lastInboundToUuid = null;
@@ -54,6 +70,14 @@ const TOOLTIPS = {
   "Type": "Neuron type: input, hidden, output, or constant",
   "Squash": "Activation function applied to the weighted sum of inputs",
   "Bias": "Constant value added before the activation function",
+  "Pre-activation mean":
+    "Pre-activation (net input) mean across samples. Pre-activation is the value before the squash: z = bias + Σ(weighted inputs).",
+  "Pre-activation range":
+    "Minimum and maximum pre-activation (net input) observed before the squash is applied.",
+  "Pre-activation p99":
+    "Approximate 99th percentile of pre-activation (net input). Large magnitudes often indicate saturation/clamping or numerical blow-ups upstream.",
+  "Pre-activation |x| max":
+    "Maximum absolute pre-activation (net input). Useful for spotting extreme values that can explode errors.",
   "Impact":
     "Fraction of influence this neuron has on the final output (0-1). Values < 1e-8 are suspiciously low and should be prunable.",
   "Impact (proxy, grad)":
@@ -124,6 +148,12 @@ const el = {
   neuronProps: document.getElementById("neuronProps"),
   impactBreakdown: document.getElementById("impactBreakdown"),
   impactDiagnosticsPanel: document.getElementById("impactDiagnosticsPanel"),
+  neuronTabDetails: document.getElementById("neuronTabDetails"),
+  neuronTabIssues: document.getElementById("neuronTabIssues"),
+  neuronTabCandidates: document.getElementById("neuronTabCandidates"),
+  neuronTabPanelDetails: document.getElementById("neuronTabPanelDetails"),
+  neuronTabPanelIssues: document.getElementById("neuronTabPanelIssues"),
+  neuronTabPanelCandidates: document.getElementById("neuronTabPanelCandidates"),
   pathModal: document.getElementById("pathModal"),
   pathModalBackdrop: document.getElementById("pathModalBackdrop"),
   pathModalTitle: document.getElementById("pathModalTitle"),
@@ -539,6 +569,12 @@ async function loadSnapshot(source, label) {
         derivedSynapses,
         recordingNeurons,
       });
+      DIAG_PRE_STATS = new Map(
+        Array.from(DIAG_PRE.entries()).map(([uuid, arr]) => [
+          uuid,
+          summariseSeriesStats(arr, { sampleSize: 512 }),
+        ]),
+      );
       DIAG_SQUASH = computeSquashDerivativeStats({
         neuronsByUuid,
         preActivations: DIAG_PRE,
@@ -550,13 +586,45 @@ async function loadSnapshot(source, label) {
         outputUuids: outputs.map((o) => o.uuid),
         iterations: 8,
       });
+
+      // Issues tab: cache cheap summaries so the UI stays snappy on large snapshots.
+      DIAG_DEADZONES = new Map(
+        Array.from(neuronsByUuid.entries()).map(([uuid, n]) => {
+          const pre = DIAG_PRE.get(uuid) ?? [];
+          return [uuid, summariseDeadZoneStats(n?.squash, pre)];
+        }),
+      );
+      DIAG_NONFINITE = computeNonFiniteIssues({
+        recording: SNAPSHOT?.recording ?? null,
+      });
+      DIAG_ERROR_TAIL = computeErrorConcentrationIssues({
+        recording: SNAPSHOT?.recording ?? null,
+      });
+      DISCOVERY_CANDIDATES = extractDiscoveryCandidates(SNAPSHOT);
+      DIAG_INPUTS = computeInputIssues({
+        recording: SNAPSHOT?.recording ?? null,
+        inputCount: creature.input ?? 0,
+        candidates: DISCOVERY_CANDIDATES,
+      });
     } catch (e) {
       console.warn("Impact diagnostics failed (non-fatal):", e);
       DIAG_PRE = new Map();
+      DIAG_PRE_STATS = new Map();
       DIAG_SQUASH = new Map();
       DIAG_PROXY = new Map();
+      DIAG_DEADZONES = new Map();
+      DIAG_NONFINITE = new Map();
+      DIAG_ERROR_TAIL = new Map();
+      DIAG_INPUTS = {
+        constantInputs: [],
+        correlatedPairs: [],
+        candidateCoverage: [],
+      };
+      DISCOVERY_CANDIDATES = [];
     }
 
+    selectedCandidateKey = null;
+    currentNeuronTab = "details";
     trace = [];
     navigateTo(startUuid);
   } catch (e) {
@@ -749,6 +817,17 @@ function renderCurrentNeuron(uuid) {
 
   // Impact diagnostics: show-your-working-style evidence for squash issues.
   if (!isInput) {
+    const preStats = DIAG_PRE_STATS.get(uuid);
+    if (preStats && preStats.n > 0) {
+      props.push(["Pre-activation mean", formatSig(preStats.mean, 4)]);
+      props.push([
+        "Pre-activation range",
+        `${formatSig(preStats.min, 4)} → ${formatSig(preStats.max, 4)}`,
+      ]);
+      props.push(["Pre-activation p99", formatSig(preStats.p99, 4)]);
+      props.push(["Pre-activation |x| max", formatSig(preStats.maxAbs, 4)]);
+    }
+
     const proxy = DIAG_PROXY.get(uuid);
     if (typeof proxy === "number" && isFinite(proxy)) {
       props.push(["Impact (proxy, grad)", formatSig(proxy, 3)]);
@@ -816,6 +895,9 @@ function renderCurrentNeuron(uuid) {
 
   renderImpactBreakdown(uuid, impact);
   renderImpactDiagnosticsPanel(uuid, n.type);
+  renderIssuesPanel(uuid, n.type);
+  renderCandidatesPanel(uuid);
+  applyNeuronTabState();
 }
 
 function renderImpactDiagnosticsPanel(uuid, neuronType) {
@@ -1164,6 +1246,19 @@ function renderSynapseList(toUuid) {
   enriched.forEach((syn) => {
     const row = document.createElement("div");
     row.className = "synapseRow";
+    const selected = (DISCOVERY_CANDIDATES ?? []).find((c) =>
+      c?.key === selectedCandidateKey
+    );
+    if (
+      selected &&
+      String(selected.type ?? "").toLowerCase() ===
+        "split_synapse_insert_neuron" &&
+      selected.fromUuid === syn.fromUuid &&
+      selected.toUuid === syn.toUuid
+    ) {
+      // Candidate overlay: highlight the original edge to be replaced.
+      row.classList.add("candidateReplaceEdge");
+    }
     if (trace.includes(syn.fromUuid)) {
       row.classList.add("inTrace");
     }
@@ -1283,7 +1378,8 @@ function escapeHtml(s) {
 
 function initTouchTooltips() {
   // iOS Safari/PWA does not reliably show `title` tooltips on tap.
-  // Provide press-and-hold tooltips on touch devices, without stealing normal taps.
+  // Provide tap + press-and-hold tooltips on touch devices, without stealing
+  // normal taps for unrelated controls.
   const isTouch = (() => {
     try {
       return (navigator.maxTouchPoints ?? 0) > 0 ||
@@ -1339,7 +1435,14 @@ function initTouchTooltips() {
   function findTooltipTarget(startEl) {
     let n = startEl;
     while (n && n !== document.body) {
-      if (n?.getAttribute && n.hasAttribute("title")) {
+      // Only treat known tooltip affordances as tooltip targets. Many controls
+      // (buttons, inputs) have titles but still need to behave normally on tap.
+      const isKnownTooltipEl = n.classList?.contains("hasTooltip") ||
+        n.classList?.contains("stat") ||
+        n.classList?.contains("neuronAlias") ||
+        n.classList?.contains("aliasName");
+
+      if (isKnownTooltipEl && n?.getAttribute && n.hasAttribute("title")) {
         const t = n.getAttribute("title");
         if (t && t.trim().length > 0) return n;
       }
@@ -1352,7 +1455,6 @@ function initTouchTooltips() {
     "touchstart",
     (e) => {
       if (pressTimer) clearTimeout(pressTimer);
-      shownForTarget = null;
 
       const target = findTooltipTarget(e.target);
       if (!target) return;
@@ -1385,18 +1487,37 @@ function initTouchTooltips() {
     { passive: true, capture: true },
   );
 
-  // If we just showed a tooltip, suppress the follow-up click so we don't
-  // accidentally trigger navigation (e.g. tapping a stat inside a synapse row).
+  // iPhone Safari can be inconsistent about long-press and `title`. Make tap the
+  // primary way to open tooltips for stat chips / labelled properties.
   document.addEventListener(
     "click",
     (e) => {
-      if (Date.now() > suppressClickUntil) return;
       const target = findTooltipTarget(e.target);
       if (!target) return;
-      if (shownForTarget && target === shownForTarget) {
+
+      // If a long-press just opened a tooltip, iOS will often fire a follow-up
+      // click on release. During the suppression window, do not toggle/close the
+      // tooltip; just swallow the click to prevent accidental actions.
+      if (Date.now() < suppressClickUntil) {
         e.preventDefault();
         e.stopPropagation();
+        return;
       }
+
+      // Toggle: tapping the same target closes the tooltip.
+      if (
+        shownForTarget && target === shownForTarget &&
+        tooltipEl?.classList.contains("isOpen")
+      ) {
+        hideTouchTooltip();
+      } else {
+        shownForTarget = target;
+        showTouchTooltip(target.getAttribute("title"));
+      }
+
+      // Don't let the click bubble and trigger row navigation underneath.
+      e.preventDefault();
+      e.stopPropagation();
     },
     { capture: true },
   );
@@ -1407,10 +1528,1009 @@ function initTouchTooltips() {
     (e) => {
       if (!tooltipEl?.classList.contains("isOpen")) return;
       if (tooltipEl.contains(e.target)) return;
+      // If the touch is on a known tooltip target, let the tap-to-toggle handler
+      // manage it. Otherwise, we'd close on touchstart then re-open on click.
+      if (findTooltipTarget(e.target)) return;
       hideTouchTooltip();
     },
     { passive: true },
   );
+
+  // Some iOS flows fire `click` without a preceding touchstart (e.g., assistive
+  // tech). Support outside-click close as well.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (!tooltipEl?.classList.contains("isOpen")) return;
+      if (tooltipEl.contains(e.target)) return;
+      // If the click was on a known tooltip target, let the tap-to-toggle handler
+      // manage it. Both listeners run on `document` in the capture phase, so we
+      // must explicitly avoid immediately closing a tooltip we just opened.
+      if (findTooltipTarget(e.target)) return;
+      hideTouchTooltip();
+    },
+    { capture: true },
+  );
+}
+
+// ============================================================================
+// Tabs: Details / Issues / Candidates
+// ============================================================================
+
+function applyNeuronTabState() {
+  const tab = currentNeuronTab;
+
+  const cfg = [
+    ["details", el.neuronTabDetails, el.neuronTabPanelDetails],
+    ["issues", el.neuronTabIssues, el.neuronTabPanelIssues],
+    ["candidates", el.neuronTabCandidates, el.neuronTabPanelCandidates],
+  ];
+
+  for (const [name, btn, panel] of cfg) {
+    if (btn) {
+      const active = name === tab;
+      btn.classList.toggle("isActive", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    if (panel) {
+      panel.classList.toggle("isActive", name === tab);
+    }
+  }
+}
+
+function setNeuronTab(tab) {
+  const t = String(tab ?? "").toLowerCase();
+  if (t !== "details" && t !== "issues" && t !== "candidates") return;
+  currentNeuronTab = t;
+  applyNeuronTabState();
+}
+
+if (el.neuronTabDetails) {
+  el.neuronTabDetails.onclick = () => setNeuronTab("details");
+}
+if (el.neuronTabIssues) {
+  el.neuronTabIssues.onclick = () => setNeuronTab("issues");
+}
+if (el.neuronTabCandidates) {
+  el.neuronTabCandidates.onclick = () => setNeuronTab("candidates");
+}
+
+// ============================================================================
+// Issues tab computations (cached on snapshot load)
+// ============================================================================
+
+function extractDiscoveryCandidates(snapshot) {
+  // Discovery snapshots have varied schema across versions. Keep this defensive.
+  const candidates = snapshot?.derived?.candidates ??
+    snapshot?.derived?.discoveryCandidates ??
+    snapshot?.derived?.discovery_candidates ??
+    snapshot?.discovery?.candidates ??
+    snapshot?.discoveryCandidates ??
+    snapshot?.candidates ??
+    [];
+
+  const arr = Array.isArray(candidates) ? candidates : [];
+  return arr.map((c, idx) => normaliseCandidate(c, idx)).filter(Boolean);
+}
+
+function normaliseCandidate(raw, idx) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const type = String(
+    raw.type ?? raw.kind ?? raw.candidateType ?? raw.candidate_type ?? "",
+  ).trim();
+
+  // Helper: safe nested getter by trying multiple field paths.
+  function pick(...paths) {
+    for (const p of paths) {
+      const v = p(raw);
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  function asStr(v) {
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  }
+
+  function asNum(v) {
+    return typeof v === "number" && isFinite(v) ? v : null;
+  }
+
+  const fromUuid = asStr(pick(
+    (o) => o.fromUuid,
+    (o) => o.from_uuid,
+    (o) => o.fromUUID,
+    (o) => o.synapse?.fromUuid,
+    (o) => o.synapse?.from_uuid,
+  ));
+  const toUuid = asStr(pick(
+    (o) => o.toUuid,
+    (o) => o.to_uuid,
+    (o) => o.toUUID,
+    (o) => o.synapse?.toUuid,
+    (o) => o.synapse?.to_uuid,
+  ));
+
+  const fromIndex = asNum(pick((o) => o.fromIndex, (o) => o.from_index));
+  const toIndex = asNum(pick((o) => o.toIndex, (o) => o.to_index));
+
+  const oldWeight = asNum(pick(
+    (o) => o.oldWeight,
+    (o) => o.old_weight,
+    (o) => o.weight,
+    (o) => o.synapse?.weight,
+  ));
+
+  // New weights: allow arrays or explicit fields.
+  const newWeightsArr = pick((o) => o.newWeights, (o) => o.new_weights);
+  const newWeightA = asNum(
+    pick(
+      (o) => Array.isArray(newWeightsArr) ? newWeightsArr[0] : null,
+      (o) => o.newWeightA,
+      (o) => o.new_weight_a,
+      (o) => o.w1,
+    ),
+  );
+  const newWeightB = asNum(
+    pick(
+      (o) => Array.isArray(newWeightsArr) ? newWeightsArr[1] : null,
+      (o) => o.newWeightB,
+      (o) => o.new_weight_b,
+      (o) => o.w2,
+    ),
+  );
+
+  const newNeuron = raw.newNeuron ?? raw.neuron ?? raw.insertedNeuron ??
+    raw.inserted_neuron ?? null;
+  const newNeuronSquash = asStr(
+    newNeuron?.squash ?? raw.newNeuronSquash ?? raw.new_neuron_squash,
+  );
+  const newNeuronBias = asNum(
+    newNeuron?.bias ?? raw.newNeuronBias ?? raw.new_neuron_bias,
+  );
+
+  const expectedScoreGain = asNum(
+    pick(
+      (o) => o.expectedScoreGain,
+      (o) => o.expected_score_gain,
+      (o) => o.scoreGain,
+    ),
+  );
+  const expectedImpact = asNum(pick((o) => o.expectedImpact, (o) => o.impact));
+  const comment = asStr(
+    pick((o) => o.comment, (o) => o.note, (o) => o.diagnostics),
+  );
+
+  const key = asStr(raw.id) ??
+    asStr(raw.uuid) ??
+    `${type || "candidate"}:${fromUuid ?? "?"}→${toUuid ?? "?"}:${idx}`;
+
+  return {
+    key,
+    type,
+    fromUuid,
+    toUuid,
+    fromIndex,
+    toIndex,
+    oldWeight,
+    newWeightA,
+    newWeightB,
+    newNeuronSquash,
+    newNeuronBias,
+    expectedScoreGain,
+    expectedImpact,
+    comment,
+    raw,
+  };
+}
+
+function computeNonFiniteIssues({ recording }) {
+  const obsIndices = recording?.obsIndices ?? recording?.obs_indices ?? null;
+  const neurons = recording?.neurons ?? {};
+  const out = new Map();
+
+  function obsAt(pos) {
+    if (Array.isArray(obsIndices) && pos >= 0 && pos < obsIndices.length) {
+      return obsIndices[pos];
+    }
+    return pos;
+  }
+
+  function scan1d(arr) {
+    if (!Array.isArray(arr)) return { count: 0, firstPos: null };
+    let count = 0;
+    let firstPos = null;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (typeof v === "number" && isFinite(v)) continue;
+      count += 1;
+      if (firstPos == null) firstPos = i;
+    }
+    return { count, firstPos };
+  }
+
+  function scan2d(arr) {
+    if (!Array.isArray(arr)) return { count: 0, firstPos: null };
+    let count = 0;
+    let firstPos = null;
+    for (let i = 0; i < arr.length; i++) {
+      const row = arr[i];
+      if (!Array.isArray(row)) continue;
+      for (let j = 0; j < row.length; j++) {
+        const v = row[j];
+        if (typeof v === "number" && isFinite(v)) continue;
+        count += 1;
+        if (firstPos == null) firstPos = i;
+      }
+    }
+    return { count, firstPos };
+  }
+
+  for (const [uuid, rec] of Object.entries(neurons)) {
+    if (!rec || typeof rec !== "object") continue;
+    const act = scan1d(rec.activation);
+    const val = scan1d(rec.value);
+    const err = scan2d(rec.errors);
+    const total = act.count + val.count + err.count;
+    if (total <= 0) continue;
+
+    out.set(uuid, {
+      total,
+      activation: {
+        count: act.count,
+        firstObsIndex: act.firstPos == null ? null : obsAt(act.firstPos),
+      },
+      value: {
+        count: val.count,
+        firstObsIndex: val.firstPos == null ? null : obsAt(val.firstPos),
+      },
+      errors: {
+        count: err.count,
+        firstObsIndex: err.firstPos == null ? null : obsAt(err.firstPos),
+      },
+    });
+  }
+
+  return out;
+}
+
+function computeErrorConcentrationIssues({ recording }) {
+  const obsIndices = recording?.obsIndices ?? recording?.obs_indices ?? null;
+  const neurons = recording?.neurons ?? {};
+  const out = new Map();
+
+  function obsAt(pos) {
+    if (Array.isArray(obsIndices) && pos >= 0 && pos < obsIndices.length) {
+      return obsIndices[pos];
+    }
+    return pos;
+  }
+
+  for (const [uuid, rec] of Object.entries(neurons)) {
+    if (!rec || typeof rec !== "object") continue;
+    const errors = rec.errors;
+    if (!Array.isArray(errors) || errors.length === 0) continue;
+
+    /** @type {number[]} */
+    const contrib = [];
+    for (let i = 0; i < errors.length; i++) {
+      const row = errors[i];
+      if (!Array.isArray(row) || row.length === 0) {
+        contrib.push(0);
+        continue;
+      }
+      let sum = 0;
+      let n = 0;
+      for (const e of row) {
+        if (typeof e !== "number" || !isFinite(e)) continue;
+        sum += e * e;
+        n += 1;
+      }
+      contrib.push(n > 0 ? sum / n : 0);
+    }
+
+    const s = summariseErrorConcentration(contrib, { topK: 8 });
+    if (s.total <= 0) continue;
+
+    out.set(uuid, {
+      total: s.total,
+      topK: s.topK.map((t) => ({
+        obsIndex: obsAt(t.index),
+        value: t.value,
+        shareOfTotal: t.shareOfTotal,
+      })),
+      topKShare: s.topKShare,
+    });
+  }
+
+  return out;
+}
+
+function computeInputIssues({ recording, inputCount, candidates }) {
+  const neurons = recording?.neurons ?? {};
+
+  // Near-constant inputs (std dev ~0).
+  const constantInputs = [];
+  for (let i = 0; i < (inputCount ?? 0); i++) {
+    const uuid = `input-${i}`;
+    const rec = neurons?.[uuid];
+    const series = rec?.activation ?? rec?.value ?? null;
+    if (!Array.isArray(series) || series.length === 0) continue;
+    const s = summariseSeriesStats(series, { sampleSize: 1024 });
+    if (s.n > 0 && s.std < 1e-6) {
+      constantInputs.push({ uuid, std: s.std, mean: s.mean });
+    }
+  }
+
+  // Highly correlated input pairs (guard-railed).
+  const correlatedPairs = computeTopInputCorrelations({
+    recording,
+    inputCount,
+    maxInputs: 80,
+    sampleSize: 512,
+    topK: 12,
+  });
+
+  // Candidate coverage for input-N nodes.
+  const coverage = [];
+  const counts = new Map();
+  const helpful = new Map();
+  const harmful = new Map();
+
+  for (const c of (Array.isArray(candidates) ? candidates : [])) {
+    const uuids = candidateReferencedInputUuids(c);
+    const gain = typeof c.expectedScoreGain === "number"
+      ? c.expectedScoreGain
+      : null;
+    for (const u of uuids) {
+      counts.set(u, (counts.get(u) ?? 0) + 1);
+      if (gain != null) {
+        if (gain >= 0) helpful.set(u, (helpful.get(u) ?? 0) + 1);
+        else harmful.set(u, (harmful.get(u) ?? 0) + 1);
+      }
+    }
+  }
+
+  for (let i = 0; i < (inputCount ?? 0); i++) {
+    const uuid = `input-${i}`;
+    coverage.push({
+      uuid,
+      count: counts.get(uuid) ?? 0,
+      helpful: helpful.get(uuid) ?? 0,
+      harmful: harmful.get(uuid) ?? 0,
+    });
+  }
+  coverage.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+
+  return { constantInputs, correlatedPairs, candidateCoverage: coverage };
+}
+
+function candidateReferencedInputUuids(candidate) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  const re = /^input-\d+$/;
+
+  function walk(x, depth) {
+    if (depth > 4) return; // guard rails (candidates should be shallow)
+    if (typeof x === "string") {
+      const s = x.trim();
+      if (re.test(s)) out.add(s);
+      return;
+    }
+    if (!x || typeof x !== "object") return;
+    if (Array.isArray(x)) {
+      for (const v of x) walk(v, depth + 1);
+      return;
+    }
+    for (const v of Object.values(x)) walk(v, depth + 1);
+  }
+
+  walk(candidate?.raw ?? candidate, 0);
+  return Array.from(out);
+}
+
+function computeTopInputCorrelations(
+  { recording, inputCount, maxInputs, sampleSize, topK },
+) {
+  const neurons = recording?.neurons ?? {};
+  const nInputs = Math.max(0, Math.floor(inputCount ?? 0));
+  const useInputs = Math.min(nInputs, Math.max(0, Math.floor(maxInputs ?? 80)));
+  if (useInputs < 2) return [];
+
+  const seriesByUuid = [];
+  for (let i = 0; i < useInputs; i++) {
+    const uuid = `input-${i}`;
+    const rec = neurons?.[uuid];
+    const series = rec?.activation ?? rec?.value ?? null;
+    if (Array.isArray(series) && series.length > 4) {
+      seriesByUuid.push({ uuid, series });
+    }
+  }
+  if (seriesByUuid.length < 2) return [];
+
+  // Downsample evenly to keep this fast.
+  function sampleSeries(arr) {
+    const take = Math.min(
+      arr.length,
+      Math.max(8, Math.floor(sampleSize ?? 512)),
+    );
+    if (take >= arr.length) return arr;
+    const step = arr.length / take;
+    const out = [];
+    for (let i = 0; i < take; i++) {
+      const idx = Math.min(arr.length - 1, Math.floor(i * step));
+      const v = arr[idx];
+      out.push(typeof v === "number" && isFinite(v) ? v : 0);
+    }
+    return out;
+  }
+
+  const sampled = seriesByUuid.map((s) => ({
+    uuid: s.uuid,
+    arr: sampleSeries(s.series),
+  }));
+
+  // Compute top correlations (|r| high).
+  const k = Math.max(1, Math.floor(topK ?? 12));
+  /** @type {{ a: string, b: string, r: number }[]} */
+  const top = [];
+
+  function insert(item) {
+    // keep ascending by |r|
+    const ar = Math.abs(item.r);
+    let lo = 0;
+    let hi = top.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Math.abs(top[mid].r) <= ar) lo = mid + 1;
+      else hi = mid;
+    }
+    top.splice(lo, 0, item);
+    if (top.length > k) top.shift();
+  }
+
+  function corr(x, y) {
+    const n = Math.min(x.length, y.length);
+    if (n < 3) return 0;
+    let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+    for (let i = 0; i < n; i++) {
+      const a = x[i];
+      const b = y[i];
+      sx += a;
+      sy += b;
+      sxx += a * a;
+      syy += b * b;
+      sxy += a * b;
+    }
+    const mx = sx / n;
+    const my = sy / n;
+    const vx = sxx / n - mx * mx;
+    const vy = syy / n - my * my;
+    const cov = sxy / n - mx * my;
+    const denom = Math.sqrt(Math.max(0, vx)) * Math.sqrt(Math.max(0, vy));
+    if (denom <= 0) return 0;
+    return cov / denom;
+  }
+
+  for (let i = 0; i < sampled.length; i++) {
+    for (let j = i + 1; j < sampled.length; j++) {
+      const r = corr(sampled[i].arr, sampled[j].arr);
+      if (top.length < k || Math.abs(r) > Math.abs(top[0].r)) {
+        insert({ a: sampled[i].uuid, b: sampled[j].uuid, r });
+      }
+    }
+  }
+
+  top.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
+  return top;
+}
+
+// ============================================================================
+// Issues tab UI
+// ============================================================================
+
+function renderIssuesPanel(currentUuid, neuronType) {
+  if (!el.neuronTabPanelIssues) return;
+  if (!SNAPSHOT) {
+    el.neuronTabPanelIssues.innerHTML = "";
+    return;
+  }
+
+  const isInput = currentUuid?.startsWith?.("input-") || neuronType === "input";
+
+  const dead = DIAG_DEADZONES.get(currentUuid);
+  const nonFinite = DIAG_NONFINITE.get(currentUuid);
+  const tail = DIAG_ERROR_TAIL.get(currentUuid);
+
+  const pieces = [];
+
+  pieces.push(`<div class="panelSectionTitle">Current neuron</div>`);
+  pieces.push(`<div class="issueList">`);
+
+  // Saturation & dead zones.
+  if (!isInput && dead) {
+    const dd = [];
+    if (dead.fracClamped != null) {
+      dd.push(`Clamp %: ${formatSig(dead.fracClamped * 100, 4)}%`);
+    }
+    if (dead.fracAtZero != null) {
+      dd.push(`Dead zone %: ${formatSig(dead.fracAtZero * 100, 4)}%`);
+    }
+    if (dead.nonFiniteCount > 0) {
+      dd.push(`Non-finite pre-acts: ${dead.nonFiniteCount}`);
+    }
+    if (dd.length > 0) {
+      pieces.push(`
+        <div class="issueRow">
+          <div class="issueRowTitle">Saturation & dead zones</div>
+          <div class="synapseStats">${
+        dd.map((x) => `<span class="stat">${escapeHtml(x)}</span>`).join("")
+      }</div>
+        </div>
+      `);
+    }
+  }
+
+  // Non-finite activations / errors.
+  if (nonFinite) {
+    const dd = [];
+    if (nonFinite.activation?.count > 0) {
+      dd.push(
+        `Non-finite activations: ${nonFinite.activation.count} (first obs_index=${nonFinite.activation.firstObsIndex})`,
+      );
+    }
+    if (nonFinite.value?.count > 0) {
+      dd.push(
+        `Non-finite values: ${nonFinite.value.count} (first obs_index=${nonFinite.value.firstObsIndex})`,
+      );
+    }
+    if (nonFinite.errors?.count > 0) {
+      dd.push(
+        `Non-finite errors: ${nonFinite.errors.count} (first obs_index=${nonFinite.errors.firstObsIndex})`,
+      );
+    }
+    pieces.push(`
+      <div class="issueRow">
+        <div class="issueRowTitle">Exploding / non-finite</div>
+        <div class="synapseStats">${
+      dd.length
+        ? dd.map((x) => `<span class="stat error">${escapeHtml(x)}</span>`)
+          .join("")
+        : `<span class="stat">No non-finite values detected</span>`
+    }</div>
+      </div>
+    `);
+  } else {
+    pieces.push(`
+      <div class="issueRow">
+        <div class="issueRowTitle">Exploding / non-finite</div>
+        <div class="synapseStats"><span class="stat">No non-finite values detected</span></div>
+      </div>
+    `);
+  }
+
+  // Error concentration.
+  if (!isInput && tail) {
+    const top = tail.topK?.slice?.(0, 4) ?? [];
+    const dd = [];
+    if (top.length > 0) {
+      dd.push(
+        `Top obs share: ${formatSig((top[0]?.shareOfTotal ?? 0) * 100, 4)}%`,
+      );
+      dd.push(`Top-k share: ${formatSig((tail.topKShare ?? 0) * 100, 4)}%`);
+      dd.push(`Top obs_index: ${top.map((t) => t.obsIndex).join(", ")}`);
+    }
+    pieces.push(`
+      <div class="issueRow">
+        <div class="issueRowTitle">Error concentration</div>
+        <div class="synapseStats">${
+      dd.length
+        ? dd.map((x) => `<span class="stat">${escapeHtml(x)}</span>`).join("")
+        : `<span class="stat">No per-observation error data</span>`
+    }</div>
+      </div>
+    `);
+  }
+
+  pieces.push(`</div>`);
+
+  // Global lists (quickly actionable).
+  pieces.push(`<div class="panelSectionTitle">Flagged neurons</div>`);
+
+  const nonFiniteUuids = Array.from(DIAG_NONFINITE.entries())
+    .sort((a, b) => (b[1]?.total ?? 0) - (a[1]?.total ?? 0))
+    .slice(0, 10);
+
+  const clampedUuids = Array.from(DIAG_DEADZONES.entries())
+    .filter(([uuid, d]) => uuid && d && d.fracClamped != null)
+    .sort((a, b) => (b[1].fracClamped ?? 0) - (a[1].fracClamped ?? 0))
+    .slice(0, 10);
+
+  const deadReluUuids = Array.from(DIAG_DEADZONES.entries())
+    .filter(([uuid, d]) => uuid && d && d.fracAtZero != null)
+    .sort((a, b) => (b[1].fracAtZero ?? 0) - (a[1].fracAtZero ?? 0))
+    .slice(0, 10);
+
+  const heavyTail = Array.from(DIAG_ERROR_TAIL.entries())
+    .sort((a, b) =>
+      (b[1]?.topK?.[0]?.shareOfTotal ?? 0) -
+      (a[1]?.topK?.[0]?.shareOfTotal ?? 0)
+    )
+    .slice(0, 10);
+
+  function renderJumpList(title, rows, renderStats) {
+    if (!rows || rows.length === 0) return "";
+    const html = rows.map(([uuid, data]) => {
+      const stats = renderStats(data);
+      return `
+        <div class="issueRow" data-jump-uuid="${escapeHtml(uuid)}">
+          <div class="issueRowTitle">${
+        escapeHtml(truncateNeuronName(uuid))
+      }</div>
+          <div class="synapseStats">${stats}</div>
+        </div>
+      `;
+    }).join("");
+    return `<div class="panelSectionTitle">${
+      escapeHtml(title)
+    }</div><div class="issueList">${html}</div>`;
+  }
+
+  pieces.push(renderJumpList(
+    "Non-finite (top 10)",
+    nonFiniteUuids,
+    (d) =>
+      `<span class="stat error">count: ${
+        escapeHtml(String(d.total ?? 0))
+      }</span>` +
+      (d.errors?.firstObsIndex != null
+        ? `<span class="stat">first obs_index: ${
+          escapeHtml(String(d.errors.firstObsIndex))
+        }</span>`
+        : ""),
+  ));
+
+  pieces.push(renderJumpList(
+    "Clamp % (top 10)",
+    clampedUuids,
+    (d) =>
+      `<span class="stat">clamp: ${
+        escapeHtml(formatSig((d.fracClamped ?? 0) * 100, 4))
+      }%</span>`,
+  ));
+
+  pieces.push(renderJumpList(
+    "Dead zone % (top 10)",
+    deadReluUuids,
+    (d) =>
+      `<span class="stat">dead: ${
+        escapeHtml(formatSig((d.fracAtZero ?? 0) * 100, 4))
+      }%</span>`,
+  ));
+
+  pieces.push(renderJumpList(
+    "Error heavy-tail (top 10)",
+    heavyTail,
+    (d) =>
+      `<span class="stat">top1: ${
+        escapeHtml(formatSig((d.topK?.[0]?.shareOfTotal ?? 0) * 100, 4))
+      }%</span>` +
+      `<span class="stat">top-k: ${
+        escapeHtml(formatSig((d.topKShare ?? 0) * 100, 4))
+      }%</span>`,
+  ));
+
+  // Input issues (redundancy).
+  pieces.push(`<div class="panelSectionTitle">Inputs</div>`);
+  const inputBits = [];
+  if (DIAG_INPUTS?.constantInputs?.length) {
+    inputBits.push(`<div class="issueRowTitle">Near-constant inputs</div>`);
+    inputBits.push(
+      `<div class="synapseStats">${
+        DIAG_INPUTS.constantInputs.slice(0, 10).map((x) =>
+          `<span class="stat">${escapeHtml(x.uuid)} std≈${
+            escapeHtml(formatSig(x.std, 3))
+          }</span>`
+        ).join("")
+      }</div>`,
+    );
+  }
+  if (DIAG_INPUTS?.correlatedPairs?.length) {
+    inputBits.push(`<div class="issueRowTitle">Highly correlated pairs</div>`);
+    inputBits.push(
+      `<div class="synapseStats">${
+        DIAG_INPUTS.correlatedPairs.slice(0, 8).map((p) =>
+          `<span class="stat">${escapeHtml(p.a)} ↔ ${escapeHtml(p.b)} r=${
+            escapeHtml(formatSig(p.r, 4))
+          }</span>`
+        ).join("")
+      }</div>`,
+    );
+  }
+  if (DIAG_INPUTS?.candidateCoverage?.length) {
+    inputBits.push(`<div class="issueRowTitle">Candidate coverage</div>`);
+    inputBits.push(
+      `<div class="synapseStats">${
+        DIAG_INPUTS.candidateCoverage.slice(0, 10).map((c) =>
+          `<span class="stat">${escapeHtml(c.uuid)} candidates=${
+            escapeHtml(String(c.count))
+          } (+${escapeHtml(String(c.helpful))}/-${
+            escapeHtml(String(c.harmful))
+          })</span>`
+        ).join("")
+      }</div>`,
+    );
+  }
+  pieces.push(
+    `<div class="issueRow">${
+      inputBits.length
+        ? inputBits.join("")
+        : `<div class="synapseStats"><span class="stat">No input redundancy data</span></div>`
+    }</div>`,
+  );
+
+  el.neuronTabPanelIssues.innerHTML = pieces.join("");
+
+  el.neuronTabPanelIssues.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest("[data-jump-uuid]");
+    if (!row) return;
+    const uuid = row.getAttribute("data-jump-uuid");
+    if (uuid) navigateTo(uuid);
+  };
+}
+
+// ============================================================================
+// Candidates tab UI
+// ============================================================================
+
+function renderCandidatesPanel(currentUuid) {
+  if (!el.neuronTabPanelCandidates) return;
+  if (!SNAPSHOT) {
+    el.neuronTabPanelCandidates.innerHTML = "";
+    return;
+  }
+
+  const relevant = (DISCOVERY_CANDIDATES ?? []).filter((c) =>
+    c?.fromUuid === currentUuid || c?.toUuid === currentUuid
+  );
+
+  const selected =
+    (DISCOVERY_CANDIDATES ?? []).find((c) => c.key === selectedCandidateKey) ??
+      null;
+
+  const list = relevant.length ? relevant : (DISCOVERY_CANDIDATES ?? []);
+  const listTitle = relevant.length
+    ? "Candidates involving this neuron"
+    : "Candidates (snapshot)";
+
+  const rows = list.map((c) => {
+    const isSelected = c.key === selectedCandidateKey;
+    const title = `${c.type || "candidate"}: ${
+      truncateUuid(c.fromUuid ?? "?")
+    } → ${truncateUuid(c.toUuid ?? "?")}`;
+    const stats = [];
+    if (c.expectedScoreGain != null) {
+      stats.push(
+        `<span class="stat ${
+          c.expectedScoreGain >= 0 ? "positive" : "negative"
+        }" title="Expected score gain">Δscore: ${
+          escapeHtml(formatSig(c.expectedScoreGain, 4))
+        }</span>`,
+      );
+    }
+    if (c.expectedImpact != null) {
+      stats.push(
+        `<span class="stat" title="Expected impact">impact: ${
+          escapeHtml(formatSig(c.expectedImpact, 4))
+        }</span>`,
+      );
+    }
+    return `
+      <div class="candidateRow ${
+      isSelected ? "isSelected" : ""
+    }" data-cand-key="${escapeHtml(c.key)}">
+        <div class="candidateRowTitle">${escapeHtml(title)}</div>
+        <div class="synapseStats">${stats.join("")}</div>
+      </div>
+    `;
+  }).join("");
+
+  const detail = selected
+    ? renderSplitSynapseCandidateDetail(selected)
+    : `<div class="emptyState">Select a candidate to inspect details.</div>`;
+
+  el.neuronTabPanelCandidates.innerHTML = `
+    <div class="panelSectionTitle">${escapeHtml(listTitle)}</div>
+    <div class="candidateList">${
+    rows ||
+    `<div class="emptyState">No discovery candidates in this snapshot.</div>`
+  }</div>
+    <div class="panelSectionTitle">Candidate details</div>
+    ${detail}
+  `;
+
+  el.neuronTabPanelCandidates.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest("[data-cand-key]");
+    if (!row) return;
+    const key = row.getAttribute("data-cand-key");
+    if (!key) return;
+    selectedCandidateKey = key;
+    renderCandidatesPanel(currentUuid);
+    renderSynapseList(currentUuid);
+  };
+}
+
+function renderSplitSynapseCandidateDetail(c) {
+  const isSplit =
+    String(c.type ?? "").toLowerCase() === "split_synapse_insert_neuron";
+
+  const from = c.fromUuid ?? "?";
+  const to = c.toUuid ?? "?";
+
+  // Small before/after diff summary.
+  const diff = `
+    <dl class="candidateDiffGrid">
+      <dt>Synapse count Δ</dt><dd>+1 (−1 +2)</dd>
+      <dt>Neuron count Δ</dt><dd>+1</dd>
+      <dt>Removed synapse</dt><dd>${escapeHtml(`${from} → ${to}`)}</dd>
+    </dl>
+  `;
+
+  const svg = renderCandidateDiagramSvg(c);
+
+  const details = [];
+  details.push(
+    `<div class="issueRowTitle">${
+      escapeHtml(
+        isSplit ? "split_synapse_insert_neuron" : (c.type || "candidate"),
+      )
+    }</div>`,
+  );
+  details.push(`<div class="synapseStats">`);
+  details.push(
+    `<span class="stat" title="from/to UUIDs">${
+      escapeHtml(`${truncateUuid(from)} → ${truncateUuid(to)}`)
+    }</span>`,
+  );
+  if (c.fromIndex != null || c.toIndex != null) {
+    details.push(
+      `<span class="stat" title="from/to indices">idx: ${
+        escapeHtml(String(c.fromIndex ?? "?"))
+      } → ${escapeHtml(String(c.toIndex ?? "?"))}</span>`,
+    );
+  }
+  if (c.oldWeight != null) {
+    details.push(
+      `<span class="stat" title="Old weight">old w: ${
+        escapeHtml(formatSig(c.oldWeight, 6))
+      }</span>`,
+    );
+  }
+  if (c.newWeightA != null || c.newWeightB != null) {
+    details.push(
+      `<span class="stat" title="New weights">new w: ${
+        escapeHtml(formatSig(c.newWeightA ?? 0, 6))
+      }, ${escapeHtml(formatSig(c.newWeightB ?? 0, 6))}</span>`,
+    );
+  }
+  if (c.newNeuronSquash) {
+    details.push(
+      `<span class="stat" title="New neuron squash">squash: ${
+        escapeHtml(c.newNeuronSquash)
+      }</span>`,
+    );
+  }
+  if (c.newNeuronBias != null) {
+    details.push(
+      `<span class="stat" title="New neuron bias">bias: ${
+        escapeHtml(formatSig(c.newNeuronBias, 6))
+      }</span>`,
+    );
+  }
+  if (c.expectedScoreGain != null) {
+    details.push(
+      `<span class="stat ${
+        c.expectedScoreGain >= 0 ? "positive" : "negative"
+      }" title="Expected score gain">Δscore: ${
+        escapeHtml(formatSig(c.expectedScoreGain, 6))
+      }</span>`,
+    );
+  }
+  if (c.expectedImpact != null) {
+    details.push(
+      `<span class="stat" title="Expected impact">impact: ${
+        escapeHtml(formatSig(c.expectedImpact, 6))
+      }</span>`,
+    );
+  }
+  details.push(`</div>`);
+
+  if (c.comment) {
+    details.push(
+      `<div class="impactBreakdownNote">${escapeHtml(c.comment)}</div>`,
+    );
+  }
+
+  const rawJson = escapeHtml(JSON.stringify(c.raw ?? {}, null, 2));
+
+  return `
+    <div class="issueRow">
+      ${details.join("")}
+      ${svg}
+      ${diff}
+      <details class="pathItem" style="margin-top: 10px;">
+        <summary>Raw candidate JSON</summary>
+        <pre class="pathEquation" style="white-space: pre-wrap;">${rawJson}</pre>
+      </details>
+    </div>
+  `;
+}
+
+function renderCandidateDiagramSvg(c) {
+  const from = truncateNeuronName(c.fromUuid ?? "?");
+  const to = truncateNeuronName(c.toUuid ?? "?");
+  const midSquash = c.newNeuronSquash ?? "IDENTITY";
+  const midBias = c.newNeuronBias != null ? formatSig(c.newNeuronBias, 4) : "0";
+  const w1 = c.newWeightA != null ? formatSig(c.newWeightA, 4) : "?";
+  const w2 = c.newWeightB != null ? formatSig(c.newWeightB, 4) : "?";
+  const oldW = c.oldWeight != null ? formatSig(c.oldWeight, 4) : "?";
+
+  // Simple inline SVG: from → ghost → to, with old edge highlighted.
+  return `
+    <svg class="candidateDiagram" viewBox="0 0 360 120" aria-label="Candidate diagram">
+      <defs>
+        <marker id="arrowOld" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--warning)"></path>
+        </marker>
+        <marker id="arrowNew" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--accent)"></path>
+        </marker>
+      </defs>
+
+      <!-- Old edge (to be replaced) -->
+      <line x1="60" y1="60" x2="300" y2="60" class="candidateDiagramOldEdge" marker-end="url(#arrowOld)"></line>
+      <text x="180" y="48" text-anchor="middle" class="candidateDiagramText">old w=${
+    escapeHtml(oldW)
+  }</text>
+
+      <!-- New edges (proposed) -->
+      <line x1="60" y1="80" x2="170" y2="80" class="candidateDiagramNewEdge" marker-end="url(#arrowNew)"></line>
+      <line x1="190" y1="80" x2="300" y2="80" class="candidateDiagramNewEdge" marker-end="url(#arrowNew)"></line>
+      <text x="115" y="100" text-anchor="middle" class="candidateDiagramText">w1=${
+    escapeHtml(w1)
+  }</text>
+      <text x="245" y="100" text-anchor="middle" class="candidateDiagramText">w2=${
+    escapeHtml(w2)
+  }</text>
+
+      <!-- Nodes -->
+      <circle cx="50" cy="60" r="18" class="candidateDiagramNode"></circle>
+      <text x="50" y="65" text-anchor="middle" class="candidateDiagramText">from</text>
+
+      <rect x="160" y="18" width="40" height="40" rx="10" class="candidateDiagramGhost"></rect>
+      <text x="180" y="40" text-anchor="middle" class="candidateDiagramText">ghost</text>
+      <text x="180" y="18" text-anchor="middle" class="candidateDiagramText"></text>
+
+      <circle cx="310" cy="60" r="18" class="candidateDiagramNode"></circle>
+      <text x="310" y="65" text-anchor="middle" class="candidateDiagramText">to</text>
+
+      <text x="50" y="18" text-anchor="middle" class="candidateDiagramText">${
+    escapeHtml(from)
+  }</text>
+      <text x="310" y="18" text-anchor="middle" class="candidateDiagramText">${
+    escapeHtml(to)
+  }</text>
+
+      <text x="180" y="70" text-anchor="middle" class="candidateDiagramText">squash=${
+    escapeHtml(midSquash)
+  } bias=${escapeHtml(midBias)}</text>
+    </svg>
+  `;
 }
 
 // ============================================================================

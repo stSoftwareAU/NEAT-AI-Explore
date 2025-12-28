@@ -84,8 +84,55 @@
         <section class="currentNeuron">
           <h2 id="currentNeuronTitle">output-0</h2>
           <dl id="neuronProps" class="propList"></dl>
-          <div id="impactBreakdown" class="impactBreakdown"></div>
-          <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
+
+          <div class="tabRow" role="tablist" aria-label="Neuron panels">
+            <button
+              id="neuronTabDetails"
+              class="tabBtn isActive"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="neuronTabPanelDetails"
+            >
+              Details
+            </button>
+            <button
+              id="neuronTabIssues"
+              class="tabBtn"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="neuronTabPanelIssues"
+            >
+              Issues
+            </button>
+            <button
+              id="neuronTabCandidates"
+              class="tabBtn"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="neuronTabPanelCandidates"
+            >
+              Candidates
+            </button>
+          </div>
+
+          <div
+            id="neuronTabPanelDetails"
+            class="tabPanel isActive"
+            role="tabpanel"
+          >
+            <div id="impactBreakdown" class="impactBreakdown"></div>
+            <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
+          </div>
+          <div id="neuronTabPanelIssues" class="tabPanel" role="tabpanel"></div>
+          <div
+            id="neuronTabPanelCandidates"
+            class="tabPanel"
+            role="tabpanel"
+          >
+          </div>
         </section>
 
         <!-- Arrow -->

@@ -53,6 +53,245 @@ function summariseDerivative(arr) {
 }
 
 /**
+ * Summarise a numeric series (e.g., pre-activations) so we can spot scale issues.
+ *
+ * Terminology:
+ * - "Pre-activation" (aka "net input") is the value before the squash/activation:
+ *   \(z = b + \sum_i w_i x_i\)
+ *
+ * Notes:
+ * - Percentiles are approximate when the series is long; we take an evenly spaced
+ *   sample to keep this fast in the browser.
+ *
+ * @param {number[]} arr
+ * @param {{ sampleSize?: number }} [options]
+ * @returns {{
+ *   n: number,
+ *   mean: number,
+ *   std: number,
+ *   min: number,
+ *   max: number,
+ *   meanAbs: number,
+ *   maxAbs: number,
+ *   p01: number,
+ *   p50: number,
+ *   p99: number,
+ * }}
+ */
+export function summariseSeriesStats(arr, options = {}) {
+  const sampleSize = Math.max(8, Math.floor(options.sampleSize ?? 512));
+  if (!Array.isArray(arr) || arr.length === 0) {
+    return {
+      n: 0,
+      mean: 0,
+      std: 0,
+      min: 0,
+      max: 0,
+      meanAbs: 0,
+      maxAbs: 0,
+      p01: 0,
+      p50: 0,
+      p99: 0,
+    };
+  }
+
+  // Welford online mean/variance + min/max.
+  let n = 0;
+  let mean = 0;
+  let m2 = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  let sumAbs = 0;
+  let maxAbs = 0;
+
+  for (const v of arr) {
+    if (typeof v !== "number" || !isFinite(v)) continue;
+    n += 1;
+    const delta = v - mean;
+    mean += delta / n;
+    const delta2 = v - mean;
+    m2 += delta * delta2;
+    if (v < min) min = v;
+    if (v > max) max = v;
+    const av = Math.abs(v);
+    sumAbs += av;
+    if (av > maxAbs) maxAbs = av;
+  }
+
+  const variance = n > 1 ? (m2 / (n - 1)) : 0;
+  const std = Math.sqrt(Math.max(0, variance));
+  const meanAbs = n > 0 ? (sumAbs / n) : 0;
+
+  // Percentiles (approx): evenly spaced downsample then sort.
+  const take = Math.min(sampleSize, arr.length);
+  /** @type {number[]} */
+  const sample = [];
+  if (take === arr.length) {
+    for (const v of arr) {
+      if (typeof v === "number" && isFinite(v)) sample.push(v);
+    }
+  } else {
+    const step = arr.length / take;
+    for (let i = 0; i < take; i++) {
+      const idx = Math.min(arr.length - 1, Math.floor(i * step));
+      const v = arr[idx];
+      if (typeof v === "number" && isFinite(v)) sample.push(v);
+    }
+  }
+  sample.sort((a, b) => a - b);
+
+  function q(p) {
+    if (sample.length === 0) return 0;
+    const t = Math.max(0, Math.min(1, p));
+    const pos = (sample.length - 1) * t;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    if (lo === hi) return sample[lo];
+    const w = pos - lo;
+    return sample[lo] * (1 - w) + sample[hi] * w;
+  }
+
+  const p01 = q(0.01);
+  const p50 = q(0.5);
+  const p99 = q(0.99);
+
+  return {
+    n,
+    mean,
+    std,
+    min: isFinite(min) ? min : 0,
+    max: isFinite(max) ? max : 0,
+    meanAbs,
+    maxAbs,
+    p01,
+    p50,
+    p99,
+  };
+}
+
+/**
+ * Summarise pre-activation dead zones / clamp behaviour for common squashes.
+ *
+ * This is used by the Issues tab to quickly spot:
+ * - Hard clamps (HARD_TANH / CLIPPED / RELU6) where large fractions of samples
+ *   are in the flat/clamped region.
+ * - Dead ReLUs (RELU / LeakyReLU) where many samples are at/below 0.
+ *
+ * Notes:
+ * - We intentionally keep this conservative and cheap (single pass).
+ * - We treat non-finite values as an issue and report the first offending index.
+ *
+ * @param {string} squash
+ * @param {number[]} preActs
+ * @returns {{
+ *   n: number,
+ *   fracClamped: number | null,
+ *   fracAtZero: number | null,
+ *   nonFiniteCount: number,
+ *   firstNonFiniteIndex: number | null,
+ * }}
+ */
+export function summariseDeadZoneStats(squash, preActs) {
+  const s = String(squash ?? "IDENTITY").toUpperCase();
+  const arr = Array.isArray(preActs) ? preActs : [];
+
+  let n = 0;
+  let clamped = 0;
+  let atZero = 0;
+  let nonFiniteCount = 0;
+  let firstNonFiniteIndex = null;
+
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (typeof v !== "number" || !isFinite(v)) {
+      nonFiniteCount += 1;
+      if (firstNonFiniteIndex == null) firstNonFiniteIndex = i;
+      continue;
+    }
+    n += 1;
+
+    if (s === "HARD_TANH" || s === "CLIPPED") {
+      if (v <= -1 || v >= 1) clamped += 1;
+    } else if (s === "RELU6") {
+      if (v <= 0 || v >= 6) clamped += 1;
+    }
+
+    if (s === "RELU" || s === "LEAKYRELU") {
+      // For RELU, activation is 0 when pre-activation <= 0.
+      // For LeakyReLU, the "dead-ish" region is also pre-activation <= 0.
+      if (v <= 0) atZero += 1;
+    }
+  }
+
+  const fracClamped = (s === "HARD_TANH" || s === "CLIPPED" || s === "RELU6")
+    ? (n > 0 ? clamped / n : 0)
+    : null;
+  const fracAtZero = (s === "RELU" || s === "LEAKYRELU")
+    ? (n > 0 ? atZero / n : 0)
+    : null;
+
+  return { n, fracClamped, fracAtZero, nonFiniteCount, firstNonFiniteIndex };
+}
+
+/**
+ * Summarise how concentrated a non-negative series is (e.g., per-observation
+ * squared error contributions).
+ *
+ * This helps catch heavy-tail failure modes where a handful of observations
+ * dominate MSE, masking broader model issues.
+ *
+ * @param {number[]} contributions
+ * @param {{ topK?: number }} [options]
+ * @returns {{
+ *   n: number,
+ *   total: number,
+ *   topK: { index: number, value: number, shareOfTotal: number }[],
+ *   topKShare: number,
+ * }}
+ */
+export function summariseErrorConcentration(contributions, options = {}) {
+  const arr = Array.isArray(contributions) ? contributions : [];
+  const k = Math.max(1, Math.floor(options.topK ?? 8));
+
+  let total = 0;
+  /** @type {{ index: number, value: number }[]} */
+  const top = [];
+
+  function insertTop(item) {
+    // Keep `top` sorted ascending by value (smallest first).
+    let lo = 0;
+    let hi = top.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (top[mid].value <= item.value) lo = mid + 1;
+      else hi = mid;
+    }
+    top.splice(lo, 0, item);
+    if (top.length > k) top.shift();
+  }
+
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (typeof v !== "number" || !isFinite(v) || v < 0) continue;
+    total += v;
+    if (top.length < k || v > top[0].value) insertTop({ index: i, value: v });
+  }
+
+  // Sort descending for presentation.
+  top.sort((a, b) => b.value - a.value);
+
+  const denom = total > 0 ? total : 1;
+  const topK = top.map((t) => ({
+    index: t.index,
+    value: t.value,
+    shareOfTotal: t.value / denom,
+  }));
+  const topKShare = topK.reduce((acc, t) => acc + t.shareOfTotal, 0);
+
+  return { n: arr.length, total, topK, topKShare };
+}
+
+/**
  * Basic squashes + derivatives. Where we don't know the precise NEAT-AI
  * behaviour, we keep it conservative and mark as non-smooth/unknown.
  *
