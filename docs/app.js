@@ -493,7 +493,7 @@ async function fetchJson(url) {
   if (!usedCache && res.ok && canUseCacheFallback) {
     try {
       const cache = await caches.open("neat-ai-explore-snapshots");
-      cache.put(u, res.clone());
+      await cache.put(u, res.clone());
     } catch (_e) {
       // Non-fatal: caching can fail in some privacy modes.
     }

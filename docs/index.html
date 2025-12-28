@@ -188,7 +188,8 @@
             await navigator.serviceWorker.register(
               "./sw.js?v=__BUILD_ID__",
             );
-            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const sleep = (ms) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
             await Promise.race([
               navigator.serviceWorker.ready,
               sleep(2000),
