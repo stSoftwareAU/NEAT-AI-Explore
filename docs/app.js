@@ -456,7 +456,11 @@ async function fetchJson(url) {
   } catch (e) {
     // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
     // fetch() rejects with TypeError("Failed to fetch") in that case.
-    if (e?.message === "Failed to fetch") {
+    // However, same-origin URLs cannot have CORS issues - "Failed to fetch" for
+    // same-origin URLs is more likely an offline/network error (especially on Chrome).
+    // Only throw the CORS error for cross-origin URLs; same-origin should proceed
+    // to cache fallback.
+    if (e?.message === "Failed to fetch" && !canUseCacheFallback) {
       throw new Error(
         "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
       );
