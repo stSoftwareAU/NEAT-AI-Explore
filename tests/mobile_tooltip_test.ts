@@ -41,6 +41,18 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
       js.includes("Date.now() < suppressClickUntil"),
     `Expected ${appPath} to suppress click toggling within suppressClickUntil window`,
   );
+  const outsideClickIdx = js.indexOf("Support outside-click close as well");
+  assert(
+    outsideClickIdx >= 0,
+    `Expected ${appPath} to include the outside-click-close handler`,
+  );
+  const outsideGuardIdx = js.indexOf(
+    "if (findTooltipTarget(e.target)) return;",
+  );
+  assert(
+    outsideGuardIdx > outsideClickIdx,
+    `Expected ${appPath} outside-click-close handler to ignore tooltip targets (avoid open-then-close race)`,
+  );
 
   const cssPath = repoPath("docs", "styles.css");
   const css = await Deno.readTextFile(cssPath);

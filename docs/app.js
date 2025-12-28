@@ -1474,6 +1474,10 @@ function initTouchTooltips() {
     (e) => {
       if (!tooltipEl?.classList.contains("isOpen")) return;
       if (tooltipEl.contains(e.target)) return;
+      // If the click was on a known tooltip target, let the tap-to-toggle handler
+      // manage it. Both listeners run on `document` in the capture phase, so we
+      // must explicitly avoid immediately closing a tooltip we just opened.
+      if (findTooltipTarget(e.target)) return;
       hideTouchTooltip();
     },
     { capture: true },
