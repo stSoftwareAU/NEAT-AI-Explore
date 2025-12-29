@@ -169,7 +169,40 @@
       </div>
     </main>
 
-    <script type="module" src="./app.js?v=__BUILD_ID__"></script>
+    <script type="module">
+      // Register the Service Worker *before* importing the app module.
+      //
+      // Issue #22 (28-Dec-2025): the app auto-loads the default snapshot on
+      // startup, and some environments (notably iOS/PWA) can fail the first
+      // fetch until the Service Worker has installed/activated. By awaiting
+      // SW readiness here, we avoid a first-load failure that succeeds on
+      // manual retry.
+      //
+      // Issue #23 (29-Dec-2025): `navigator.serviceWorker.ready` never rejects
+      // and can remain pending forever if installation/activation fails (e.g.
+      // quota exceeded, privacy mode restrictions, or an unhandled SW install
+      // error). Use a timeout so the app still boots in degraded mode.
+      (async () => {
+        if ("serviceWorker" in navigator) {
+          try {
+            await navigator.serviceWorker.register(
+              "./sw.js?v=__BUILD_ID__",
+            );
+            const sleep = (ms) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
+            await Promise.race([
+              navigator.serviceWorker.ready,
+              sleep(2000),
+            ]);
+          } catch (err) {
+            console.warn("SW registration failed:", err);
+          }
+        }
+
+        // Start the app once SW registration has had a chance to settle.
+        await import("./app.js?v=__BUILD_ID__");
+      })();
+    </script>
 
     <!-- Impact path inspector modal (for "show your working"). -->
     <div id="pathModal" class="modal" aria-hidden="true">
@@ -201,14 +234,6 @@
       </div>
     </div>
 
-    <script>
-      // Register service worker for PWA offline support.
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=__BUILD_ID__")
-          .catch((err) => {
-            console.warn("SW registration failed:", err);
-          });
-      }
-    </script>
+    <!-- Service worker registration moved into the module bootstrap above. -->
   </body>
 </html>

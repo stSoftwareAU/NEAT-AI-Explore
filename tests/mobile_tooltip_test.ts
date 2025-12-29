@@ -99,4 +99,20 @@ Deno.test("tooltips work on mobile via press-and-hold", async () => {
     css.includes(".touchTooltip"),
     `Expected ${cssPath} to style the touch tooltip UI`,
   );
+
+  // Issue #21 (28-Dec-2025): on iOS, press-and-hold to show tooltips can also
+  // select the underlying text. Since our touch handlers are passive (so we
+  // can't reliably preventDefault), we disable selection/callouts for tooltip
+  // targets on touch devices via CSS.
+  assert(
+    css.includes("@media (hover: none)"),
+    `Expected ${cssPath} to include touch-only CSS rules (hover: none)`,
+  );
+  assert(
+    css.includes(".hasTooltip") &&
+      (css.includes("user-select: none") ||
+        css.includes("-webkit-user-select")) &&
+      (css.includes("-webkit-touch-callout") || css.includes("touch-callout")),
+    `Expected ${cssPath} to disable text selection/callouts for tooltip targets on touch devices`,
+  );
 });
