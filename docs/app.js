@@ -431,11 +431,17 @@ function isSameOriginUrl(url) {
   }
 }
 
+// Cache metadata transport between `fetchJson` and `loadSnapshot`.
+//
+// IMPORTANT: Use a Symbol so this cannot collide with user snapshot JSON keys
+// when loading local files (Issue #25, 29-Dec-2025).
+const LOADED_FROM_CACHE = Symbol("neat-ai-explore.loadedFromCache");
+
 function maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason) {
   // Strict mode: `JSON.parse()` (and `res.json()`) can return `null` or a
   // primitive. Only objects can be annotated safely.
   if (usedCache && obj && typeof obj === "object") {
-    obj.__loadedFromCache = cacheReason || true;
+    obj[LOADED_FROM_CACHE] = cacheReason || true;
   }
   return obj;
 }
@@ -612,8 +618,8 @@ async function loadSnapshot(source, label) {
     const obj = typeof source === "string" ? await fetchJson(source) : source;
     hideProgress();
     const loadedFromCache = obj && typeof obj === "object" &&
-      obj.__loadedFromCache != null;
-    if (loadedFromCache) delete obj.__loadedFromCache;
+      obj[LOADED_FROM_CACHE] != null;
+    if (loadedFromCache) delete obj[LOADED_FROM_CACHE];
 
     SNAPSHOT = obj;
     loadInputLabelsFromSnapshot(SNAPSHOT);

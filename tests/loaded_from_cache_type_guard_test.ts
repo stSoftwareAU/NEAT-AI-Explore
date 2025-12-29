@@ -20,13 +20,14 @@ Deno.test("loaded-from-cache annotation is type-guarded (Issue #22 follow-up, 29
   // In strict mode, `JSON.parse()` can legitimately return `null` or a primitive.
   // We must never set properties on that value without a type guard.
   assert(
-    !js.includes("if (usedCache) obj.__loadedFromCache"),
-    `Expected ${appPath} to avoid unguarded obj.__loadedFromCache assignment`,
+    js.includes('usedCache && obj && typeof obj === "object"'),
+    `Expected ${appPath} to type-guard before annotating cache metadata`,
   );
 
-  // Ensure the type-guard pattern exists in the implementation.
+  // Cache metadata transport must not collide with user snapshot data.
+  // A Symbol avoids collisions because it cannot appear in JSON.
   assert(
-    js.includes('usedCache && obj && typeof obj === "object"'),
-    `Expected ${appPath} to type-guard before annotating __loadedFromCache`,
+    !js.includes("__loadedFromCache"),
+    `Expected ${appPath} to avoid using __loadedFromCache (can collide with user snapshot JSON)`,
   );
 });
