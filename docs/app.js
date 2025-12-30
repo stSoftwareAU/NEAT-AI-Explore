@@ -80,6 +80,10 @@ const SNAPSHOT_FALLBACK_URLS = [
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
 const IMPACT_SUSPICIOUS_THRESHOLD = 1e-8; // Suspiciously low - should be prunable
 const MSE_ERROR_THRESHOLD = 0.3; // Highlight if MSE > 0.3
+// Heuristic warning threshold for issue #26 (30-Dec-2025): STEP/BIPOLAR squashes
+// with extreme pre-activation magnitudes can make value-domain error metrics
+// (MSE/MAE) look 'obviously wrong' because saturation/outliers dominate.
+const EXTREME_PREACTIVATION_ABS_MAX_FOR_STEP_BIPOLAR = 1e6;
 
 // Tooltips for property labels
 const TOOLTIPS = {
@@ -108,10 +112,17 @@ const TOOLTIPS = {
   "Activation Range": "Minimum and maximum activation values observed",
   "MAE": "Mean Absolute Error - used in focus neuron ranking",
   "MSE": "Mean Squared Error - matches production creature scoring",
+  "MSE/MAE warning":
+    "For STEP/BIPOLAR squashes with extreme pre-activation magnitudes, value-domain error metrics (MSE/MAE) can be dominated by saturation/outliers. Check the Issues tab for supporting evidence (e.g. error tails).",
   "Samples": "Number of observations recorded for this neuron",
   "Max Recon Δ":
     "Maximum reconstruction delta - largest difference between recorded activation and recomputed activation from inputs. High values suggest recording or squash function issues.",
 };
+
+function isStepOrBipolarSquash(squash) {
+  const s = (squash ?? "").toString().toUpperCase();
+  return s === "STEP" || s === "BIPOLAR";
+}
 
 function squashWarningExplanation(note, squash) {
   const n = (note ?? "").toString();
@@ -891,6 +902,7 @@ function renderCurrentNeuron(uuid) {
   const alias = getAlias(uuid);
   const desc = getInputDescription(uuid);
   const isInput = uuid.startsWith("input-");
+  let diagPreStats = null;
 
   // Ensure we have a dedicated description block under the neuron title.
   // iOS Safari/PWA doesn't reliably show `title` tooltips on tap.
@@ -944,6 +956,7 @@ function renderCurrentNeuron(uuid) {
   // Impact diagnostics: show-your-working-style evidence for squash issues.
   if (!isInput) {
     const preStats = DIAG_PRE_STATS.get(uuid);
+    diagPreStats = preStats;
     if (preStats && preStats.n > 0) {
       props.push(["Pre-activation mean", formatSig(preStats.mean, 4)]);
       props.push([
@@ -993,6 +1006,22 @@ function renderCurrentNeuron(uuid) {
       if (mae != null) {
         props.push(["MAE", formatSig(mae, 3)]);
       }
+      const extremePreActivation = diagPreStats &&
+        typeof diagPreStats.maxAbs === "number" &&
+        isFinite(diagPreStats.maxAbs) &&
+        diagPreStats.maxAbs >= EXTREME_PREACTIVATION_ABS_MAX_FOR_STEP_BIPOLAR;
+      if (
+        (mse != null || mae != null) && isStepOrBipolarSquash(n.squash) &&
+        extremePreActivation
+      ) {
+        props.push([
+          "MSE/MAE warning",
+          "Value-domain error metrics can be dominated by saturation/outliers when STEP/BIPOLAR pre-activation is extreme.",
+          "error",
+          "If MSE/MAE look obviously wrong, inspect the Issues tab for error tails/outliers.",
+          { issuesTabLink: true },
+        ]);
+      }
     }
     props.push(["Samples", stats.recordCount ?? "N/A"]);
   }
@@ -1004,7 +1033,8 @@ function renderCurrentNeuron(uuid) {
   }
 
   el.neuronProps.innerHTML = "";
-  props.forEach(([label, value, cls, valueTitle]) => {
+  props.forEach((row) => {
+    const [label, value, cls, valueTitle, meta] = row;
     const dt = document.createElement("dt");
     dt.textContent = label;
     if (TOOLTIPS[label]) {
@@ -1015,6 +1045,22 @@ function renderCurrentNeuron(uuid) {
     dd.textContent = value;
     if (cls) dd.className = cls;
     if (valueTitle) dd.title = valueTitle;
+    if (meta?.issuesTabLink && el.neuronTabIssues) {
+      const open = document.createTextNode(" (");
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = "inlineLink";
+      link.textContent = "Issues tab";
+      link.onclick = (ev) => {
+        ev.preventDefault();
+        setNeuronTab("issues");
+        applyNeuronTabState();
+      };
+      const close = document.createTextNode(")");
+      dd.appendChild(open);
+      dd.appendChild(link);
+      dd.appendChild(close);
+    }
     el.neuronProps.appendChild(dt);
     el.neuronProps.appendChild(dd);
   });

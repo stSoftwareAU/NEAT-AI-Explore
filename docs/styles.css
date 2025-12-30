@@ -342,6 +342,12 @@ html, body {
   word-break: break-all;
 }
 
+.propList dd a.inlineLink {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
 .propList dd.positive {
   color: var(--positive);
 }
