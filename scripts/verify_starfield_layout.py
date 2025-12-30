@@ -101,21 +101,66 @@ def main() -> int:
             # Give WebGL a couple of frames to settle so point sprites are visible.
             page.wait_for_timeout(300)
 
+            # Verify we can explore from output neurons to discover issues.
+            # Use the in-page debug API (added for screenshot automation).
+            page.wait_for_function(
+                """() => Boolean(window.__neatStarfield && window.__neatStarfield.getSnapshotLoaded())""",
+                timeout=10_000,
+            )
+            page.wait_for_function(
+                """() => Boolean(window.__neatStarfield.getDefaultOutputUuid())""",
+                timeout=10_000,
+            )
+
+            # Start at output-0 (or first output).
+            page.evaluate(
+                """() => {
+                  const api = window.__neatStarfield;
+                  const out = api.getDefaultOutputUuid();
+                  api.focusByUuid(out);
+                }""",
+            )
+            page.wait_for_function(
+                """() => {
+                  const txt = (document.getElementById('hud')?.textContent || '');
+                  return txt.includes('Focus:') && (txt.includes('output-0') || txt.includes('Score'));
+                }""",
+                timeout=10_000,
+            )
+
             out0 = out_dir / "starfield-desktop.png"
             page.screenshot(path=str(out0), full_page=False)
             print(f"Wrote {out0.relative_to(ROOT)}")
 
-            # Click centre to focus a star and populate the HUD.
-            page.click("#glCanvas", position={"x": 640, "y": 400})
+            # Hop to a directly linked neighbour and ensure the focus badge/HUD changes.
+            page.evaluate(
+                """() => {
+                  const api = window.__neatStarfield;
+                  const out = api.getDefaultOutputUuid();
+                  const neigh = api.getNeighbourUuids(out);
+                  if (neigh && neigh.length) api.focusByUuid(neigh[0]);
+                }""",
+            )
             page.wait_for_function(
                 """() => {
                   const hud = document.getElementById('hud');
-                  if (!hud) return false;
-                  const txt = (hud.textContent || '');
-                  return txt.includes('Focus:') && !txt.includes('No focus');
+                  const txt = (hud?.textContent || '');
+                  // Ensure we're no longer on output-0.
+                  return txt.includes('Focus:') && !txt.includes('output-0') && !txt.includes('Score');
                 }""",
                 timeout=10_000,
             )
+
+            # Now jump to the highest-risk neighbour of output and ensure flags are visible (if any).
+            page.evaluate(
+                """() => {
+                  const api = window.__neatStarfield;
+                  const out = api.getDefaultOutputUuid();
+                  const risky = api.pickHighestRiskNeighbour(out);
+                  if (risky) api.focusByUuid(risky);
+                }""",
+            )
+            page.wait_for_timeout(250)
 
             out1 = out_dir / "starfield-desktop-focus.png"
             page.screenshot(path=str(out1), full_page=False)

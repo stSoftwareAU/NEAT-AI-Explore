@@ -213,6 +213,45 @@ html, body {
   background: transparent;
 }
 
+.labelOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.starLabel {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  /* Depth hinting (set inline): opacity + scale are adjusted by JS. */
+  transform-origin: center bottom;
+}
+
+.starLabel.isFocus {
+  border-color: rgba(80, 240, 255, 0.35);
+  box-shadow: 0 0 18px rgba(80, 240, 255, 0.18);
+}
+
+.starLabel .uuid {
+  color: var(--muted);
+  margin-left: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+}
+
 .hud {
   position: absolute;
   top: 14px;
@@ -272,6 +311,37 @@ html, body {
   opacity: 0.8;
 }
 
+.focusBadge {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text);
+  font-size: 12px;
+  user-select: none;
+  max-width: min(720px, calc(100vw - 28px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focusBadge .uuid {
+  color: var(--muted);
+  margin-left: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.focusBadge .alias {
+  font-weight: 700;
+}
+
 .help {
   position: absolute;
   bottom: 12px;
@@ -302,5 +372,12 @@ html, body {
     left: 12px;
     right: auto;
     max-width: min(520px, calc(100vw - 24px));
+  }
+  .focusBadge {
+    top: auto;
+    bottom: 64px;
+    left: 12px;
+    transform: none;
+    max-width: min(720px, calc(100vw - 24px));
   }
 }
