@@ -160,7 +160,25 @@ self.addEventListener("fetch", (event) => {
   // Navigation -> cached index.html as app shell.
   if (request.mode === "navigate") {
     if (!sameOrigin) return;
-    event.respondWith(cacheFirst("./index.html"));
+    // This site has multiple entry points under docs/:
+    // - ./index.html (Explorer)
+    // - ./starfield/index.html (Starfield)
+    //
+    // IMPORTANT: If we always serve "./index.html" for navigation, then visiting
+    // "/starfield/" will load the explorer HTML, and its relative asset URLs
+    // (./styles.css, ./app.js) will resolve under "/starfield/" and 404.
+    // That produces a blank/unstyled page.
+    const path = (() => {
+      try {
+        return new URL(request.url).pathname;
+      } catch {
+        return "";
+      }
+    })();
+    const isStarfieldNav = /\/starfield(\/|$)/.test(path);
+    event.respondWith(
+      cacheFirst(isStarfieldNav ? "./starfield/index.html" : "./index.html"),
+    );
     return;
   }
 

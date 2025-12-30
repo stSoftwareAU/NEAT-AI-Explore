@@ -111,6 +111,16 @@ Deno.test("service worker caches the app shell", async () => {
       `Expected service worker to include ${mustInclude} in STATIC_FILES`,
     );
   }
+
+  // Ensure navigation routing serves the correct app shell for /starfield/.
+  assert(
+    sw.includes('request.mode === "navigate"'),
+    "Expected service worker to handle navigation requests",
+  );
+  assert(
+    sw.includes("./starfield/index.html"),
+    "Expected service worker to route /starfield/ navigations to ./starfield/index.html",
+  );
 });
 
 Deno.test("app loads tooltips from snapshot (not Tooltips.json)", async () => {
