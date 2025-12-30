@@ -32,6 +32,16 @@ function shouldSpaFallback(req: Request): boolean {
   return req.method === "GET" && accept.includes("text/html");
 }
 
+function spaEntryPointForPath(pathname: string): string {
+  // This repo publishes multiple entry points under docs/:
+  // - /index.html (Explorer)
+  // - /starfield/index.html (Starfield)
+  //
+  // Local dev should mirror GitHub Pages so links like /starfield/ work.
+  if (/^\/starfield(\/|$)/.test(pathname)) return "/starfield/index.html";
+  return "/index.html";
+}
+
 function resolveServeDir(repoRoot: string, dirArg: string | undefined): string {
   const dir = (dirArg ?? "docs").trim() || "docs";
   // Prevent accidental path traversal outside repo root.
@@ -63,7 +73,7 @@ Deno.serve(
     if (shouldSpaFallback(req)) {
       const url = new URL(req.url);
       const indexUrl = new URL(url);
-      indexUrl.pathname = "/index.html";
+      indexUrl.pathname = spaEntryPointForPath(url.pathname);
       return await serveDir(new Request(indexUrl, req), { fsRoot });
     }
 

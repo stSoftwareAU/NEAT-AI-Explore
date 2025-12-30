@@ -29,6 +29,11 @@ Deno.test("helpers/server.ts uses JSR std http file server", async () => {
     text.includes("@std/http/file-server"),
     "Expected helpers/server.ts to import @std/http/file-server (via deno.json imports)",
   );
+  assert(
+    text.includes("spaEntryPointForPath") &&
+      text.includes("/starfield/index.html"),
+    "Expected helpers/server.ts SPA fallback to route /starfield/ to /starfield/index.html",
+  );
 });
 
 Deno.test("deno.json pins JSR std imports", async () => {
