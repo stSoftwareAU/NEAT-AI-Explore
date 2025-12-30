@@ -50,7 +50,11 @@ const el = {
   canvas: document.getElementById("glCanvas"),
   labelOverlay: document.getElementById("labelOverlay"),
   hud: document.getElementById("hud"),
+  hudBody: document.getElementById("hudBody"),
+  hudToggle: document.getElementById("hudToggle"),
   focusBadge: document.getElementById("focusBadge"),
+  legend: document.getElementById("legend"),
+  legendToggle: document.getElementById("legendToggle"),
   modeToggle: document.getElementById("modeToggle"),
 };
 
@@ -1709,8 +1713,60 @@ function pickDefaultFocusIndex(points, neuronsByUuid) {
 }
 
 function setHudText(s) {
-  if (!el.hud) return;
-  el.hud.textContent = String(s ?? "");
+  const body = el.hudBody;
+  if (!body) return;
+  body.textContent = String(s ?? "");
+}
+
+function isNarrowMobile() {
+  try {
+    return window.matchMedia?.("(max-width: 520px)")?.matches === true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function setPanelCollapsed(panelEl, collapsed) {
+  if (!(panelEl instanceof HTMLElement)) return;
+  panelEl.classList.toggle("isCollapsed", !!collapsed);
+}
+
+function initPanels() {
+  // On iPhone, default the legend to collapsed so it doesn't block interaction.
+  // The user can re-open it via the Minimise/Expand button.
+  if (isNarrowMobile()) setPanelCollapsed(el.legend, true);
+
+  if (el.hudToggle instanceof HTMLButtonElement) {
+    const update = () => {
+      const collapsed = el.hud?.classList?.contains("isCollapsed");
+      el.hudToggle.textContent = collapsed ? "Expand" : "Minimise";
+      el.hudToggle.title = collapsed
+        ? "Expand focus panel"
+        : "Minimise focus panel";
+      el.hudToggle.setAttribute("aria-label", el.hudToggle.title);
+    };
+    update();
+    el.hudToggle.addEventListener("click", () => {
+      const isCollapsed = el.hud?.classList?.contains("isCollapsed");
+      setPanelCollapsed(el.hud, !isCollapsed);
+      update();
+    });
+  }
+
+  if (el.legendToggle instanceof HTMLButtonElement) {
+    const update = () => {
+      const collapsed = el.legend?.classList?.contains("isCollapsed");
+      el.legendToggle.textContent = collapsed ? "Expand" : "Minimise";
+      el.legendToggle.title = collapsed ? "Expand legend" : "Minimise legend";
+      el.legendToggle.setAttribute("aria-label", el.legendToggle.title);
+    };
+    update();
+    el.legendToggle.addEventListener("click", () => {
+      const isCollapsed = el.legend?.classList?.contains("isCollapsed");
+      setPanelCollapsed(el.legend, !isCollapsed);
+      update();
+    });
+  }
 }
 
 function setFocusBadge(uuid) {
@@ -2136,6 +2192,7 @@ function initStarfield() {
   }
   renderer = new StarfieldRenderer(el.canvas);
   exposeDebugApi();
+  initPanels();
   renderer.onFocusChanged = (idx, m, _prevIdx, prevMeta) => {
     // Re-centre the whole neighbourhood around the newly focused neuron.
     const focusUuid = m?.uuid ?? null;
@@ -2194,11 +2251,12 @@ function initStarfield() {
           // Reserve space for inbound + path (and no longer render the full
           // upstream subgraph, which can be extremely dense).
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+          const trailEdges = Math.max(0, getTrailIndexPairs().length);
           const linePos = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -2244,19 +2302,28 @@ function initStarfield() {
             pathUuids: outputPathToFocus,
             alpha: 0.95,
           }));
-          renderer.updateLines(linePos, lineCol);
+          ({ p, c } = appendTrailLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions: upstreamLayout.positions,
+            alpha: 0.55,
+          }));
+          renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
         } else {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
           const inbound = selectInboundEdgesForRender(alloc.rows);
           inboundRenderedCount = inbound.length;
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+          const trailEdges = Math.max(0, getTrailIndexPairs().length);
 
           const linePos = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -2297,7 +2364,15 @@ function initStarfield() {
             pathUuids: outputPathToFocus,
             alpha: 0.95,
           }));
-          renderer.updateLines(linePos, lineCol);
+          ({ p, c } = appendTrailLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions,
+            alpha: 0.55,
+          }));
+          renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
         }
       }
       renderer.resetCamera();

@@ -15,6 +15,11 @@ import {
   computeInboundSynapseImpactAllocation,
 } from "./impact_attribution.js";
 import {
+  buildGraphIndex,
+  computeReachableToOutputs,
+  computeTopContributingInputs as computeTopContributingInputsCore,
+} from "./shared/graph_analysis.js";
+import {
   computeGradientProxyImpact,
   computeOutgoingProxyTerms,
   computePreActivations,
@@ -30,6 +35,10 @@ let neuronsByUuid = new Map();
 let trace = []; // Array of neuron UUIDs
 let uuidToLabel = {}; // "input-N" -> "human-name"
 let uuidToDescription = {}; // "input-N" -> "Tooltip description"
+let uuidToGroup = {}; // "input-N" -> "group label"
+
+/** @type {Map<string, { fromUuid: string, toUuid: string, weight: number }[]>} */
+let inboundByTo = new Map();
 
 let DIAG_PRE = new Map();
 let DIAG_SQUASH = new Map();
@@ -52,6 +61,11 @@ let lastInboundAllocation = null;
 let lastInboundToUuid = null;
 let lastInboundPage = 0;
 const INBOUND_PAGE_SIZE = 200;
+
+let INPUT_DASH = {
+  inputCount: 0,
+  rows: [], // { uuid, alias, description, reachable, outDegree, proxy, constant, candidates }
+};
 
 // Default snapshot used when the app is opened without a URL parameter.
 //
@@ -187,10 +201,97 @@ const el = {
   pathModalBody: document.getElementById("pathModalBody"),
   pathModalClose: document.getElementById("pathModalClose"),
   pathModalMore: document.getElementById("pathModalMore"),
+  topInputsPanel: document.getElementById("topInputsPanel"),
+  obsBtn: document.getElementById("obsBtn"),
+  obsModal: document.getElementById("obsModal"),
+  obsModalBackdrop: document.getElementById("obsModalBackdrop"),
+  obsModalTitle: document.getElementById("obsModalTitle"),
+  obsModalBody: document.getElementById("obsModalBody"),
+  obsModalClose: document.getElementById("obsModalClose"),
+  explainModal: document.getElementById("explainModal"),
+  explainModalBackdrop: document.getElementById("explainModalBackdrop"),
+  explainModalTitle: document.getElementById("explainModalTitle"),
+  explainModalBody: document.getElementById("explainModalBody"),
+  explainModalClose: document.getElementById("explainModalClose"),
   synapseCount: document.getElementById("synapseCount"),
   synapseSort: document.getElementById("synapseSort"),
+  synapseMinAlloc: document.getElementById("synapseMinAlloc"),
+  synapseTopK: document.getElementById("synapseTopK"),
+  synapseTraceOnly: document.getElementById("synapseTraceOnly"),
   synapseListContainer: document.getElementById("synapseListContainer"),
 };
+
+// ============================================================================
+// Inbound list filters (to keep large creatures usable)
+// ============================================================================
+
+function isNarrowMobile() {
+  try {
+    return window.matchMedia?.("(max-width: 520px)")?.matches === true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function defaultInboundTopK() {
+  // iPhone: tighter default to keep the list scannable.
+  return isNarrowMobile() ? 80 : 200;
+}
+
+let inboundMinAllocImpact = 0;
+let inboundTopK = defaultInboundTopK(); // 0 means unlimited
+let inboundTraceOnly = false;
+let inboundRenderLimit = inboundTopK || 0;
+
+function parseMaybeNumber(s) {
+  const raw = String(s ?? "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!isFinite(n)) return null;
+  return n;
+}
+
+function syncInboundFilterControls() {
+  if (el.synapseMinAlloc) {
+    el.synapseMinAlloc.value = inboundMinAllocImpact > 0
+      ? String(inboundMinAllocImpact)
+      : "";
+  }
+  if (el.synapseTopK) {
+    // If the exact value isn't present in the select, fall back to the closest
+    // supported option. This avoids the select appearing blank on iPhone when
+    // defaults use a value like 80.
+    const select = el.synapseTopK;
+    const desired = inboundTopK === 0 ? 0 : inboundTopK;
+    const opts = Array.from(select.options ?? [])
+      .map((o) => parseMaybeNumber(o.value))
+      .filter((n) => typeof n === "number" && isFinite(n));
+
+    if (opts.length === 0) {
+      select.value = inboundTopK === 0 ? "0" : String(inboundTopK);
+    } else {
+      // Choose the closest numeric option (prefer exact match).
+      let best = opts[0];
+      let bestDist = Math.abs(best - desired);
+      for (const v of opts) {
+        const d = Math.abs(v - desired);
+        if (d < bestDist) {
+          best = v;
+          bestDist = d;
+        }
+      }
+      select.value = String(best);
+
+      // Keep state consistent with what the UI can represent.
+      inboundTopK = best;
+    }
+  }
+  if (el.synapseTraceOnly) el.synapseTraceOnly.checked = !!inboundTraceOnly;
+}
+
+function resetInboundRenderLimit() {
+  inboundRenderLimit = inboundTopK || 0;
+}
 
 // ============================================================================
 // Input labels and descriptions (from snapshot.tooltips)
@@ -201,22 +302,28 @@ function loadInputLabelsFromSnapshot(snapshot) {
   if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
     uuidToLabel = {};
     uuidToDescription = {};
+    uuidToGroup = {};
     return;
   }
 
   uuidToLabel = {};
   uuidToDescription = {};
+  uuidToGroup = {};
 
   for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
     if (!uuid || typeof uuid !== "string") continue;
     if (!info || typeof info !== "object") continue;
     const label = info.label;
     const description = info.description;
+    const group = info.group ?? info.category ?? info.domain ?? null;
     if (typeof label === "string" && label.trim().length > 0) {
       uuidToLabel[uuid] = label;
     }
     if (typeof description === "string" && description.trim().length > 0) {
       uuidToDescription[uuid] = description;
+    }
+    if (typeof group === "string" && group.trim().length > 0) {
+      uuidToGroup[uuid] = group.trim();
     }
   }
 }
@@ -227,6 +334,10 @@ function getAlias(uuid) {
 
 function getInputDescription(uuid) {
   return uuidToDescription[uuid] ?? null;
+}
+
+function getInputGroup(uuid) {
+  return uuidToGroup[uuid] ?? null;
 }
 
 // ============================================================================
@@ -646,6 +757,13 @@ function normaliseCreature(snapshot) {
     return { fromUuid, toUuid, weight };
   }).filter(Boolean);
 
+  // Index inbound synapses for fast traversal.
+  inboundByTo = new Map();
+  for (const s of synapses) {
+    if (!inboundByTo.has(s.toUuid)) inboundByTo.set(s.toUuid, []);
+    inboundByTo.get(s.toUuid).push(s);
+  }
+
   const rawNeurons = creature.neurons ?? [];
   neuronsByUuid = new Map(rawNeurons.map((n) => [n.uuid, n]));
 
@@ -680,6 +798,7 @@ async function loadSnapshot(source, label) {
     SNAPSHOT = obj;
     loadInputLabelsFromSnapshot(SNAPSHOT);
     const creature = normaliseCreature(obj);
+    clearTopInputCache();
 
     const neuronCount = (creature.neurons ?? []).filter((n) =>
       n.type !== "input"
@@ -743,6 +862,16 @@ async function loadSnapshot(source, label) {
         inputCount: creature.input ?? 0,
         candidates: DISCOVERY_CANDIDATES,
       });
+
+      // Observations dashboard (reachability + low-signal flags).
+      INPUT_DASH = computeInputDashboard({
+        synapses,
+        inputCount: creature.input ?? 0,
+        outputUuids: outputs.map((o) => o.uuid),
+        proxy: DIAG_PROXY,
+        constantInputs: DIAG_INPUTS?.constantInputs ?? [],
+        candidateCoverage: DIAG_INPUTS?.candidateCoverage ?? [],
+      });
     } catch (e) {
       console.warn("Impact diagnostics failed (non-fatal):", e);
       DIAG_PRE = new Map();
@@ -758,6 +887,7 @@ async function loadSnapshot(source, label) {
         candidateCoverage: [],
       };
       DISCOVERY_CANDIDATES = [];
+      INPUT_DASH = { inputCount: creature.input ?? 0, rows: [] };
     }
 
     selectedCandidateKey = null;
@@ -769,6 +899,330 @@ async function loadSnapshot(source, label) {
     setStatus(e.message, "bad");
     console.error(e);
   }
+}
+
+// ============================================================================
+// Observations dashboard (unused inputs + redundancy)
+// ============================================================================
+
+function computeInputDashboard(
+  {
+    synapses,
+    inputCount,
+    outputUuids,
+    proxy,
+    constantInputs,
+    candidateCoverage,
+  },
+) {
+  const nInputs = Math.max(0, Math.floor(inputCount ?? 0));
+  const { incomingByTo, outgoingByFrom } = buildGraphIndex(synapses);
+  const reachable = computeReachableToOutputs({ outputUuids, incomingByTo });
+
+  /** @type {Set<string>} */
+  const constantSet = new Set(
+    (Array.isArray(constantInputs) ? constantInputs : []).map((x) => x.uuid)
+      .filter(Boolean),
+  );
+
+  /** @type {Map<string, any>} */
+  const covByUuid = new Map(
+    (Array.isArray(candidateCoverage) ? candidateCoverage : []).map((c) => [
+      c.uuid,
+      c,
+    ]),
+  );
+
+  const rows = [];
+  for (let i = 0; i < nInputs; i++) {
+    const uuid = `input-${i}`;
+    const alias = getAlias(uuid);
+    const description = getInputDescription(uuid);
+    const group = getInputGroup(uuid);
+    const outDegree = outgoingByFrom.get(uuid)?.length ?? 0;
+    const p = proxy?.get?.(uuid);
+    const cov = covByUuid.get(uuid) ?? null;
+
+    rows.push({
+      uuid,
+      alias,
+      description,
+      group,
+      reachable: reachable.has(uuid),
+      outDegree,
+      proxy: typeof p === "number" && isFinite(p) ? p : null,
+      constant: constantSet.has(uuid),
+      candidates: cov,
+    });
+  }
+
+  return { inputCount: nInputs, rows };
+}
+
+let obsFilter = {
+  search: "",
+  showUnusedOnly: false,
+  showDisconnectedOnly: false,
+  showConstantOnly: false,
+  sort: "proxyDesc", // proxyDesc | unusedFirst | uuid
+};
+
+function openObsModal() {
+  if (!el.obsModal || !el.obsModalBody || !el.obsModalTitle) return;
+  el.obsModal.classList.add("isOpen");
+  el.obsModal.setAttribute("aria-hidden", "false");
+  renderObsModal();
+}
+
+function closeObsModal() {
+  if (!el.obsModal) return;
+  el.obsModal.classList.remove("isOpen");
+  el.obsModal.setAttribute("aria-hidden", "true");
+}
+
+function renderObsModal() {
+  if (!el.obsModalBody || !SNAPSHOT) return;
+
+  const rows = Array.isArray(INPUT_DASH?.rows) ? INPUT_DASH.rows : [];
+  const total = rows.length;
+  const unused = rows.filter((r) => !r.reachable).length;
+  const disconnected = rows.filter((r) => (r.outDegree ?? 0) === 0).length;
+  const constant = rows.filter((r) => !!r.constant).length;
+
+  const search = String(obsFilter.search ?? "").trim().toLowerCase();
+
+  const filtered = rows.filter((r) => {
+    if (obsFilter.showUnusedOnly && r.reachable) return false;
+    if (obsFilter.showDisconnectedOnly && (r.outDegree ?? 0) > 0) return false;
+    if (obsFilter.showConstantOnly && !r.constant) return false;
+    if (!search) return true;
+
+    const hay = [
+      r.uuid,
+      r.alias ?? "",
+      r.description ?? "",
+      r.group ?? "",
+    ].join(" ").toLowerCase();
+    return hay.includes(search);
+  });
+
+  filtered.sort((a, b) => {
+    const sa = obsFilter.sort;
+    if (sa === "unusedFirst") {
+      if (a.reachable !== b.reachable) return a.reachable ? 1 : -1;
+      return (b.proxy ?? 0) - (a.proxy ?? 0);
+    }
+    if (sa === "uuid") return String(a.uuid).localeCompare(String(b.uuid));
+    // proxyDesc
+    return (b.proxy ?? 0) - (a.proxy ?? 0);
+  });
+
+  // Group summary (simple counts, based on the full set).
+  /** @type {Map<string, { total: number, unused: number }>} */
+  const groupAgg = new Map();
+  for (const r of rows) {
+    const g = String(r.group ?? "").trim();
+    if (!g) continue;
+    const prev = groupAgg.get(g) ?? { total: 0, unused: 0 };
+    prev.total += 1;
+    if (!r.reachable) prev.unused += 1;
+    groupAgg.set(g, prev);
+  }
+  const topGroups = Array.from(groupAgg.entries())
+    .sort((a, b) => (b[1].total ?? 0) - (a[1].total ?? 0))
+    .slice(0, 8);
+
+  const summary = `
+    <div class="obsSummary">
+      <span class="stat" title="Total observations (inputs)">inputs: ${
+    escapeHtml(String(total))
+  }</span>
+      <span class="stat" title="Inputs that cannot reach any output via synapses">unused: ${
+    escapeHtml(String(unused))
+  }</span>
+      <span class="stat" title="Inputs with out-degree 0 (no outgoing synapses)">disconnected: ${
+    escapeHtml(String(disconnected))
+  }</span>
+      <span class="stat" title="Inputs with near-zero variance across samples">near-constant: ${
+    escapeHtml(String(constant))
+  }</span>
+      <span class="stat" title="After search/filters">shown: ${
+    escapeHtml(String(filtered.length))
+  }</span>
+    </div>
+    ${
+    topGroups.length
+      ? `<div class="obsSummary">${
+        topGroups.map(([g, d]) =>
+          `<span class="stat" title="Group: total (unused)">${escapeHtml(g)}: ${
+            escapeHtml(String(d.total))
+          } (${escapeHtml(String(d.unused))})</span>`
+        ).join("")
+      }</div>`
+      : ""
+  }
+  `;
+
+  const controls = `
+    <div class="obsControls">
+      <label class="filterItem">
+        <span>Search</span>
+        <input id="obsSearch" class="input inputSmall" placeholder="uuid / label" value="${
+    escapeHtml(obsFilter.search)
+  }" />
+      </label>
+      <label class="filterItem">
+        <span>Sort</span>
+        <select id="obsSort" class="select selectSmall">
+          <option value="proxyDesc"${
+    obsFilter.sort === "proxyDesc" ? " selected" : ""
+  }>Proxy influence ↓</option>
+          <option value="unusedFirst"${
+    obsFilter.sort === "unusedFirst" ? " selected" : ""
+  }>Unused first</option>
+          <option value="uuid"${
+    obsFilter.sort === "uuid" ? " selected" : ""
+  }>UUID</option>
+        </select>
+      </label>
+      <label class="filterItem filterCheckbox">
+        <input id="obsUnusedOnly" type="checkbox"${
+    obsFilter.showUnusedOnly ? " checked" : ""
+  } />
+        <span>Unused only</span>
+      </label>
+      <label class="filterItem filterCheckbox">
+        <input id="obsDisconnectedOnly" type="checkbox"${
+    obsFilter.showDisconnectedOnly ? " checked" : ""
+  } />
+        <span>Disconnected only</span>
+      </label>
+      <label class="filterItem filterCheckbox">
+        <input id="obsConstantOnly" type="checkbox"${
+    obsFilter.showConstantOnly ? " checked" : ""
+  } />
+        <span>Near-constant only</span>
+      </label>
+    </div>
+  `;
+
+  const listHtml = filtered.slice(0, 300).map((r) => {
+    const alias = r.alias
+      ? `<span class="obsAlias">${escapeHtml(r.alias)}</span>`
+      : "";
+    const uuid = `<span class="obsUuid">${escapeHtml(r.uuid)}</span>`;
+    const desc = r.description
+      ? `<div class="obsRowMuted">${escapeHtml(r.description)}</div>`
+      : "";
+
+    const chips = [];
+    chips.push(
+      `<span class="stat" title="Outgoing synapses count">out: ${
+        escapeHtml(String(r.outDegree ?? 0))
+      }</span>`,
+    );
+    if (r.group) {
+      chips.push(
+        `<span class="stat" title="Observation group">${
+          escapeHtml(String(r.group))
+        }</span>`,
+      );
+    }
+    if (!r.reachable) {
+      chips.push(
+        `<span class="stat error" title="No path from this input to any output (structurally unused)">unused</span>`,
+      );
+    }
+    if ((r.outDegree ?? 0) === 0) {
+      chips.push(
+        `<span class="stat" title="No outgoing synapses (disconnected)">disconnected</span>`,
+      );
+    }
+    if (r.constant) {
+      chips.push(
+        `<span class="stat" title="Near-constant input (std dev ~0)">constant</span>`,
+      );
+    }
+    if (r.proxy != null) {
+      chips.push(
+        `<span class="stat" title="Viewer proxy influence (diagnostic)">proxy: ${
+          escapeHtml(formatSig(r.proxy, 3))
+        }</span>`,
+      );
+    }
+    if (r.candidates) {
+      chips.push(
+        `<span class="stat" title="Discovery candidate references">cand: ${
+          escapeHtml(String(r.candidates.count ?? 0))
+        }</span>`,
+      );
+    }
+
+    return `
+      <div class="obsRow" data-obs-uuid="${escapeHtml(r.uuid)}">
+        <div class="obsRowTitle">${alias}${uuid}</div>
+        <div class="synapseStats">${chips.join("")}</div>
+        ${desc}
+      </div>
+    `;
+  }).join("");
+
+  const truncated = filtered.length > 300
+    ? `<div class="emptyState">Showing first 300 (use search/filters to narrow).</div>`
+    : "";
+
+  el.obsModalBody.innerHTML = summary + controls +
+    `<div class="obsList">${
+      listHtml ||
+      `<div class="emptyState">No observations match these filters.</div>`
+    }</div>` +
+    truncated;
+
+  // Wire controls.
+  el.obsModalBody.querySelector("#obsSearch")?.addEventListener(
+    "input",
+    (e) => {
+      obsFilter.search = e.target.value;
+      renderObsModal();
+    },
+  );
+  el.obsModalBody.querySelector("#obsSort")?.addEventListener("change", (e) => {
+    obsFilter.sort = e.target.value;
+    renderObsModal();
+  });
+  el.obsModalBody.querySelector("#obsUnusedOnly")?.addEventListener(
+    "change",
+    (e) => {
+      obsFilter.showUnusedOnly = !!e.target.checked;
+      renderObsModal();
+    },
+  );
+  el.obsModalBody.querySelector("#obsDisconnectedOnly")?.addEventListener(
+    "change",
+    (e) => {
+      obsFilter.showDisconnectedOnly = !!e.target.checked;
+      renderObsModal();
+    },
+  );
+  el.obsModalBody.querySelector("#obsConstantOnly")?.addEventListener(
+    "change",
+    (e) => {
+      obsFilter.showConstantOnly = !!e.target.checked;
+      renderObsModal();
+    },
+  );
+
+  // Row click navigates to input (and closes).
+  el.obsModalBody.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest("[data-obs-uuid]");
+    if (!row) return;
+    const uuid = row.getAttribute("data-obs-uuid");
+    if (!uuid) return;
+    closeObsModal();
+    navigateTo(uuid);
+  };
 }
 
 // ============================================================================
@@ -833,6 +1287,7 @@ function navigateTo(uuid) {
 
   renderTrace();
   renderCurrentNeuron(uuid);
+  resetInboundRenderLimit();
   renderSynapseList(uuid);
 }
 
@@ -842,6 +1297,7 @@ function goBack() {
     const uuid = trace[trace.length - 1];
     renderTrace();
     renderCurrentNeuron(uuid);
+    resetInboundRenderLimit();
     renderSynapseList(uuid);
   }
 }
@@ -1067,9 +1523,186 @@ function renderCurrentNeuron(uuid) {
 
   renderImpactBreakdown(uuid, impact);
   renderImpactDiagnosticsPanel(uuid, n.type);
+  renderTopInputsPanel(uuid, n.type);
   renderIssuesPanel(uuid, n.type);
   renderCandidatesPanel(uuid);
   applyNeuronTabState();
+}
+
+// ============================================================================
+// \"Why this score\": top contributing inputs for the focused neuron
+// ============================================================================
+
+/** @type {Map<string, any>} */
+let TOP_INPUT_CACHE = new Map();
+
+function clearTopInputCache() {
+  TOP_INPUT_CACHE = new Map();
+}
+
+function computeTopContributingInputs(focusUuid, opts = {}) {
+  return computeTopContributingInputsCore({
+    focusUuid,
+    maxDepth: opts?.maxDepth,
+    maxWork: opts?.maxWork,
+    maxInboundPerNode: opts?.maxInboundPerNode,
+    getInboundEdges: (toUuid) => {
+      const inbound = inboundByTo.get(toUuid) ?? [];
+      return inbound.map((s) => ({
+        fromUuid: s.fromUuid,
+        toUuid: s.toUuid,
+        weight: s.weight,
+        meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+      }));
+    },
+  });
+}
+
+function renderTopInputsPanel(uuid, neuronType) {
+  if (!el.topInputsPanel) return;
+  if (!SNAPSHOT) {
+    el.topInputsPanel.innerHTML = "";
+    return;
+  }
+
+  // Inputs don't have meaningful upstream inputs.
+  if (uuid.startsWith("input-") || neuronType === "input") {
+    el.topInputsPanel.innerHTML = "";
+    return;
+  }
+
+  const cacheKey = `topInputs:${uuid}`;
+  let cached = TOP_INPUT_CACHE.get(cacheKey);
+  if (!cached) {
+    cached = computeTopContributingInputs(uuid, {
+      maxDepth: 7,
+      maxWork: 1600,
+      maxInboundPerNode: 40,
+    });
+    TOP_INPUT_CACHE.set(cacheKey, cached);
+  }
+
+  const top = (cached.inputs ?? []).slice(0, 8);
+  if (top.length === 0) {
+    el.topInputsPanel.innerHTML = "";
+    return;
+  }
+
+  const title = "Top observations → upstream";
+  const note =
+    "Bounded, explainable heuristic: walk upstream from the focused neuron using inbound share allocation, and summarise which inputs receive the most share. This is diagnostic, not ground truth.";
+
+  const headerHtml = `
+    <div class="impactBreakdownHeader">
+      <div class="impactBreakdownTitle">${escapeHtml(title)}</div>
+      <button class="impactBreakdownBtn" type="button" data-open-explain="1" title="Inspect full list">Inspect</button>
+    </div>
+    <div class="impactBreakdownNote">${escapeHtml(note)}</div>
+  `;
+
+  const rows = top.map((r) => {
+    const alias = getAlias(r.uuid);
+    const label = alias ? `${alias} (${r.uuid})` : r.uuid;
+    const pct = formatSig((r.score ?? 0) * 100, 4) + "%";
+    return `
+      <div class="impactBreakdownRow">
+        <div class="impactBreakdownOut">${escapeHtml(label)}</div>
+        <div class="impactBreakdownStats">
+          <span class="stat" title="Allocated share (normalised across shown inputs)">${
+      escapeHtml(pct)
+    }</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  el.topInputsPanel.innerHTML = headerHtml +
+    `<div class="impactBreakdownList">${rows}</div>`;
+
+  el.topInputsPanel.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest(".impactBreakdownBtn");
+    if (!btn) return;
+    if (btn.getAttribute("data-open-explain") === "1") openExplainModal(uuid);
+  };
+}
+
+function openExplainModal(focusUuid) {
+  if (!el.explainModal || !el.explainModalBody || !el.explainModalTitle) return;
+  el.explainModal.classList.add("isOpen");
+  el.explainModal.setAttribute("aria-hidden", "false");
+  renderExplainModal(focusUuid);
+}
+
+function closeExplainModal() {
+  if (!el.explainModal) return;
+  el.explainModal.classList.remove("isOpen");
+  el.explainModal.setAttribute("aria-hidden", "true");
+}
+
+function renderExplainModal(focusUuid) {
+  if (!el.explainModalBody || !el.explainModalTitle) return;
+  if (!SNAPSHOT) return;
+
+  const cacheKey = `topInputs:${focusUuid}`;
+  const cached = TOP_INPUT_CACHE.get(cacheKey) ??
+    computeTopContributingInputs(focusUuid);
+
+  const focusLabel = truncateNeuronName(focusUuid);
+  el.explainModalTitle.textContent = `Top observations for ${focusLabel}`;
+
+  const truncatedNote = cached.truncated
+    ? `<div class="impactBreakdownTruncated" title="Computation was bounded to keep the UI fast on large creatures.">Truncated</div>`
+    : "";
+
+  const items = (cached.inputs ?? []).slice(0, 80).map((r) => {
+    const alias = getAlias(r.uuid);
+    const label = alias ? `${alias} (${r.uuid})` : r.uuid;
+    const pct = formatSig((r.score ?? 0) * 100, 6) + "%";
+    const path = Array.isArray(r.path)
+      ? r.path.map(truncateNeuronName).join(" → ")
+      : "";
+    return `
+      <div class="issueRow" data-jump-uuid="${escapeHtml(r.uuid)}">
+        <div class="issueRowTitle">${escapeHtml(label)}</div>
+        <div class="synapseStats">
+          <span class="stat" title="Allocated share (normalised across shown inputs)">${
+      escapeHtml(pct)
+    }</span>
+          <span class="stat" title="Example upstream chain (highest-share branch encountered)">${
+      escapeHtml(path)
+    }</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  el.explainModalBody.innerHTML = `
+    <div class="impactBreakdownHeader">
+      <div class="impactBreakdownTitle">Top contributing observations</div>
+      ${truncatedNote}
+    </div>
+    <div class="impactBreakdownNote">
+      We explore upstream using inbound share allocation (|meanContribution| fallback |weight|), bounded by depth and work limits so it stays fast on iPhone.
+      Tap a row to jump to that observation.
+    </div>
+    <div class="issueList">${
+    items || `<div class="emptyState">No inputs found.</div>`
+  }</div>
+  `;
+
+  el.explainModalBody.onclick = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest("[data-jump-uuid]");
+    if (!row) return;
+    const uuid = row.getAttribute("data-jump-uuid");
+    if (uuid) {
+      closeExplainModal();
+      navigateTo(uuid);
+    }
+  };
 }
 
 function renderImpactDiagnosticsPanel(uuid, neuronType) {
@@ -1334,8 +1967,33 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePathModal();
 });
 
+// Observations modal wiring (close / backdrop / Esc).
+if (el.obsBtn) {
+  el.obsBtn.onclick = () => openObsModal();
+}
+if (el.obsModalBackdrop) {
+  el.obsModalBackdrop.onclick = () => closeObsModal();
+}
+if (el.obsModalClose) {
+  el.obsModalClose.onclick = () => closeObsModal();
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeObsModal();
+});
+
+// Explain modal wiring (close / backdrop / Esc).
+if (el.explainModalBackdrop) {
+  el.explainModalBackdrop.onclick = () => closeExplainModal();
+}
+if (el.explainModalClose) {
+  el.explainModalClose.onclick = () => closeExplainModal();
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeExplainModal();
+});
+
 function getInboundSynapses(toUuid) {
-  return synapses.filter((s) => s.toUuid === toUuid);
+  return inboundByTo.get(toUuid) ?? [];
 }
 
 function renderSynapseList(toUuid) {
@@ -1413,9 +2071,34 @@ function renderSynapseList(toUuid) {
     }
   });
 
+  // Apply filters.
+  const filtered = enriched.filter((syn) => {
+    if (inboundTraceOnly && !trace.includes(syn.fromUuid)) return false;
+    if (inboundMinAllocImpact > 0) {
+      const ai = syn.allocImpact ?? 0;
+      if (ai < inboundMinAllocImpact) return false;
+    }
+    return true;
+  });
+
+  // Apply top-K / paging (Show more).
+  const totalFiltered = filtered.length;
+  let showCount = totalFiltered;
+  if (inboundRenderLimit && inboundRenderLimit > 0) {
+    showCount = Math.min(totalFiltered, inboundRenderLimit);
+  }
+  const visible = filtered.slice(0, showCount);
+
+  // Update badge so it's clear when filters are hiding most synapses.
+  if (el.synapseCount) {
+    el.synapseCount.textContent = inbound.length === totalFiltered
+      ? String(inbound.length)
+      : `${totalFiltered}/${inbound.length}`;
+  }
+
   el.synapseListContainer.innerHTML = "";
 
-  enriched.forEach((syn) => {
+  visible.forEach((syn) => {
     const row = document.createElement("div");
     row.className = "synapseRow";
     const selected = (DISCOVERY_CANDIDATES ?? []).find((c) =>
@@ -1515,6 +2198,22 @@ function renderSynapseList(toUuid) {
     row.onclick = () => navigateTo(syn.fromUuid);
     el.synapseListContainer.appendChild(row);
   });
+
+  if (showCount < totalFiltered) {
+    const wrap = document.createElement("div");
+    wrap.className = "showMoreRow";
+    const btn = document.createElement("button");
+    btn.className = "button buttonSmall";
+    btn.type = "button";
+    btn.textContent = `Show more (${showCount}/${totalFiltered})`;
+    btn.onclick = () => {
+      const step = inboundTopK && inboundTopK > 0 ? inboundTopK : 200;
+      inboundRenderLimit = (inboundRenderLimit || showCount) + step;
+      renderSynapseList(toUuid);
+    };
+    wrap.appendChild(btn);
+    el.synapseListContainer.appendChild(wrap);
+  }
 }
 
 function formatNumber(n, decimals = 4) {
@@ -2745,9 +3444,43 @@ el.traceClearBtn.onclick = clearTrace;
 
 el.synapseSort.onchange = () => {
   if (trace.length > 0) {
+    resetInboundRenderLimit();
     renderSynapseList(trace[trace.length - 1]);
   }
 };
+
+function initInboundFilters() {
+  // Defaults can depend on viewport, so compute once at boot.
+  inboundTopK = defaultInboundTopK();
+  inboundRenderLimit = inboundTopK || 0;
+  syncInboundFilterControls();
+
+  if (el.synapseMinAlloc) {
+    el.synapseMinAlloc.addEventListener("input", () => {
+      const n = parseMaybeNumber(el.synapseMinAlloc.value);
+      inboundMinAllocImpact = n != null && n > 0 ? n : 0;
+      resetInboundRenderLimit();
+      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
+    });
+  }
+  if (el.synapseTopK) {
+    el.synapseTopK.addEventListener("change", () => {
+      const n = parseMaybeNumber(el.synapseTopK.value);
+      inboundTopK = n != null
+        ? Math.max(0, Math.floor(n))
+        : defaultInboundTopK();
+      resetInboundRenderLimit();
+      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
+    });
+  }
+  if (el.synapseTraceOnly) {
+    el.synapseTraceOnly.addEventListener("change", () => {
+      inboundTraceOnly = !!el.synapseTraceOnly.checked;
+      resetInboundRenderLimit();
+      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
+    });
+  }
+}
 
 el.fetchUrl.onkeydown = (e) => {
   if (e.key === "Enter") el.fetchBtn.click();
@@ -2764,6 +3497,7 @@ const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
 
 initThemeMode();
 initTouchTooltips();
+initInboundFilters();
 
 function decodeBase64UrlToUtf8(base64Url) {
   // Base64url decode for query params (avoids needing to percent-encode presigned URLs).

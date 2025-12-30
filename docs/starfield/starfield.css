@@ -72,6 +72,20 @@ html, body {
   color: var(--text);
 }
 
+/* App shell
+ *
+ * iOS Safari/PWA note:
+ * - Avoid hard-coding a header height (it can wrap on iPhone).
+ * - Use a flex column layout so the header takes its natural height and the
+ *   stage fills the remaining viewport.
+ */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .appHeader {
   display: flex;
   align-items: center;
@@ -204,8 +218,8 @@ html, body {
 
 .stage {
   position: relative;
-  height: calc(100vh - 57px);
-  height: calc(100dvh - 57px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   background: radial-gradient(
     circle at 30% 20%,
@@ -262,6 +276,28 @@ html, body {
   font-size: 10px;
 }
 
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.panelTitle {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.buttonSmall {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.panelBody {
+  color: var(--muted);
+}
+
 .hud {
   position: absolute;
   top: 14px;
@@ -278,10 +314,28 @@ html, body {
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
+  z-index: 20;
 }
 
 .hud a {
   color: var(--accent);
+}
+
+.hudBody {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hud.isCollapsed .hudBody {
+  display: none;
+}
+
+.legend.isCollapsed .legendBody {
+  display: none;
 }
 
 .legend {
@@ -299,11 +353,7 @@ html, body {
   font-size: 12px;
   line-height: 1.35;
   user-select: none;
-}
-
-.legendTitle {
-  font-weight: 700;
-  margin-bottom: 6px;
+  z-index: 20;
 }
 
 .legendBody {
@@ -339,6 +389,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  z-index: 15;
 }
 
 .focusBadge .uuid {
@@ -389,5 +440,32 @@ html, body {
     left: 12px;
     transform: none;
     max-width: min(720px, calc(100vw - 24px));
+  }
+}
+
+/* iPhone: keep panels from blocking the entire viewport.
+ *
+ * Use a bottom-sheet style HUD and default the legend to collapsed via JS.
+ */
+@media (max-width: 520px) {
+  .hud {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+    max-height: 45vh;
+    overflow: auto;
+  }
+
+  .legend {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+
+  .help {
+    display: none;
   }
 }
