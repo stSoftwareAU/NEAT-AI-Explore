@@ -10,6 +10,17 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
+function countOccurrences(haystack: string, needle: string): number {
+  let n = 0;
+  let i = 0;
+  while (true) {
+    const j = haystack.indexOf(needle, i);
+    if (j < 0) return n;
+    n++;
+    i = j + needle.length;
+  }
+}
+
 Deno.test("starfield supports back navigation + focus trail (path home)", async () => {
   const jsPath = repoPath("docs", "starfield", "starfield.js");
   const htmlPath = repoPath("docs", "starfield", "index.html");
@@ -33,8 +44,25 @@ Deno.test("starfield supports back navigation + focus trail (path home)", async 
   );
   assert(
     js.includes("appendTrailLines"),
-    `Expected ${jsPath} to render a focus trail (path home) as line segments`,
+    `Expected ${jsPath} to define an appendTrailLines helper`,
   );
+
+  // Ensure the trail is actually rendered (not just defined).
+  const start = js.indexOf("renderer.onFocusChanged = (idx, m");
+  assert(start >= 0, `Expected ${jsPath} to assign renderer.onFocusChanged`);
+  const endMarker = "buildHudForIndex(-1);";
+  const end = js.indexOf(endMarker, start);
+  assert(
+    end > start,
+    `Expected ${jsPath} to include ${endMarker} after handler`,
+  );
+  const handler = js.slice(start, end);
+  const calls = countOccurrences(handler, "appendTrailLines({");
+  assert(
+    calls >= 1,
+    `Expected onFocusChanged to call appendTrailLines({ at least once; found ${calls}.`,
+  );
+
   assert(
     js.includes("computeOutputPathToFocus") &&
       js.includes("appendOutputPathLines"),

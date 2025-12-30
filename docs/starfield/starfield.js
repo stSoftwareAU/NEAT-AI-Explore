@@ -2194,11 +2194,12 @@ function initStarfield() {
           // Reserve space for inbound + path (and no longer render the full
           // upstream subgraph, which can be extremely dense).
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+          const trailEdges = Math.max(0, getTrailIndexPairs().length);
           const linePos = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -2244,19 +2245,28 @@ function initStarfield() {
             pathUuids: outputPathToFocus,
             alpha: 0.95,
           }));
-          renderer.updateLines(linePos, lineCol);
+          ({ p, c } = appendTrailLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions: upstreamLayout.positions,
+            alpha: 0.55,
+          }));
+          renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
         } else {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
           const inbound = selectInboundEdgesForRender(alloc.rows);
           inboundRenderedCount = inbound.length;
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+          const trailEdges = Math.max(0, getTrailIndexPairs().length);
 
           const linePos = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length + pathEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -2297,7 +2307,15 @@ function initStarfield() {
             pathUuids: outputPathToFocus,
             alpha: 0.95,
           }));
-          renderer.updateLines(linePos, lineCol);
+          ({ p, c } = appendTrailLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions,
+            alpha: 0.55,
+          }));
+          renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
         }
       }
       renderer.resetCamera();
