@@ -1828,7 +1828,10 @@ function initStarfield() {
     // Re-centre the whole neighbourhood around the newly focused neuron.
     const focusUuid = m?.uuid ?? null;
     if (points && adjacency && focusUuid) {
-      const positions = viewMode === "paths" && inboundAdjacency
+      // Paths mode needs both the upstream positions (for rendering) and the BFS
+      // distances (for selecting which upstream edges to render). Computing the
+      // upstream layout is relatively expensive, so do it once and reuse.
+      const upstreamLayout = viewMode === "paths" && inboundAdjacency
         ? computePositionsForUpstream({
           points,
           inboundAdj: inboundAdjacency,
@@ -1836,7 +1839,11 @@ function initStarfield() {
           maxDepth: UPSTREAM_MAX_DEPTH,
           ringStep: FOCUS_RING_STEP,
           farRadius: FOCUS_FAR_RADIUS,
-        }).positions
+        })
+        : null;
+
+      const positions = upstreamLayout
+        ? upstreamLayout.positions
         : computePositionsForFocus({
           points,
           adjacency,
@@ -1848,19 +1855,11 @@ function initStarfield() {
       renderer.updatePositions(positions);
       // Update synapse lines to direct neighbours.
       if (edgeByDir) {
-        if (viewMode === "paths" && inboundAdjacency) {
-          const upstream = computePositionsForUpstream({
-            points,
-            inboundAdj: inboundAdjacency,
-            focusUuid,
-            maxDepth: UPSTREAM_MAX_DEPTH,
-            ringStep: FOCUS_RING_STEP,
-            farRadius: FOCUS_FAR_RADIUS,
-          });
+        if (upstreamLayout) {
           const edges = buildUpstreamEdgesForFocus({
             focusUuid,
             inboundAdj: inboundAdjacency,
-            dist: upstream.dist,
+            dist: upstreamLayout.dist,
             maxDepth: UPSTREAM_MAX_DEPTH,
           });
 
@@ -1874,12 +1873,12 @@ function initStarfield() {
             const iTo = points.indexByUuid.get(e.toUuid);
             if (iFrom == null || iTo == null) continue;
 
-            const fx = upstream.positions[iFrom * 3 + 0];
-            const fy = upstream.positions[iFrom * 3 + 1];
-            const fz = upstream.positions[iFrom * 3 + 2];
-            const tx = upstream.positions[iTo * 3 + 0];
-            const ty = upstream.positions[iTo * 3 + 1];
-            const tz = upstream.positions[iTo * 3 + 2];
+            const fx = upstreamLayout.positions[iFrom * 3 + 0];
+            const fy = upstreamLayout.positions[iFrom * 3 + 1];
+            const fz = upstreamLayout.positions[iFrom * 3 + 2];
+            const tx = upstreamLayout.positions[iTo * 3 + 0];
+            const ty = upstreamLayout.positions[iTo * 3 + 1];
+            const tz = upstreamLayout.positions[iTo * 3 + 2];
 
             linePos[p++] = fx;
             linePos[p++] = fy;
