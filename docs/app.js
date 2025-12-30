@@ -258,9 +258,33 @@ function syncInboundFilterControls() {
       : "";
   }
   if (el.synapseTopK) {
-    // If the exact value isn't present in the select, fall back to the closest.
-    const v = inboundTopK === 0 ? "0" : String(inboundTopK);
-    el.synapseTopK.value = v;
+    // If the exact value isn't present in the select, fall back to the closest
+    // supported option. This avoids the select appearing blank on iPhone when
+    // defaults use a value like 80.
+    const select = el.synapseTopK;
+    const desired = inboundTopK === 0 ? 0 : inboundTopK;
+    const opts = Array.from(select.options ?? [])
+      .map((o) => parseMaybeNumber(o.value))
+      .filter((n) => typeof n === "number" && isFinite(n));
+
+    if (opts.length === 0) {
+      select.value = inboundTopK === 0 ? "0" : String(inboundTopK);
+    } else {
+      // Choose the closest numeric option (prefer exact match).
+      let best = opts[0];
+      let bestDist = Math.abs(best - desired);
+      for (const v of opts) {
+        const d = Math.abs(v - desired);
+        if (d < bestDist) {
+          best = v;
+          bestDist = d;
+        }
+      }
+      select.value = String(best);
+
+      // Keep state consistent with what the UI can represent.
+      inboundTopK = best;
+    }
   }
   if (el.synapseTraceOnly) el.synapseTraceOnly.checked = !!inboundTraceOnly;
 }
