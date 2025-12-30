@@ -23,6 +23,15 @@ const STATIC_FILES = [
   "./vendor/fflate.browser.js",
   "./manifest.webmanifest",
   "./favicon.ico",
+  // Starfield view (Issue #25): kept in its own folder to avoid destabilising
+  // the existing explorer view.
+  "./starfield/index.html",
+  "./starfield/starfield.js",
+  "./starfield/starfield.css",
+  // Shared modules for multiple views.
+  "./shared/snapshot_loader.js",
+  "./shared/theme.js",
+  "./shared/colour_maps.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",

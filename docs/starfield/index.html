@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEAT-AI Explore - Starfield</title>
+
+    <!-- Match the default (light) and override via prefers-colour-scheme. -->
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="theme-color"
+      content="#0a0e1a"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <link rel="stylesheet" href="./starfield.css" />
+    <link rel="icon" href="../favicon.ico" />
+  </head>
+  <body>
+    <header class="appHeader">
+      <h1>NEAT-AI Starfield</h1>
+      <div class="headerControls">
+        <input
+          id="fetchUrl"
+          class="input"
+          placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+        />
+        <button id="fetchBtn" class="button">Fetch</button>
+        <input
+          id="fileInput"
+          type="file"
+          accept="application/json,.json,.gz,application/gzip,application/x-gzip"
+          style="display: none"
+        />
+        <div class="browseGroup">
+          <button id="fileBtn" class="button">Browse…</button>
+          <button
+            id="themeToggle"
+            class="button buttonSecondary themeToggle"
+            type="button"
+            aria-label="Theme mode (tap to cycle)"
+            title="Theme: Auto (tap to cycle)"
+          >
+            A
+          </button>
+        </div>
+        <div
+          id="progressContainer"
+          class="progressContainer"
+          style="display: none"
+        >
+          <div id="progressBar" class="progressBar"></div>
+        </div>
+        <span id="status" class="statusInline"></span>
+      </div>
+    </header>
+
+    <main class="stage">
+      <canvas id="glCanvas" class="glCanvas"></canvas>
+      <aside id="hud" class="hud" aria-live="polite"></aside>
+      <aside id="legend" class="legend" aria-label="Starfield legend">
+        <div class="legendTitle">Legend</div>
+        <div class="legendBody">
+          <div>
+            <span class="k">Position</span>: distance from focus (directly
+            linked are closest)
+          </div>
+          <div><span class="k">Size</span>: log scale of neuron impact</div>
+          <div><span class="k">Colour</span>: type + hidden squash flavour</div>
+          <div>
+            <span class="k">Glow</span>: “CT scan” risk (non-finite, saturation,
+            heavy-tail, prunable)
+          </div>
+          <div class="legendHint">
+            Click a star to focus · Drag to look · WASD/Arrows to fly
+          </div>
+        </div>
+      </aside>
+      <div class="help">
+        Drag to look · Wheel to zoom · WASD/Arrows to fly · Click a star to
+        focus
+      </div>
+    </main>
+
+    <script type="module" src="./starfield.js"></script>
+  </body>
+</html>

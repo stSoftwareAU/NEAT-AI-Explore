@@ -150,6 +150,32 @@ viewports (see `scripts/generate_pwa_assets.py`).
 
 ![Desktop inbound modal](docs/screenshots/desktop-inbound-modal.png)
 
+## Starfield view (Issue #25)
+
+The starfield view is a fun/intuition-building alternative visualisation for
+large creatures.
+
+- **Entry point**: `docs/starfield/index.html`
+- **Controls**:
+  - Drag to look
+  - Mouse wheel to zoom
+  - WASD / arrow keys to fly
+  - Click a star to focus it (HUD shows key properties + flags)
+- **Layout**: focus-centric neighbourhood view (directly linked neurons are
+  closest; moving focus recomputes the local starfield)
+
+### Starfield (desktop)
+
+![Starfield desktop](docs/screenshots/starfield-desktop.png)
+
+### Starfield (click-to-focus HUD)
+
+![Starfield focus HUD](docs/screenshots/starfield-desktop-focus.png)
+
+### Starfield (tilt + zoom)
+
+![Starfield tilt](docs/screenshots/starfield-desktop-tilt.png)
+
 ## Direction terminology (to avoid confusion)
 
 - **Dataflow direction (network computation)**: observations/inputs → outputs
