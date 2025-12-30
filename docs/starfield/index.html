@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NEAT-AI Explore - Starfield</title>
+    <title>NEAT-AI Explore - Graph view</title>
 
     <!-- Match the default (light) and override via prefers-colour-scheme. -->
     <meta name="theme-color" content="#f5f7fb" />
@@ -18,7 +18,7 @@
   </head>
   <body>
     <header class="appHeader">
-      <h1>NEAT-AI Starfield</h1>
+      <h1>NEAT-AI Graph</h1>
       <div class="headerControls">
         <input
           id="fetchUrl"
@@ -78,11 +78,36 @@
     <main class="stage">
       <canvas id="glCanvas" class="glCanvas"></canvas>
       <div id="labelOverlay" class="labelOverlay" aria-hidden="true"></div>
-      <aside id="hud" class="hud" aria-live="polite"></aside>
+      <aside id="hud" class="hud" aria-live="polite">
+        <div class="panelHeader">
+          <div class="panelTitle">Focus</div>
+          <button
+            id="hudToggle"
+            class="button buttonSecondary buttonSmall"
+            type="button"
+            aria-label="Toggle focus panel"
+            title="Minimise focus panel"
+          >
+            Minimise
+          </button>
+        </div>
+        <pre id="hudBody" class="panelBody hudBody"></pre>
+      </aside>
       <div id="focusBadge" class="focusBadge" aria-label="Current focus"></div>
-      <aside id="legend" class="legend" aria-label="Starfield legend">
-        <div class="legendTitle">Legend</div>
-        <div class="legendBody">
+      <aside id="legend" class="legend" aria-label="Graph legend">
+        <div class="panelHeader">
+          <div class="panelTitle">Legend</div>
+          <button
+            id="legendToggle"
+            class="button buttonSecondary buttonSmall"
+            type="button"
+            aria-label="Toggle legend panel"
+            title="Minimise legend"
+          >
+            Minimise
+          </button>
+        </div>
+        <div class="panelBody legendBody">
           <div>
             <span class="k">Position</span>: distance from focus (directly
             linked are closest)
@@ -94,13 +119,13 @@
             heavy-tail, prunable)
           </div>
           <div class="legendHint">
-            Click a neuron to focus · Backspace/Back to go back · Drag to look ·
+            Tap a neuron to focus · Backspace/Back to go back · Drag to look ·
             WASD/Arrows to fly
           </div>
         </div>
       </aside>
       <div class="help">
-        Drag to look · Wheel to zoom · WASD/Arrows to fly · Click a neuron to
+        Drag to look · Wheel to zoom · WASD/Arrows to fly · Tap a neuron to
         focus · Backspace/Back to go back
       </div>
     </main>

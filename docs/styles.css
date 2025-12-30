@@ -110,6 +110,20 @@ html, body {
   color: var(--text);
 }
 
+/* App shell
+ *
+ * iOS Safari/PWA note:
+ * - Avoid hard-coding a header height (it can wrap on iPhone).
+ * - Use a flex column layout so the header takes its natural height and the
+ *   main content fills the remaining viewport.
+ */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Header */
 .appHeader {
   display: flex;
@@ -155,6 +169,11 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
+}
+
+.inputSmall, .selectSmall {
+  padding: 5px 8px;
+  font-size: 12px;
 }
 
 .button {
@@ -238,9 +257,9 @@ html, body {
 .explorer {
   display: flex;
   flex-direction: column;
-  /* iOS Safari/PWA: prefer dynamic viewport units where available. */
-  height: calc(100vh - 53px);
-  height: calc(100dvh - 53px);
+  /* Fill the remaining space under the header (see body flex shell). */
+  flex: 1 1 auto;
+  min-height: 0; /* Allow inner scroll containers to size correctly. */
 }
 
 /* Trace bar */
@@ -639,6 +658,16 @@ html, body {
   flex-direction: column;
 }
 
+/* iPhone: use more of the vertical space for modals (they're our primary
+   \"dialogs\"), without covering the entire viewport. */
+@media (max-width: 520px) {
+  .modalPanel {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    margin: 8px auto;
+  }
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -656,6 +685,66 @@ html, body {
 .modalBody {
   padding: 12px 14px;
   overflow: auto;
+}
+
+/* Observations dashboard */
+.obsSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.obsControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.obsList {
+  display: grid;
+  gap: 8px;
+}
+
+.obsRow {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surfaceSofter);
+  cursor: pointer;
+}
+
+.obsRow:hover {
+  background: var(--panelHover);
+}
+
+.obsRowTitle {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.obsRowTitle .obsAlias {
+  color: var(--positive);
+  font-weight: 600;
+}
+
+.obsRowTitle .obsUuid {
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+.obsRowMuted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 6px;
 }
 
 .modalFooter {
@@ -763,6 +852,72 @@ html, body {
   padding: 12px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
+}
+
+.synapseHeader {
+  /* Keep controls reachable when the inbound list is long. On mobile we scroll
+     the whole explorer surface, so sticky headers make a big difference. */
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.synapseTools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.filterDetails summary {
+  list-style: none;
+}
+
+.filterDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.filterPanel {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surfaceSofter);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.filterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.filterItem span {
+  color: var(--muted);
+}
+
+.filterCheckbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.filterCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.showMoreRow {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 14px 0;
 }
 
 .synapseHeader h2 {

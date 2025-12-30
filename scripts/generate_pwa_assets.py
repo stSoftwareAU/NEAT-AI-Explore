@@ -283,6 +283,11 @@ def generate_screenshots() -> None:
     iphone_modal_path = SHOTS_DIR / "iphone-inbound-modal.png"
     ipad_modal_path = SHOTS_DIR / "ipad-inbound-modal.png"
 
+    # Starfield / graph view (README).
+    starfield_desktop_path = SHOTS_DIR / "starfield-desktop.png"
+    starfield_focus_path = SHOTS_DIR / "starfield-desktop-focus.png"
+    starfield_tilt_path = SHOTS_DIR / "starfield-desktop-tilt.png"
+
     # Always ensure output dir exists.
     SHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -296,6 +301,9 @@ def generate_screenshots() -> None:
         _placeholder_screenshot(iphone_path, (390, 844), "iPhone")
         _placeholder_screenshot(iphone_modal_path, (390, 844), "iPhone (inbound modal)")
         _placeholder_screenshot(ipad_modal_path, (820, 1180), "iPad (inbound modal)")
+        _placeholder_screenshot(starfield_desktop_path, (1280, 720), "Starfield (desktop)")
+        _placeholder_screenshot(starfield_focus_path, (1280, 720), "Starfield (focus HUD)")
+        _placeholder_screenshot(starfield_tilt_path, (1280, 720), "Starfield (tilt)")
         return
 
     port = _free_port()
@@ -306,11 +314,24 @@ def generate_screenshots() -> None:
             def load_app(page, viewport_label: str) -> None:
                 # Use an explicit URL parameter so the screenshots are stable even
                 # if the app default changes in future.
-                page.goto(url + "?snapshotUrl=./snapshot.json.gz", wait_until="domcontentloaded")
-                # Wait until the app reports a successful load.
+                #
+                # Note: this repo intentionally does not commit `docs/snapshot.json.gz`
+                # (it's large). The default snapshot lives in the dedicated Snapshot
+                # repo (published via GitHub Pages): https://github.com/stSoftwareAU/NEAT-AI-Snapshot
+                snapshot_url = "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+                import urllib.parse
+                page.goto(
+                    url + "?snapshotUrl=" + urllib.parse.quote(snapshot_url, safe=""),
+                    wait_until="domcontentloaded",
+                )
+                # Wait until the app reports a successful load (or a cached load).
                 page.wait_for_function(
-                    "() => document.getElementById('status')?.classList.contains('ok')",
-                    timeout=60_000,
+                    "() => {"
+                    "  const el = document.getElementById('status');"
+                    "  if (!el) return false;"
+                    "  return el.classList.contains('ok') || el.classList.contains('warn');"
+                    "}",
+                    timeout=180_000,
                 )
                 # Give the layout a beat to settle.
                 page.wait_for_timeout(250)
@@ -331,6 +352,28 @@ def generate_screenshots() -> None:
                 page.click(".impactBreakdownBtn")
                 page.wait_for_selector("#pathModal.isOpen", timeout=10_000)
                 page.wait_for_timeout(150)
+
+            def load_starfield(page, viewport_label: str) -> None:
+                # Starfield currently auto-loads its default snapshot. We just wait
+                # for the status element to flip to ok/warn so screenshots aren't blank.
+                page.goto(url + "starfield/", wait_until="domcontentloaded")
+                page.wait_for_function(
+                    "() => {"
+                    "  const el = document.getElementById('status');"
+                    "  if (!el) return false;"
+                    "  return el.classList.contains('ok') || el.classList.contains('warn');"
+                    "}",
+                    timeout=180_000,
+                )
+                page.wait_for_timeout(400)
+                try:
+                    overflow = page.evaluate(
+                        "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2",
+                    )
+                    if overflow:
+                        print(f"Warning: horizontal overflow detected in {viewport_label} (starfield)")
+                except Exception:
+                    pass
 
             # Desktop (manifest)
             page = browser.new_page(viewport={"width": 1280, "height": 720})
@@ -372,6 +415,30 @@ def generate_screenshots() -> None:
             page.screenshot(path=str(ipad_path), full_page=True)
             open_inbound_modal(page)
             page.screenshot(path=str(ipad_modal_path), full_page=True)
+
+            # Starfield (README) - desktop shots.
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            load_starfield(page, "Desktop (starfield)")
+            page.screenshot(path=str(starfield_desktop_path), full_page=True)
+
+            # Click near the centre to focus a neuron, then capture the HUD.
+            try:
+                page.mouse.click(640, 360)
+                page.wait_for_timeout(250)
+            except Exception:
+                pass
+            page.screenshot(path=str(starfield_focus_path), full_page=True)
+
+            # Drag to tilt, then capture.
+            try:
+                page.mouse.move(640, 360)
+                page.mouse.down()
+                page.mouse.move(740, 300)
+                page.mouse.up()
+                page.wait_for_timeout(200)
+            except Exception:
+                pass
+            page.screenshot(path=str(starfield_tilt_path), full_page=True)
 
             browser.close()
 

@@ -76,6 +76,9 @@
         <button id="traceClearBtn" class="button buttonSmall buttonSecondary">
           Clear
         </button>
+        <button id="obsBtn" class="button buttonSmall buttonSecondary">
+          Observations
+        </button>
       </nav>
 
       <!-- Main exploration area: left-to-right flow -->
@@ -125,6 +128,7 @@
           >
             <div id="impactBreakdown" class="impactBreakdown"></div>
             <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
+            <div id="topInputsPanel" class="impactBreakdown"></div>
           </div>
           <div id="neuronTabPanelIssues" class="tabPanel" role="tabpanel"></div>
           <div
@@ -144,24 +148,61 @@
             <h2>
               Inbound Synapses <span id="synapseCount" class="badge">0</span>
             </h2>
-            <div class="sortControls">
-              <label>Sort by:</label>
-              <select id="synapseSort" class="select">
-                <option value="allocImpact">
-                  Allocated impact ↓ (into current)
-                </option>
-                <option value="allocImpactAsc">
-                  Allocated impact ↑ (into current)
-                </option>
-                <option value="impact">Source impact ↓ (highest)</option>
-                <option value="impactAsc">
-                  Source impact ↑ (lowest - prunable?)
-                </option>
-                <option value="mse">MSE (source)</option>
-                <option value="absWeight">|Weight|</option>
-                <option value="absContribution">|Contribution|</option>
-                <option value="weight">Weight</option>
-              </select>
+            <div class="synapseTools">
+              <div class="sortControls">
+                <label>Sort by:</label>
+                <select id="synapseSort" class="select">
+                  <option value="allocImpact">
+                    Allocated impact ↓ (into current)
+                  </option>
+                  <option value="allocImpactAsc">
+                    Allocated impact ↑ (into current)
+                  </option>
+                  <option value="impact">Source impact ↓ (highest)</option>
+                  <option value="impactAsc">
+                    Source impact ↑ (lowest - prunable?)
+                  </option>
+                  <option value="mse">MSE (source)</option>
+                  <option value="absWeight">|Weight|</option>
+                  <option value="absContribution">|Contribution|</option>
+                  <option value="weight">Weight</option>
+                </select>
+              </div>
+
+              <details class="filterDetails">
+                <summary class="button buttonSmall buttonSecondary">
+                  Filters
+                </summary>
+                <div
+                  class="filterPanel"
+                  role="group"
+                  aria-label="Inbound filters"
+                >
+                  <label class="filterItem">
+                    <span>Min alloc imp</span>
+                    <input
+                      id="synapseMinAlloc"
+                      class="input inputSmall"
+                      inputmode="decimal"
+                      placeholder="0"
+                    />
+                  </label>
+                  <label class="filterItem">
+                    <span>Top</span>
+                    <select id="synapseTopK" class="select selectSmall">
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                      <option value="500">500</option>
+                      <option value="0">All</option>
+                    </select>
+                  </label>
+                  <label class="filterItem filterCheckbox">
+                    <input id="synapseTraceOnly" type="checkbox" />
+                    <span>Trace only</span>
+                  </label>
+                </div>
+              </details>
             </div>
           </div>
           <div id="synapseListContainer" class="synapseListScroll"></div>
@@ -231,6 +272,54 @@
             Show more
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Observations dashboard modal (unused inputs, redundancy, reachability). -->
+    <div id="obsModal" class="modal" aria-hidden="true">
+      <div id="obsModalBackdrop" class="modalBackdrop"></div>
+      <div
+        class="modalPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Observations dashboard"
+      >
+        <div class="modalHeader">
+          <div id="obsModalTitle" class="modalTitle">Observations</div>
+          <button
+            id="obsModalClose"
+            class="button buttonSmall buttonSecondary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <div id="obsModalBody" class="modalBody"></div>
+      </div>
+    </div>
+
+    <!-- Explain \"why this score\" modal (top contributing observations). -->
+    <div id="explainModal" class="modal" aria-hidden="true">
+      <div id="explainModalBackdrop" class="modalBackdrop"></div>
+      <div
+        class="modalPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Top contributing observations"
+      >
+        <div class="modalHeader">
+          <div id="explainModalTitle" class="modalTitle">
+            Top contributing observations
+          </div>
+          <button
+            id="explainModalClose"
+            class="button buttonSmall buttonSecondary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <div id="explainModalBody" class="modalBody"></div>
       </div>
     </div>
 

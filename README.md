@@ -9,6 +9,10 @@ debug tool for investigating why discovery candidates fail or succeed.
   [Open Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/)
 - **Starfield (3D neighbourhood view)**:
   [Open Starfield on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/starfield/)
+- **Snapshot repo (default example snapshot)**:
+  [NEAT-AI-Snapshot](https://github.com/stSoftwareAU/NEAT-AI-Snapshot)
+  (published via GitHub Pages as
+  `https://stsoftwareau.github.io/NEAT-AI-Snapshot/`)
 
 Both views **auto-load the default snapshot** on first open, so you can click
 straight in.
@@ -80,6 +84,12 @@ The viewer can display human-friendly observation names and descriptions using a
 `snapshot.tooltips["input-0"] =
 { label, description }`). This avoids needing a
 separate `Tooltips.json` file.
+
+Optional fields:
+
+- **group**: a short group name used for clustering/summary in the Observations
+  dashboard (e.g. `macro`, `rates`, `equities`). Example:
+  `snapshot.tooltips["input-0"] = { label, description, group: "rates" }`.
 
 ### Loading snapshots from S3 (presigned URLs)
 
