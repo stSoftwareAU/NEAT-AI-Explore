@@ -1510,7 +1510,7 @@ function setLabelOverlayItems(items) {
 
 let lastLabelUpdateMs = 0;
 
-function updateLabelsForFocus(focusUuid) {
+function updateLabelsForFocus(focusUuid, opts) {
   if (!renderer || !points || !adjacency || !focusUuid) {
     clearLabelOverlay();
     return;
@@ -1518,9 +1518,15 @@ function updateLabelsForFocus(focusUuid) {
   if (!el.labelOverlay) return;
 
   // Throttle label updates for mobile performance (labels don't need 60fps).
+  //
+  // Important: when the focus changes (or we recompute a layout), we must
+  // re-project labels *immediately* using the updated `renderer.positions`,
+  // otherwise labels can briefly appear in the wrong spot. Callers can bypass
+  // the throttle using `{ force: true }`.
+  const force = Boolean(opts?.force);
   const now = performance.now();
   const minIntervalMs = 100;
-  if (now - lastLabelUpdateMs < minIntervalMs) return;
+  if (!force && now - lastLabelUpdateMs < minIntervalMs) return;
   lastLabelUpdateMs = now;
 
   // Label the focus and a small, high-signal subset of neighbours only.
@@ -1803,7 +1809,6 @@ function initStarfield() {
       // Force a refresh of lines/HUD for current focus.
       const focusUuid = renderer?.meta?.[renderer.focusIndex]?.uuid ?? null;
       if (focusUuid) {
-        updateLabelsForFocus(focusUuid);
         renderer.onFocusChanged?.(
           renderer.focusIndex,
           renderer.meta[renderer.focusIndex],
@@ -1951,7 +1956,7 @@ function initStarfield() {
       renderer.resetCamera();
     }
     setFocusBadge(focusUuid);
-    updateLabelsForFocus(focusUuid);
+    updateLabelsForFocus(focusUuid, { force: true });
     buildHudForIndex(idx);
   };
   buildHudForIndex(-1);
