@@ -19,6 +19,7 @@ import {
 } from "../shared/snapshot_loader.js";
 import { initThemeMode } from "../shared/theme.js";
 import { hash32, neuronColourRgb01, u32ToU01 } from "../shared/colour_maps.js";
+import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 
 const DEFAULT_SNAPSHOT_URL =
   "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz";
@@ -27,6 +28,7 @@ const DEFAULT_SNAPSHOT_URL =
 const FOCUS_MAX_DEPTH = 5;
 const FOCUS_RING_STEP = 30; // world units per graph hop away from focus
 const FOCUS_FAR_RADIUS = 240; // unreachable / very far nodes
+const UPSTREAM_MAX_DEPTH = 4; // hops shown in Paths mode (focused neuron -> upstream)
 
 const el = {
   fetchUrl: document.getElementById("fetchUrl"),
@@ -37,7 +39,10 @@ const el = {
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
   canvas: document.getElementById("glCanvas"),
+  labelOverlay: document.getElementById("labelOverlay"),
   hud: document.getElementById("hud"),
+  focusBadge: document.getElementById("focusBadge"),
+  modeToggle: document.getElementById("modeToggle"),
 };
 
 function setStatus(msg, kind = "") {
@@ -124,6 +129,60 @@ function getNeuronSquash(neuronsByUuid, uuid) {
 function getNeuronBias(neuronsByUuid, uuid) {
   const n = neuronsByUuid.get(uuid);
   return typeof n?.bias === "number" ? n.bias : null;
+}
+
+// ============================================================================
+// Aliases / descriptions (from snapshot.tooltips)
+// ============================================================================
+
+let uuidToLabel = {};
+let uuidToDescription = {};
+
+function loadLabelsFromSnapshot(snapshot) {
+  const tooltipsByUuid = snapshot?.tooltips ?? snapshot?.meta?.tooltips ?? null;
+  if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
+    uuidToLabel = {};
+    uuidToDescription = {};
+    return;
+  }
+
+  uuidToLabel = {};
+  uuidToDescription = {};
+  for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
+    if (!uuid || typeof uuid !== "string") continue;
+    if (!info || typeof info !== "object") continue;
+    const label = info.label;
+    const description = info.description;
+    if (typeof label === "string" && label.trim().length > 0) {
+      uuidToLabel[uuid] = label.trim();
+    }
+    if (typeof description === "string" && description.trim().length > 0) {
+      uuidToDescription[uuid] = description.trim();
+    }
+  }
+}
+
+function getAlias(uuid) {
+  return uuidToLabel[uuid] ?? null;
+}
+
+function getDescription(uuid) {
+  return uuidToDescription[uuid] ?? null;
+}
+
+function displayName(uuid) {
+  const a = getAlias(uuid);
+  return a ? a : uuid;
+}
+
+function shortUuid(uuid) {
+  const s = String(uuid ?? "");
+  if (s.length <= 8) return s;
+  return s.slice(-8);
+}
+
+function labelText(uuid) {
+  return getAlias(uuid) ?? shortUuid(uuid);
 }
 
 // ============================================================================
@@ -286,6 +345,8 @@ function computeRisk({
 function buildAdjacency(neuronsByUuid, synapses) {
   /** @type {Map<string, Set<string>>} */
   const adj = new Map();
+  /** @type {Map<string, { weight: number, meanContribution: number|null }>} */
+  const edgeByDir = new Map();
 
   for (const uuid of neuronsByUuid.keys()) {
     adj.set(uuid, new Set());
@@ -297,9 +358,151 @@ function buildAdjacency(neuronsByUuid, synapses) {
     // Undirected adjacency for "directly linked" neighbourhood exploration.
     adj.get(s.fromUuid).add(s.toUuid);
     adj.get(s.toUuid).add(s.fromUuid);
+    edgeByDir.set(`${s.fromUuid}→${s.toUuid}`, {
+      weight: s.weight,
+      meanContribution: null,
+    });
   }
 
-  return adj;
+  return { adj, edgeByDir };
+}
+
+function buildInboundAdjacency(neuronsByUuid, synapses) {
+  /** @type {Map<string, Set<string>>} */
+  const inbound = new Map();
+  for (const uuid of neuronsByUuid.keys()) inbound.set(uuid, new Set());
+  for (const s of synapses) {
+    if (!inbound.has(s.toUuid)) inbound.set(s.toUuid, new Set());
+    inbound.get(s.toUuid).add(s.fromUuid);
+  }
+  return inbound;
+}
+
+function computeInboundDistancesFromFocus(inboundAdj, focusUuid, maxDepth) {
+  /** @type {Map<string, number>} */
+  const dist = new Map();
+  /** @type {string[]} */
+  const q = [];
+  if (!focusUuid || !inboundAdj?.has?.(focusUuid)) return dist;
+  dist.set(focusUuid, 0);
+  q.push(focusUuid);
+  while (q.length) {
+    const u = q.shift();
+    const d = dist.get(u) ?? 0;
+    if (d >= (maxDepth ?? 0)) continue;
+    const ins = inboundAdj.get(u) ?? new Set();
+    for (const v of ins) {
+      if (!dist.has(v)) {
+        dist.set(v, d + 1);
+        q.push(v);
+      }
+    }
+  }
+  return dist;
+}
+
+function computePositionsForUpstream({
+  points,
+  inboundAdj,
+  focusUuid,
+  maxDepth,
+  ringStep,
+  farRadius,
+}) {
+  const uuids = points?.uuids ?? [];
+  const n = uuids.length;
+  const positions = new Float32Array(n * 3);
+
+  const dist = computeInboundDistancesFromFocus(
+    inboundAdj,
+    focusUuid,
+    maxDepth,
+  );
+
+  for (let i = 0; i < n; i++) {
+    const uuid = uuids[i];
+    if (uuid === focusUuid) {
+      positions[i * 3 + 0] = 0;
+      positions[i * 3 + 1] = 0;
+      positions[i * 3 + 2] = 0;
+      continue;
+    }
+    const d = dist.get(uuid);
+    const unreachable = d == null;
+    const layer = unreachable ? (maxDepth + 1) : d;
+    const baseR = unreachable ? farRadius : (layer * ringStep);
+
+    const h1 = hash32(`${focusUuid}::${uuid}::thetaUp`);
+    const h2 = hash32(`${focusUuid}::${uuid}::phiUp`);
+    const h3 = hash32(`${focusUuid}::${uuid}::rUp`);
+    const u1 = u32ToU01(h1);
+    const u2 = u32ToU01(h2);
+    const uj = u32ToU01(h3);
+
+    const theta = 2 * Math.PI * u1;
+    const cosPhi = 1 - 2 * u2;
+    const sinPhi = Math.sqrt(Math.max(0, 1 - cosPhi * cosPhi));
+    const r = baseR * (0.78 + 0.44 * uj);
+
+    // Push deeper hops a bit further away (z-) so the user can "fly" forward
+    // through upstream shells.
+    positions[i * 3 + 0] = Math.cos(theta) * sinPhi * r;
+    positions[i * 3 + 1] = cosPhi * r;
+    positions[i * 3 + 2] = Math.sin(theta) * sinPhi * r - (layer * 10);
+  }
+
+  return { positions, dist };
+}
+
+function buildUpstreamEdgesForFocus({
+  focusUuid,
+  inboundAdj,
+  dist,
+  maxDepth,
+}) {
+  /** @type {{ fromUuid: string, toUuid: string, share: number|null, weight: number, meanContribution: number|null }[]} */
+  const edges = [];
+  if (!focusUuid || !inboundAdj || !dist) return edges;
+
+  // Cache allocations per toUuid so we can map share onto edges.
+  /** @type {Map<string, Map<string, number>>} */
+  const shareByTo = new Map();
+
+  for (const [toUuid, d] of dist.entries()) {
+    if (toUuid === focusUuid) {
+      // ok, include inbound edges
+    }
+    if (d >= (maxDepth ?? 0)) continue;
+
+    // Only consider nodes within the upstream subgraph.
+    const ins = inboundAdj.get(toUuid) ?? new Set();
+    if (ins.size === 0) continue;
+
+    // Build share map for this node (impact allocation into toUuid).
+    if (!shareByTo.has(toUuid)) {
+      const alloc = computeInboundAllocationForFocus(toUuid);
+      const m = new Map();
+      for (const r of alloc.rows) m.set(r.fromUuid, r.share ?? 0);
+      shareByTo.set(toUuid, m);
+    }
+    const shares = shareByTo.get(toUuid) ?? new Map();
+
+    for (const fromUuid of ins) {
+      const fromD = dist.get(fromUuid);
+      if (fromD == null) continue;
+      // Keep edges that progress one hop away from focus.
+      if (fromD !== d + 1) continue;
+
+      const info = edgeInfoBetween(edgeByDir, fromUuid, toUuid);
+      const weight = info?.weight ?? 0;
+      const meanContribution = info?.meanContribution ??
+        readDerivedMeanContribution(SNAPSHOT, fromUuid, toUuid);
+      const share = shares.get(fromUuid) ?? null;
+      edges.push({ fromUuid, toUuid, share, weight, meanContribution });
+    }
+  }
+
+  return edges;
 }
 
 function computeGraphDistancesFromFocus(adjacency, focusUuid, maxDepth) {
@@ -326,6 +529,139 @@ function computeGraphDistancesFromFocus(adjacency, focusUuid, maxDepth) {
   }
 
   return dist;
+}
+
+function readDerivedMeanContribution(snapshot, fromUuid, toUuid) {
+  const key = `${fromUuid}→${toUuid}`;
+  const syn = snapshot?.derived?.synapses?.[key] ?? null;
+  const stats = syn?.stats ?? null;
+  const mc = stats?.meanContribution ?? stats?.mean_contribution ?? null;
+  return typeof mc === "number" && Number.isFinite(mc) ? mc : null;
+}
+
+function annotateEdgeStatsFromDerived(snapshot, edgeByDir) {
+  // Best-effort: not all snapshots contain derived synapse contributions.
+  for (const [k, v] of edgeByDir.entries()) {
+    const parts = k.split("→");
+    if (parts.length !== 2) continue;
+    const mc = readDerivedMeanContribution(snapshot, parts[0], parts[1]);
+    if (mc != null) v.meanContribution = mc;
+  }
+}
+
+function edgeInfoBetween(edgeByDir, a, b) {
+  // Prefer the a→b direction if present, else b→a.
+  const ab = edgeByDir.get(`${a}→${b}`) ?? null;
+  if (ab) return { fromUuid: a, toUuid: b, ...ab };
+  const ba = edgeByDir.get(`${b}→${a}`) ?? null;
+  if (ba) return { fromUuid: b, toUuid: a, ...ba };
+  return null;
+}
+
+function edgeStrength01(edgeInfo) {
+  // Prefer contribution magnitude when available; fall back to |weight|.
+  const c = edgeInfo?.meanContribution;
+  const w = edgeInfo?.weight;
+  const v = (typeof c === "number" && Number.isFinite(c))
+    ? Math.abs(c)
+    : Math.abs(w ?? 0);
+  if (!(v > 0)) return 0;
+  // Compress dynamic range for readability.
+  return Math.min(1, Math.sqrt(v) / 3);
+}
+
+function getInboundSynapsesForFocus(focusUuid) {
+  if (!graph?.synapses || !focusUuid) return [];
+  return graph.synapses.filter((s) => s.toUuid === focusUuid);
+}
+
+function getInboundFromUuidsForFocus(focusUuid) {
+  const inbound = getInboundSynapsesForFocus(focusUuid);
+  const out = [];
+  for (const s of inbound) out.push(s.fromUuid);
+  return out;
+}
+
+function computeInboundAllocationForFocus(focusUuid) {
+  const inbound = getInboundSynapsesForFocus(focusUuid);
+  const neuronImpact = impactsByUuid?.[focusUuid] ?? null;
+
+  const rows = inbound.map((s) => ({
+    fromUuid: s.fromUuid,
+    toUuid: s.toUuid,
+    weight: s.weight,
+    meanContribution: readDerivedMeanContribution(
+      SNAPSHOT,
+      s.fromUuid,
+      s.toUuid,
+    ),
+  }));
+
+  const allocation = computeInboundSynapseImpactAllocation({
+    toUuid: focusUuid,
+    neuronImpact: typeof neuronImpact === "number" ? neuronImpact : null,
+    inboundSynapses: rows,
+  });
+
+  // Normalise for HUD/line usage.
+  const out = (allocation?.synapses ?? []).slice().sort((a, b) =>
+    (b.allocatedImpact ?? 0) - (a.allocatedImpact ?? 0)
+  );
+
+  return {
+    neuronImpact: allocation?.neuronImpact ?? null,
+    totalScore: allocation?.totalScore ?? 0,
+    rows: out.map((r) => ({
+      fromUuid: r.fromUuid,
+      toUuid: r.toUuid,
+      weight: r.weight,
+      meanContribution: r.meanContribution ?? null,
+      score: r.score ?? null,
+      share: r.share ?? 0,
+      allocatedImpact: r.allocatedImpact ?? null,
+    })),
+  };
+}
+
+function computeReachableFromOutputs({ neuronsByUuid, synapses }) {
+  // Directed reachability: which nodes can influence outputs?
+  // If a node is reachable by traversing inbound edges from an output, then it
+  // has a directed path to an output in the forward direction.
+  /** @type {Map<string, Set<string>>} */
+  const inbound = new Map();
+  for (const uuid of neuronsByUuid.keys()) inbound.set(uuid, new Set());
+  for (const s of synapses) {
+    if (!inbound.has(s.toUuid)) inbound.set(s.toUuid, new Set());
+    inbound.get(s.toUuid).add(s.fromUuid);
+  }
+
+  /** @type {string[]} */
+  const outputs = [];
+  for (const [uuid, n] of neuronsByUuid.entries()) {
+    if (String(n?.type ?? "") === "output") outputs.push(uuid);
+  }
+  if (outputs.length === 0 && neuronsByUuid.has("output-0")) {
+    outputs.push("output-0");
+  }
+
+  const seen = new Set();
+  /** @type {string[]} */
+  const q = [];
+  for (const o of outputs) {
+    seen.add(o);
+    q.push(o);
+  }
+  while (q.length) {
+    const u = q.shift();
+    const ins = inbound.get(u) ?? new Set();
+    for (const v of ins) {
+      if (!seen.has(v)) {
+        seen.add(v);
+        q.push(v);
+      }
+    }
+  }
+  return seen;
 }
 
 function computePositionsForFocus({
@@ -552,6 +888,15 @@ function fmtSig(n, sig = 4) {
   return Number(n.toPrecision(sig)).toString();
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 class StarfieldRenderer {
   /**
    * @param {HTMLCanvasElement} canvas
@@ -559,7 +904,11 @@ class StarfieldRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     /** @type {WebGLRenderingContext} */
-    const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
+    const gl = canvas.getContext("webgl", { antialias: true, alpha: true }) ||
+      canvas.getContext("experimental-webgl", {
+        antialias: true,
+        alpha: true,
+      });
     if (!gl) throw new Error("WebGL not supported in this browser");
     this.gl = gl;
 
@@ -569,6 +918,7 @@ class StarfieldRenderer {
       attribute vec3 aPos;
       attribute vec4 aCol;
       attribute float aSize;
+      attribute float aFocus;
 
       uniform mat4 uProj;
       uniform mat4 uView;
@@ -576,6 +926,7 @@ class StarfieldRenderer {
 
       varying vec4 vCol;
       varying float vDepth;
+      varying float vFocus;
 
       void main() {
         vec4 viewPos = uView * vec4(aPos, 1.0);
@@ -584,14 +935,16 @@ class StarfieldRenderer {
 
         // Perspective-ish size: closer stars are bigger.
         float depthScale = clamp(140.0 / max(6.0, vDepth), 0.5, 6.0);
-        gl_PointSize = aSize * depthScale * uPixelRatio;
+        gl_PointSize = (aSize + 8.0 * aFocus) * depthScale * uPixelRatio;
         vCol = aCol;
+        vFocus = aFocus;
       }
     `,
       `
       precision mediump float;
       varying vec4 vCol;
       varying float vDepth;
+      varying float vFocus;
 
       void main() {
         // Circular point sprite with a soft edge.
@@ -609,10 +962,14 @@ class StarfieldRenderer {
         float depthFade = clamp(1.2 - (vDepth / 180.0), 0.15, 1.0);
 
         vec3 base = vCol.rgb;
+        // Focus gets a strong "you are here" cyan tint.
+        vec3 focusTint = vec3(0.35, 0.95, 1.0);
         vec3 tint = mix(base, vec3(1.0, 0.45, 0.35), risk); // warm warning tint
+        tint = mix(tint, focusTint, clamp(vFocus, 0.0, 1.0));
 
         float alpha = (0.25 * glow + 0.55 * core) * depthFade;
         alpha += risk * 0.35 * glow;
+        alpha += vFocus * 0.55 * glow;
         gl_FragColor = vec4(tint, clamp(alpha, 0.0, 1.0));
       }
     `,
@@ -621,6 +978,7 @@ class StarfieldRenderer {
     this.aPos = gl.getAttribLocation(this.program, "aPos");
     this.aCol = gl.getAttribLocation(this.program, "aCol");
     this.aSize = gl.getAttribLocation(this.program, "aSize");
+    this.aFocus = gl.getAttribLocation(this.program, "aFocus");
     this.uProj = gl.getUniformLocation(this.program, "uProj");
     this.uView = gl.getUniformLocation(this.program, "uView");
     this.uPixelRatio = gl.getUniformLocation(this.program, "uPixelRatio");
@@ -628,11 +986,43 @@ class StarfieldRenderer {
     this.bufPos = gl.createBuffer();
     this.bufCol = gl.createBuffer();
     this.bufSize = gl.createBuffer();
+    this.bufFocus = gl.createBuffer();
+
+    // Lines (synapses) program
+    this.lineProgram = createProgram(
+      gl,
+      `
+      attribute vec3 aPos;
+      attribute vec4 aCol;
+      uniform mat4 uProj;
+      uniform mat4 uView;
+      varying vec4 vCol;
+      void main() {
+        gl_Position = uProj * (uView * vec4(aPos, 1.0));
+        vCol = aCol;
+      }
+    `,
+      `
+      precision mediump float;
+      varying vec4 vCol;
+      void main() {
+        gl_FragColor = vCol;
+      }
+    `,
+    );
+    this.lineAPos = gl.getAttribLocation(this.lineProgram, "aPos");
+    this.lineACol = gl.getAttribLocation(this.lineProgram, "aCol");
+    this.lineUProj = gl.getUniformLocation(this.lineProgram, "uProj");
+    this.lineUView = gl.getUniformLocation(this.lineProgram, "uView");
+    this.bufLinePos = gl.createBuffer();
+    this.bufLineCol = gl.createBuffer();
+    this.lineCount = 0;
 
     this.count = 0;
     this.meta = [];
     this.positions = null;
     this.indexByUuid = new Map();
+    this.focusFlags = null;
 
     // Camera state
     this.yaw = 0;
@@ -727,6 +1117,7 @@ class StarfieldRenderer {
     this.count = Math.floor(positions.length / 3);
     this.meta = meta ?? [];
     this.positions = positions;
+    this.focusFlags = new Float32Array(this.count);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufPos);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
@@ -736,6 +1127,9 @@ class StarfieldRenderer {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSize);
     gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufFocus);
+    gl.bufferData(gl.ARRAY_BUFFER, this.focusFlags, gl.DYNAMIC_DRAW);
   }
 
   updatePositions(positions) {
@@ -743,6 +1137,24 @@ class StarfieldRenderer {
     this.positions = positions;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufPos);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+  }
+
+  updateFocusFlag(idx) {
+    if (!this.focusFlags) return;
+    this.focusFlags.fill(0);
+    if (idx >= 0 && idx < this.focusFlags.length) this.focusFlags[idx] = 1;
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufFocus);
+    gl.bufferData(gl.ARRAY_BUFFER, this.focusFlags, gl.DYNAMIC_DRAW);
+  }
+
+  updateLines(linePositions, lineColours) {
+    const gl = this.gl;
+    this.lineCount = Math.floor(linePositions.length / 3);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLinePos);
+    gl.bufferData(gl.ARRAY_BUFFER, linePositions, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLineCol);
+    gl.bufferData(gl.ARRAY_BUFFER, lineColours, gl.DYNAMIC_DRAW);
   }
 
   resizeToDisplaySize() {
@@ -824,9 +1236,30 @@ class StarfieldRenderer {
     const proj = mat4Perspective(this.fov, aspect, this.near, this.far);
     const view = this.getViewMatrix();
 
+    // Draw synapse lines first (slightly additive for readability).
+    if (this.lineCount > 0) {
+      gl.useProgram(this.lineProgram);
+      gl.uniformMatrix4fv(this.lineUProj, false, proj);
+      gl.uniformMatrix4fv(this.lineUView, false, view);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLinePos);
+      gl.enableVertexAttribArray(this.lineAPos);
+      gl.vertexAttribPointer(this.lineAPos, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLineCol);
+      gl.enableVertexAttribArray(this.lineACol);
+      gl.vertexAttribPointer(this.lineACol, 4, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.LINES, 0, this.lineCount);
+    }
+
+    // Then draw stars.
+    gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uProj, false, proj);
     gl.uniformMatrix4fv(this.uView, false, view);
     gl.uniform1f(this.uPixelRatio, this.pixelRatio);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufPos);
     gl.enableVertexAttribArray(this.aPos);
@@ -839,6 +1272,10 @@ class StarfieldRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSize);
     gl.enableVertexAttribArray(this.aSize);
     gl.vertexAttribPointer(this.aSize, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufFocus);
+    gl.enableVertexAttribArray(this.aFocus);
+    gl.vertexAttribPointer(this.aFocus, 1, gl.FLOAT, false, 0, 0);
 
     gl.drawArrays(gl.POINTS, 0, this.count);
   }
@@ -903,6 +1340,7 @@ class StarfieldRenderer {
 
   setFocus(idx) {
     this.focusIndex = idx;
+    this.updateFocusFlag(idx);
     this.onFocusChanged?.(idx, this.meta[idx] ?? null);
   }
 }
@@ -916,6 +1354,70 @@ let SNAPSHOT = null;
 let graph = null;
 let points = null;
 let adjacency = null;
+let edgeByDir = null;
+let impactsByUuid = {};
+let inboundAdjacency = null;
+
+/** @type {"impact"|"paths"|"neighbourhood"} */
+let viewMode = "impact";
+
+function exposeDebugApi() {
+  // Expose a small, stable debug API so Playwright can verify exploration flows
+  // (focus output -> hop to neighbours -> inspect flags) before taking README
+  // screenshots.
+  //
+  // This is intentionally minimal and non-invasive (safe to ship).
+  try {
+    window.__neatStarfield = {
+      getSnapshotLoaded: () => Boolean(SNAPSHOT),
+      getFocusUuid: () =>
+        renderer?.meta?.[renderer?.focusIndex ?? -1]?.uuid ??
+          null,
+      getDefaultOutputUuid: () => {
+        if (!renderer?.meta?.length) return null;
+        for (const m of renderer.meta) {
+          if (m?.uuid === "output-0") return "output-0";
+        }
+        for (const m of renderer.meta) {
+          if (String(m?.type ?? "") === "output") return m.uuid ?? null;
+        }
+        return null;
+      },
+      getNeighbourUuids: (uuid) => {
+        if (!adjacency || !uuid) return [];
+        return Array.from(adjacency.get(String(uuid)) ?? []);
+      },
+      focusByUuid: (uuid) => {
+        if (!points || !renderer || !uuid) return false;
+        const idx = points.indexByUuid.get(String(uuid));
+        if (idx == null) return false;
+        renderer.setFocus(idx);
+        return true;
+      },
+      pickHighestRiskNeighbour: (uuid) => {
+        if (!points || !renderer || !adjacency || !uuid) return null;
+        const u = String(uuid);
+        const neigh = Array.from(adjacency.get(u) ?? []);
+        let best = null;
+        let bestScore = -Infinity;
+        for (const v of neigh) {
+          const idx = points.indexByUuid.get(v);
+          if (idx == null) continue;
+          const m = renderer.meta[idx];
+          const s = m?.risk?.score;
+          const score = typeof s === "number" && Number.isFinite(s) ? s : 0;
+          if (score > bestScore) {
+            bestScore = score;
+            best = v;
+          }
+        }
+        return best;
+      },
+    };
+  } catch (_e) {
+    // No-op.
+  }
+}
 
 function pickDefaultFocusIndex(points, neuronsByUuid) {
   const uuids = points?.uuids ?? [];
@@ -952,6 +1454,140 @@ function setHudText(s) {
   el.hud.textContent = String(s ?? "");
 }
 
+function setFocusBadge(uuid) {
+  if (!el.focusBadge) return;
+  // Avoid stale hover tooltips when focus changes (or is cleared). The badge's
+  // child spans don't always carry a `title`, so the outer element must be
+  // cleared/updated consistently.
+  el.focusBadge.title = "";
+  if (!uuid) {
+    el.focusBadge.textContent = "";
+    return;
+  }
+  const alias = getAlias(uuid);
+  const desc = getDescription(uuid);
+  const title = desc ? `${uuid} — ${desc}` : uuid;
+  el.focusBadge.title = title;
+  if (alias) {
+    el.focusBadge.innerHTML = `<span class="alias">${
+      escapeHtml(alias)
+    }</span><span class="uuid">${escapeHtml(uuid)}</span>`;
+  } else {
+    el.focusBadge.textContent = uuid;
+  }
+}
+
+function clearLabelOverlay() {
+  const root = el.labelOverlay;
+  if (!root) return;
+  root.innerHTML = "";
+}
+
+function setLabelOverlayItems(items) {
+  const root = el.labelOverlay;
+  if (!root) return;
+  root.innerHTML = "";
+  for (const it of items) {
+    const div = document.createElement("div");
+    div.className = "starLabel" + (it.isFocus ? " isFocus" : "");
+    div.style.left = `${it.x}px`;
+    div.style.top = `${it.y}px`;
+    if (typeof it.opacity === "number") div.style.opacity = String(it.opacity);
+    if (typeof it.scale === "number") {
+      div.style.transform = `translate(-50%, -120%) scale(${it.scale})`;
+    }
+    if (it.title) div.title = it.title;
+    if (it.isFocus) {
+      div.innerHTML = `<span class="alias">${escapeHtml(it.text)}</span>${
+        it.uuidSuffix
+          ? `<span class="uuid">${escapeHtml(it.uuidSuffix)}</span>`
+          : ""
+      }`;
+    } else {
+      div.textContent = it.text;
+    }
+    root.appendChild(div);
+  }
+}
+
+let lastLabelUpdateMs = 0;
+
+function updateLabelsForFocus(focusUuid, opts) {
+  if (!renderer || !points || !adjacency || !focusUuid) {
+    clearLabelOverlay();
+    return;
+  }
+  if (!el.labelOverlay) return;
+
+  // Throttle label updates for mobile performance (labels don't need 60fps).
+  //
+  // Important: when the focus changes (or we recompute a layout), we must
+  // re-project labels *immediately* using the updated `renderer.positions`,
+  // otherwise labels can briefly appear in the wrong spot. Callers can bypass
+  // the throttle using `{ force: true }`.
+  const force = Boolean(opts?.force);
+  const now = performance.now();
+  const minIntervalMs = 100;
+  if (!force && now - lastLabelUpdateMs < minIntervalMs) return;
+  lastLabelUpdateMs = now;
+
+  // Label the focus and a small, high-signal subset of neighbours only.
+  //
+  // Important for iPhone/iPad: creating/updating 100-150 DOM nodes per frame can
+  // tank performance. Keep the label set small and stable.
+  const neighAll = Array.from(adjacency.get(focusUuid) ?? []);
+  const maxNeighbourLabels = 24;
+  const neigh = (viewMode === "impact" && edgeByDir)
+    ? computeInboundAllocationForFocus(focusUuid).rows
+      .slice(0, maxNeighbourLabels)
+      .map((r) => r.fromUuid)
+    : neighAll.slice(0, maxNeighbourLabels);
+  const want = [focusUuid, ...neigh];
+
+  /** @type {{ uuid: string, text: string, x: number, y: number, isFocus: boolean, title: string, uuidSuffix: string|null }[]} */
+  const out = [];
+
+  // Compute pixel ratio-adjusted positions based on current camera matrices.
+  const rect = renderer.canvas.getBoundingClientRect();
+  const dpr = renderer.pixelRatio ?? 1;
+
+  for (const u of want) {
+    const idx = points.indexByUuid.get(u);
+    if (idx == null) continue;
+    const xw = renderer.positions[idx * 3 + 0];
+    const yw = renderer.positions[idx * 3 + 1];
+    const zw = renderer.positions[idx * 3 + 2];
+    const p = renderer.projectPointToScreen(xw, yw, zw);
+    if (!p) continue;
+    // Convert from GL canvas pixels to CSS pixels.
+    // Place within overlay coordinates (overlay is positioned over the canvas).
+    const x = p.sx / dpr;
+    const y = p.sy / dpr;
+
+    const isFocus = u === focusUuid;
+    const text = labelText(u);
+    const title = getDescription(u) ? `${u} — ${getDescription(u)}` : u;
+    // Depth-aware label styling: far stars get smaller + fainter labels.
+    // `p.depth` is NDC z in [-1, 1], where smaller tends to be closer.
+    const depth01 = Math.min(1, Math.max(0, (p.depth + 1) / 2));
+    const opacity = isFocus ? 1 : (0.15 + (1 - depth01) * 0.75);
+    const scale = isFocus ? 1.05 : (0.72 + (1 - depth01) * 0.45);
+    out.push({
+      uuid: u,
+      text,
+      x,
+      y,
+      isFocus,
+      title,
+      uuidSuffix: getAlias(u) ? shortUuid(u) : null,
+      opacity,
+      scale,
+    });
+  }
+
+  setLabelOverlayItems(out);
+}
+
 function buildHudForIndex(idx) {
   if (!renderer || !renderer.meta?.length || idx < 0) {
     setHudText(
@@ -966,10 +1602,28 @@ function buildHudForIndex(idx) {
   const mse = stats?.meanSquaredError ?? stats?.mean_squared_error ?? null;
   const mae = stats?.meanAbsoluteError ?? stats?.mean_absolute_error ?? null;
   const directNeighbours = adjacency?.get?.(m.uuid)?.size ?? 0;
+  const desc = getDescription(m.uuid);
+  const ignoredInputs = (() => {
+    if (!graph?.creature) return [];
+    const inputCount = graph.creature.input ?? 0;
+    if (!(inputCount > 0) || !graph?.neuronsByUuid) return [];
+    const reachable = computeReachableFromOutputs({
+      neuronsByUuid: graph.neuronsByUuid,
+      synapses: graph.synapses,
+    });
+    const out = [];
+    for (let i = 0; i < inputCount; i++) {
+      const uuid = `input-${i}`;
+      if (!reachable.has(uuid)) out.push(uuid);
+    }
+    return out;
+  })();
 
   const lines = [];
-  lines.push(`Focus: ${m.uuid}`);
+  lines.push(`Focus: ${displayName(m.uuid)}`);
+  if (getAlias(m.uuid)) lines.push(`UUID:  ${m.uuid}`);
   lines.push(`Type:  ${m.type}`);
+  if (desc) lines.push(`Desc:  ${desc}`);
   if (!m.uuid.startsWith("input-")) {
     lines.push(`Squash: ${m.squash}`);
     if (bias != null) lines.push(`Bias:  ${fmtSig(bias, 6)}`);
@@ -979,6 +1633,72 @@ function buildHudForIndex(idx) {
   if (mae != null) lines.push(`MAE:   ${fmtSig(mae, 6)}`);
   lines.push(`Risk:  ${fmtSig(m.risk?.score ?? 0, 3)}`);
   lines.push(`Links: ${directNeighbours}`);
+  if (ignoredInputs.length) {
+    lines.push(`Ignored observations: ${ignoredInputs.length}`);
+    const top = ignoredInputs.slice(0, 8).map((u) => labelText(u)).join(", ");
+    if (top) {
+      lines.push(`Top:   ${top}${ignoredInputs.length > 8 ? ", …" : ""}`);
+    }
+  }
+
+  // Synapse summary (top links).
+  if (edgeByDir) {
+    const focusUuid = m.uuid;
+
+    if (viewMode === "impact") {
+      const alloc = computeInboundAllocationForFocus(focusUuid);
+      const top = alloc.rows.slice(0, 10);
+      if (top.length) {
+        lines.push("");
+        lines.push("Inbound impact (top):");
+        for (const r of top) {
+          const name = displayName(r.fromUuid);
+          const wStr = fmtSig(r.weight, 4);
+          const mcStr = r.meanContribution != null
+            ? fmtSig(r.meanContribution, 4)
+            : "N/A";
+          const aStr = r.allocatedImpact != null
+            ? fmtSig(r.allocatedImpact, 4)
+            : "N/A";
+          const pct = fmtSig((r.share ?? 0) * 100, 3) + "%";
+          lines.push(
+            `- ${name}  alloc=${aStr} (${pct})  w=${wStr}  c=${mcStr}`,
+          );
+        }
+      } else {
+        lines.push("");
+        lines.push(
+          "Inbound impact: N/A (no inbound synapses or missing impact)",
+        );
+      }
+    } else {
+      const neigh = Array.from(adjacency?.get(focusUuid) ?? []);
+      const items = neigh.map((u) => {
+        const info = edgeInfoBetween(edgeByDir, focusUuid, u);
+        const strength = edgeStrength01(info);
+        const w = info?.weight ?? 0;
+        const mc = info?.meanContribution ?? null;
+        return { uuid: u, info, strength, w, mc };
+      }).sort((a, b) => (b.strength ?? 0) - (a.strength ?? 0));
+
+      const top = items.slice(0, 8);
+      if (top.length) {
+        lines.push("");
+        lines.push("Top links:");
+        for (const it of top) {
+          const name = displayName(it.uuid);
+          const wStr = fmtSig(it.w, 4);
+          const mcStr = it.mc != null ? fmtSig(it.mc, 4) : "N/A";
+          const dir = it.info?.fromUuid && it.info?.toUuid
+            ? `${it.info.fromUuid}→${it.info.toUuid}`
+            : "";
+          lines.push(
+            `- ${name}  w=${wStr}  c=${mcStr}${dir ? "  " + dir : ""}`,
+          );
+        }
+      }
+    }
+  }
   if (m.risk?.reasons?.length) {
     lines.push("");
     lines.push("Flags:");
@@ -1013,7 +1733,16 @@ async function loadSnapshot(source, label) {
       : source;
     SNAPSHOT = obj;
     graph = normaliseCreature(obj);
-    adjacency = buildAdjacency(graph.neuronsByUuid, graph.synapses);
+    impactsByUuid = getImpacts(obj);
+    loadLabelsFromSnapshot(obj);
+    const adjPack = buildAdjacency(graph.neuronsByUuid, graph.synapses);
+    adjacency = adjPack.adj;
+    edgeByDir = adjPack.edgeByDir;
+    annotateEdgeStatsFromDerived(obj, edgeByDir);
+    inboundAdjacency = buildInboundAdjacency(
+      graph.neuronsByUuid,
+      graph.synapses,
+    );
 
     // Build star points and feed the renderer.
     points = buildStarPoints({
@@ -1040,6 +1769,7 @@ async function loadSnapshot(source, label) {
     });
     renderer.resetCamera();
     renderer.setFocus(focusIdx);
+    setFocusBadge(focusUuid);
 
     const neuronCount = (graph.creature.neurons ?? []).filter((n) =>
       n.type !== "input"
@@ -1059,25 +1789,175 @@ async function loadSnapshot(source, label) {
 function initStarfield() {
   initThemeMode({ toggleButtonId: "themeToggle" });
 
+  // Mode toggle (Impact Flow vs Neighbourhood).
+  if (el.modeToggle) {
+    const updateModeBtn = () => {
+      el.modeToggle.textContent = viewMode === "impact"
+        ? "Impact"
+        : (viewMode === "paths" ? "Paths" : "Links");
+      el.modeToggle.title = `Mode: ${
+        viewMode === "impact"
+          ? "Impact Flow"
+          : (viewMode === "paths" ? "Upstream paths" : "Neighbourhood")
+      } (tap to toggle)`;
+    };
+    updateModeBtn();
+    el.modeToggle.addEventListener("click", () => {
+      // Cycle: Impact -> Paths -> Links
+      viewMode = viewMode === "impact"
+        ? "paths"
+        : (viewMode === "paths" ? "neighbourhood" : "impact");
+      updateModeBtn();
+      // Force a refresh of lines/HUD for current focus.
+      const focusUuid = renderer?.meta?.[renderer.focusIndex]?.uuid ?? null;
+      if (focusUuid) {
+        renderer.onFocusChanged?.(
+          renderer.focusIndex,
+          renderer.meta[renderer.focusIndex],
+        );
+      }
+    });
+  }
+
   if (!(el.canvas instanceof HTMLCanvasElement)) {
     throw new Error("Missing #glCanvas");
   }
   renderer = new StarfieldRenderer(el.canvas);
+  exposeDebugApi();
   renderer.onFocusChanged = (idx, m) => {
     // Re-centre the whole neighbourhood around the newly focused neuron.
     const focusUuid = m?.uuid ?? null;
     if (points && adjacency && focusUuid) {
-      const positions = computePositionsForFocus({
-        points,
-        adjacency,
-        focusUuid,
-        maxDepth: FOCUS_MAX_DEPTH,
-        ringStep: FOCUS_RING_STEP,
-        farRadius: FOCUS_FAR_RADIUS,
-      });
+      // Paths mode needs both the upstream positions (for rendering) and the BFS
+      // distances (for selecting which upstream edges to render). Computing the
+      // upstream layout is relatively expensive, so do it once and reuse.
+      const upstreamLayout = viewMode === "paths" && inboundAdjacency
+        ? computePositionsForUpstream({
+          points,
+          inboundAdj: inboundAdjacency,
+          focusUuid,
+          maxDepth: UPSTREAM_MAX_DEPTH,
+          ringStep: FOCUS_RING_STEP,
+          farRadius: FOCUS_FAR_RADIUS,
+        })
+        : null;
+
+      const positions = upstreamLayout
+        ? upstreamLayout.positions
+        : computePositionsForFocus({
+          points,
+          adjacency,
+          focusUuid,
+          maxDepth: FOCUS_MAX_DEPTH,
+          ringStep: FOCUS_RING_STEP,
+          farRadius: FOCUS_FAR_RADIUS,
+        });
       renderer.updatePositions(positions);
+      // Update synapse lines to direct neighbours.
+      if (edgeByDir) {
+        if (upstreamLayout) {
+          const edges = buildUpstreamEdgesForFocus({
+            focusUuid,
+            inboundAdj: inboundAdjacency,
+            dist: upstreamLayout.dist,
+            maxDepth: UPSTREAM_MAX_DEPTH,
+          });
+
+          const linePos = new Float32Array(edges.length * 2 * 3);
+          const lineCol = new Float32Array(edges.length * 2 * 4);
+          let p = 0;
+          let c = 0;
+
+          for (const e of edges) {
+            const iFrom = points.indexByUuid.get(e.fromUuid);
+            const iTo = points.indexByUuid.get(e.toUuid);
+            if (iFrom == null || iTo == null) continue;
+
+            const fx = upstreamLayout.positions[iFrom * 3 + 0];
+            const fy = upstreamLayout.positions[iFrom * 3 + 1];
+            const fz = upstreamLayout.positions[iFrom * 3 + 2];
+            const tx = upstreamLayout.positions[iTo * 3 + 0];
+            const ty = upstreamLayout.positions[iTo * 3 + 1];
+            const tz = upstreamLayout.positions[iTo * 3 + 2];
+
+            linePos[p++] = fx;
+            linePos[p++] = fy;
+            linePos[p++] = fz;
+            linePos[p++] = tx;
+            linePos[p++] = ty;
+            linePos[p++] = tz;
+
+            const positive = (e.weight ?? 0) >= 0;
+            const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
+            const s01 = e.share != null
+              ? clamp(Math.sqrt(Math.max(0, e.share)) * 2.2, 0, 1)
+              : edgeStrength01(
+                edgeInfoBetween(edgeByDir, e.fromUuid, e.toUuid),
+              );
+            const a = 0.05 + 0.85 * s01;
+            for (let k = 0; k < 2; k++) {
+              lineCol[c++] = base[0];
+              lineCol[c++] = base[1];
+              lineCol[c++] = base[2];
+              lineCol[c++] = a;
+            }
+          }
+          renderer.updateLines(linePos, lineCol);
+        } else {
+          const neigh = viewMode === "impact"
+            ? getInboundFromUuidsForFocus(focusUuid)
+            : Array.from(adjacency.get(focusUuid) ?? []);
+          const linePos = new Float32Array(neigh.length * 2 * 3);
+          const lineCol = new Float32Array(neigh.length * 2 * 4);
+          let p = 0;
+          let c = 0;
+
+          // Precompute impact allocations (so line alpha reflects contribution).
+          const alloc = viewMode === "impact"
+            ? computeInboundAllocationForFocus(focusUuid)
+            : null;
+          const allocByFrom = alloc
+            ? new Map(alloc.rows.map((r) => [r.fromUuid, r]))
+            : new Map();
+
+          for (const u of neigh) {
+            const j = points.indexByUuid.get(u);
+            if (j == null) continue;
+            const x = positions[j * 3 + 0];
+            const y = positions[j * 3 + 1];
+            const z = positions[j * 3 + 2];
+            // From focus origin to neighbour.
+            linePos[p++] = 0;
+            linePos[p++] = 0;
+            linePos[p++] = 0;
+            linePos[p++] = x;
+            linePos[p++] = y;
+            linePos[p++] = z;
+
+            const info = edgeInfoBetween(edgeByDir, focusUuid, u);
+            const allocRow = allocByFrom.get(u) ?? null;
+            const s01 = viewMode === "impact"
+              ? clamp(Math.sqrt(Math.max(0, allocRow?.share ?? 0)) * 2.2, 0, 1)
+              : edgeStrength01(info);
+            const w = info?.weight ?? 0;
+            const positive = w >= 0;
+            const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
+            const a = 0.12 + 0.75 * s01;
+            // Same colour for both endpoints.
+            for (let k = 0; k < 2; k++) {
+              lineCol[c++] = base[0];
+              lineCol[c++] = base[1];
+              lineCol[c++] = base[2];
+              lineCol[c++] = a;
+            }
+          }
+          renderer.updateLines(linePos, lineCol);
+        }
+      }
       renderer.resetCamera();
     }
+    setFocusBadge(focusUuid);
+    updateLabelsForFocus(focusUuid, { force: true });
     buildHudForIndex(idx);
   };
   buildHudForIndex(-1);
@@ -1120,6 +2000,9 @@ function initStarfield() {
     lastT = now;
     renderer.update(dt);
     renderer.render();
+    // Keep labels in sync with camera motion.
+    const focusUuid = renderer?.meta?.[renderer.focusIndex]?.uuid ?? null;
+    if (focusUuid) updateLabelsForFocus(focusUuid);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -1128,6 +2011,12 @@ function initStarfield() {
 try {
   initStarfield();
 } catch (e) {
-  setStatus(e?.message ?? String(e), "bad");
+  // iOS Safari can disable WebGL in low-power / privacy modes. Give a clearer
+  // message than a blank screen.
+  const msg = e?.message ?? String(e);
+  setStatus(
+    `Starfield failed to start: ${msg}. On iPhone/iPad: ensure WebGL is enabled (disable Low Power Mode, try Safari not in private browsing, and reload).`,
+    "bad",
+  );
   console.error(e);
 }

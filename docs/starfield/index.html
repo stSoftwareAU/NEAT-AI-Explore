@@ -35,6 +35,15 @@
         <div class="browseGroup">
           <button id="fileBtn" class="button">Browse…</button>
           <button
+            id="modeToggle"
+            class="button buttonSecondary"
+            type="button"
+            aria-label="View mode (Impact Flow / Neighbourhood)"
+            title="Mode: Impact Flow (tap to toggle)"
+          >
+            Impact
+          </button>
+          <button
             id="themeToggle"
             class="button buttonSecondary themeToggle"
             type="button"
@@ -57,7 +66,9 @@
 
     <main class="stage">
       <canvas id="glCanvas" class="glCanvas"></canvas>
+      <div id="labelOverlay" class="labelOverlay" aria-hidden="true"></div>
       <aside id="hud" class="hud" aria-live="polite"></aside>
+      <div id="focusBadge" class="focusBadge" aria-label="Current focus"></div>
       <aside id="legend" class="legend" aria-label="Starfield legend">
         <div class="legendTitle">Legend</div>
         <div class="legendBody">
