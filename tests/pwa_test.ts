@@ -41,12 +41,28 @@ Deno.test("docs PWA files exist", async () => {
   const indexPath = repoPath("docs", "index.html");
   const impactPath = repoPath("docs", "impact_attribution.js");
   const faviconPath = repoPath("docs", "favicon.ico");
+  const starfieldIndexPath = repoPath("docs", "starfield", "index.html");
+  const starfieldJsPath = repoPath("docs", "starfield", "starfield.js");
+  const starfieldCssPath = repoPath("docs", "starfield", "starfield.css");
+  const sharedSnapshotLoaderPath = repoPath(
+    "docs",
+    "shared",
+    "snapshot_loader.js",
+  );
+  const sharedThemePath = repoPath("docs", "shared", "theme.js");
+  const sharedColourMapsPath = repoPath("docs", "shared", "colour_maps.js");
 
   await Deno.stat(manifestPath);
   await Deno.stat(swPath);
   await Deno.stat(indexPath);
   await Deno.stat(impactPath);
   await Deno.stat(faviconPath);
+  await Deno.stat(starfieldIndexPath);
+  await Deno.stat(starfieldJsPath);
+  await Deno.stat(starfieldCssPath);
+  await Deno.stat(sharedSnapshotLoaderPath);
+  await Deno.stat(sharedThemePath);
+  await Deno.stat(sharedColourMapsPath);
 });
 
 Deno.test("manifest icons and screenshots exist on disk", async () => {
@@ -82,6 +98,12 @@ Deno.test("service worker caches the app shell", async () => {
       '"./manifest.webmanifest"',
       '"./favicon.ico"',
       '"./icons/icon-192x192.png"',
+      '"./starfield/index.html"',
+      '"./starfield/starfield.js"',
+      '"./starfield/starfield.css"',
+      '"./shared/snapshot_loader.js"',
+      '"./shared/theme.js"',
+      '"./shared/colour_maps.js"',
     ]
   ) {
     assert(
