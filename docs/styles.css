@@ -102,6 +102,10 @@ html, body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
+  /* iOS Safari can auto-inflate text sizes (even with a viewport meta), which
+     breaks our tight mobile layout. Keep text sizing stable across iPhone. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: var(--bg);
   color: var(--text);
 }

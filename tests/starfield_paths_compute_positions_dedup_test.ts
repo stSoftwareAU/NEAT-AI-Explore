@@ -28,7 +28,7 @@ Deno.test("starfield paths mode computes upstream positions once per focus chang
   const jsPath = repoPath("docs", "starfield", "starfield.js");
   const js = await Deno.readTextFile(jsPath);
 
-  const start = js.indexOf("renderer.onFocusChanged = (idx, m) => {");
+  const start = js.indexOf("renderer.onFocusChanged = (idx, m");
   assert(start >= 0, "Expected renderer.onFocusChanged handler to exist.");
 
   // Use a stable marker immediately after the handler to bound the search.

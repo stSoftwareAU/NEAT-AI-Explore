@@ -17,7 +17,6 @@ import {
   fetchSnapshotJson,
   readSnapshotFile,
 } from "../shared/snapshot_loader.js";
-import { initThemeMode } from "../shared/theme.js";
 import { hash32, neuronColourRgb01, u32ToU01 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 
@@ -30,11 +29,21 @@ const FOCUS_RING_STEP = 30; // world units per graph hop away from focus
 const FOCUS_FAR_RADIUS = 240; // unreachable / very far nodes
 const UPSTREAM_MAX_DEPTH = 4; // hops shown in Paths mode (focused neuron -> upstream)
 
+// Focus trail (navigation history).
+// Keep bounded so it never grows without limit during long sessions.
+const MAX_FOCUS_TRAIL = 64;
+
+// Line budget (reduce clutter for high-fan-in NEAT neurons).
+const MAX_INBOUND_LINES = 80;
+const MIN_INBOUND_LINES = 16;
+const MIN_INBOUND_SHARE = 0.004; // 0.4% of inbound allocation (tuned for signal)
+
 const el = {
   fetchUrl: document.getElementById("fetchUrl"),
   fetchBtn: document.getElementById("fetchBtn"),
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
+  backBtn: document.getElementById("backBtn"),
   progressContainer: document.getElementById("progressContainer"),
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
@@ -119,6 +128,21 @@ function getNeuronStats(snapshot, uuid) {
 function getNeuronType(neuronsByUuid, uuid) {
   if (uuid?.startsWith?.("input-")) return "input";
   return String(neuronsByUuid.get(uuid)?.type ?? "hidden");
+}
+
+function getOutputUuids(neuronsByUuid) {
+  /** @type {string[]} */
+  const out = [];
+  for (const [uuid, n] of neuronsByUuid.entries()) {
+    if (uuid === "output-0") out.push(uuid);
+    else if (String(n?.type ?? "") === "output") out.push(uuid);
+  }
+  // Stable ordering: prefer output-0 first, then lexical.
+  out.sort((a, b) =>
+    (a === "output-0" ? -1 : b === "output-0" ? 1 : 0) ||
+    String(a).localeCompare(String(b))
+  );
+  return out;
 }
 
 function getNeuronSquash(neuronsByUuid, uuid) {
@@ -378,6 +402,47 @@ function buildInboundAdjacency(neuronsByUuid, synapses) {
   return inbound;
 }
 
+function computeOutputPathToFocus({ neuronsByUuid, inboundAdj, focusUuid }) {
+  if (!focusUuid || !inboundAdj) return [];
+  const outputs = getOutputUuids(neuronsByUuid);
+  if (!outputs.length) return [];
+
+  /** @type {string[]} */
+  const q = [];
+  /** @type {Map<string, string|null>} */
+  const prev = new Map(); // prev[child] = parent in the BFS tree (downstream)
+
+  for (const o of outputs) {
+    q.push(o);
+    prev.set(o, null);
+  }
+
+  while (q.length) {
+    const u = q.shift();
+    if (!u) continue;
+    if (u === focusUuid) break;
+    const ins = inboundAdj.get(u) ?? new Set();
+    for (const v of ins) {
+      if (!prev.has(v)) {
+        prev.set(v, u);
+        q.push(v);
+      }
+    }
+  }
+
+  if (!prev.has(focusUuid)) return [];
+  /** @type {string[]} */
+  const rev = [];
+  let cur = focusUuid;
+  while (cur) {
+    rev.push(cur);
+    cur = prev.get(cur) ?? null;
+  }
+  // rev is focus -> ... -> output; reverse to output -> ... -> focus.
+  rev.reverse();
+  return rev;
+}
+
 function computeInboundDistancesFromFocus(inboundAdj, focusUuid, maxDepth) {
   /** @type {Map<string, number>} */
   const dist = new Map();
@@ -405,6 +470,7 @@ function computePositionsForUpstream({
   points,
   inboundAdj,
   focusUuid,
+  backUuid,
   maxDepth,
   ringStep,
   farRadius,
@@ -448,7 +514,16 @@ function computePositionsForUpstream({
     // through upstream shells.
     positions[i * 3 + 0] = Math.cos(theta) * sinPhi * r;
     positions[i * 3 + 1] = cosPhi * r;
-    positions[i * 3 + 2] = Math.sin(theta) * sinPhi * r - (layer * 10);
+    //
+    // Also bias the layout to feel more "first person": the focus is the
+    // closest star, and most other stars sit in front (z-) so you can look
+    // outward along paths. The node you came from (if any) is nudged behind
+    // (z+), so you can turn around and see the way home.
+    const rawZ = Math.sin(theta) * sinPhi * r;
+    const forwardZ = rawZ - (layer * 10);
+    positions[i * 3 + 2] = (backUuid && uuid === backUuid)
+      ? (Math.abs(rawZ) + 28)
+      : (-Math.abs(forwardZ));
   }
 
   return { positions, dist };
@@ -623,6 +698,15 @@ function computeInboundAllocationForFocus(focusUuid) {
   };
 }
 
+function selectInboundEdgesForRender(rows) {
+  const all = Array.isArray(rows) ? rows : [];
+  const strong = all.filter((r) => (r?.share ?? 0) >= MIN_INBOUND_SHARE);
+  const out = strong.slice(0, MAX_INBOUND_LINES);
+  if (out.length >= MIN_INBOUND_LINES) return out;
+  // Guarantee a minimum number of inbound lines so the view never feels empty.
+  return all.slice(0, Math.min(MAX_INBOUND_LINES, MIN_INBOUND_LINES));
+}
+
 function computeReachableFromOutputs({ neuronsByUuid, synapses }) {
   // Directed reachability: which nodes can influence outputs?
   // If a node is reachable by traversing inbound edges from an output, then it
@@ -668,6 +752,7 @@ function computePositionsForFocus({
   points,
   adjacency,
   focusUuid,
+  backUuid,
   maxDepth,
   ringStep,
   farRadius,
@@ -712,7 +797,13 @@ function computePositionsForFocus({
 
     positions[i * 3 + 0] = Math.cos(theta) * sinPhi * r;
     positions[i * 3 + 1] = cosPhi * r;
-    positions[i * 3 + 2] = Math.sin(theta) * sinPhi * r;
+    // FPS-like depth bias: keep most stars in front (z-) so the focus reads as
+    // "you are here" and linked nodes feel further away, not closer.
+    const rawZ = Math.sin(theta) * sinPhi * r;
+    const depthBias = layer * 6;
+    positions[i * 3 + 2] = (backUuid && uuid === backUuid)
+      ? (Math.abs(rawZ) + 24)
+      : (-Math.abs(rawZ) - depthBias);
   }
 
   return positions;
@@ -933,7 +1024,7 @@ class StarfieldRenderer {
         vDepth = -viewPos.z;
         gl_Position = uProj * viewPos;
 
-        // Perspective-ish size: closer stars are bigger.
+        // Perspective-ish size: closer neurons are bigger.
         float depthScale = clamp(140.0 / max(6.0, vDepth), 0.5, 6.0);
         gl_PointSize = (aSize + 8.0 * aFocus) * depthScale * uPixelRatio;
         vCol = aCol;
@@ -1254,7 +1345,7 @@ class StarfieldRenderer {
       gl.drawArrays(gl.LINES, 0, this.lineCount);
     }
 
-    // Then draw stars.
+    // Then draw neurons.
     gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uProj, false, proj);
     gl.uniformMatrix4fv(this.uView, false, view);
@@ -1339,9 +1430,11 @@ class StarfieldRenderer {
   }
 
   setFocus(idx) {
+    const prevIdx = this.focusIndex;
+    const prevMeta = prevIdx >= 0 ? (this.meta[prevIdx] ?? null) : null;
     this.focusIndex = idx;
     this.updateFocusFlag(idx);
-    this.onFocusChanged?.(idx, this.meta[idx] ?? null);
+    this.onFocusChanged?.(idx, this.meta[idx] ?? null, prevIdx, prevMeta);
   }
 }
 
@@ -1360,6 +1453,169 @@ let inboundAdjacency = null;
 
 /** @type {"impact"|"paths"|"neighbourhood"} */
 let viewMode = "impact";
+
+/** @type {string[]} */
+let focusTrail = [];
+/** @type {string[]} */
+let outputPathToFocus = [];
+let inboundTotalCount = 0;
+let inboundRenderedCount = 0;
+
+function updateBackButtonState() {
+  const btn = el.backBtn;
+  if (!(btn instanceof HTMLButtonElement)) return;
+  btn.disabled = focusTrail.length < 2;
+}
+
+function focusTrailTitle() {
+  if (!focusTrail.length) return "";
+  // Newest last (the current focus is at the end).
+  return `\n\nHistory: ${focusTrail.join(" → ")}`;
+}
+
+function normaliseFocusTrailForCurrentFocus(focusUuid) {
+  if (!focusUuid) return;
+  if (!focusTrail.length) {
+    focusTrail = [focusUuid];
+    return;
+  }
+  // If the user jumps to a non-neighbour (not linked by any synapse), reset the
+  // trail. This keeps the "path home" meaningful for NEAT navigation, where the
+  // user generally traverses synapses step-by-step.
+  const prevUuid = focusTrail[focusTrail.length - 1] ?? null;
+  if (prevUuid && adjacency) {
+    const prevNeigh = adjacency.get(String(prevUuid)) ?? new Set();
+    if (!prevNeigh.has(String(focusUuid))) {
+      focusTrail = [focusUuid];
+      return;
+    }
+  }
+  // Keep the current focus as the last element.
+  const last = focusTrail[focusTrail.length - 1];
+  if (last !== focusUuid) focusTrail.push(focusUuid);
+  if (focusTrail.length > MAX_FOCUS_TRAIL) {
+    focusTrail = focusTrail.slice(-MAX_FOCUS_TRAIL);
+  }
+}
+
+function navigateBack() {
+  if (!renderer || !points) return false;
+  if (focusTrail.length < 2) return false;
+
+  // Remove current focus and go to the previous.
+  focusTrail.pop();
+  const targetUuid = focusTrail[focusTrail.length - 1] ?? null;
+  if (!targetUuid) return false;
+
+  const idx = points.indexByUuid.get(String(targetUuid));
+  if (idx == null) return false;
+
+  renderer.setFocus(idx);
+  updateBackButtonState();
+  return true;
+}
+
+function getTrailIndexPairs() {
+  if (!points || focusTrail.length < 2) return [];
+  /** @type {{ ia: number, ib: number, aUuid: string, bUuid: string }[]} */
+  const out = [];
+  for (let i = 0; i < focusTrail.length - 1; i++) {
+    const a = focusTrail[i] ?? null;
+    const b = focusTrail[i + 1] ?? null;
+    if (!a || !b) continue;
+    const ia = points.indexByUuid.get(String(a));
+    const ib = points.indexByUuid.get(String(b));
+    if (ia == null || ib == null) continue;
+    out.push({ ia, ib, aUuid: String(a), bUuid: String(b) });
+  }
+  return out;
+}
+
+function appendTrailLines({ linePos, lineCol, p, c, positions, alpha = 0.55 }) {
+  const pairs = getTrailIndexPairs();
+  if (!pairs.length) return { p, c };
+  // "You are here" cyan, but only when the focus trail step corresponds to an
+  // actual synapse. This keeps the overlay faithful to the NEAT graph.
+  const base = [0.35, 0.95, 1.0];
+  for (const { ia, ib, aUuid, bUuid } of pairs) {
+    const info = edgeInfoBetween(edgeByDir, aUuid, bUuid);
+    if (!info) continue;
+
+    const ax = positions[ia * 3 + 0];
+    const ay = positions[ia * 3 + 1];
+    const az = positions[ia * 3 + 2];
+    const bx = positions[ib * 3 + 0];
+    const by = positions[ib * 3 + 1];
+    const bz = positions[ib * 3 + 2];
+
+    linePos[p++] = ax;
+    linePos[p++] = ay;
+    linePos[p++] = az;
+    linePos[p++] = bx;
+    linePos[p++] = by;
+    linePos[p++] = bz;
+
+    for (let k = 0; k < 2; k++) {
+      lineCol[c++] = base[0];
+      lineCol[c++] = base[1];
+      lineCol[c++] = base[2];
+      // Slightly scale alpha by edge strength so the trail feels "synapse-like".
+      const s01 = edgeStrength01(info);
+      lineCol[c++] = alpha * (0.6 + 0.4 * s01);
+    }
+  }
+  return { p, c };
+}
+
+function appendOutputPathLines({
+  linePos,
+  lineCol,
+  p,
+  c,
+  positions,
+  pathUuids,
+  alpha = 0.85,
+}) {
+  if (!points || !pathUuids?.length || pathUuids.length < 2) return { p, c };
+  const base = [0.35, 0.95, 1.0]; // bright cyan "route"
+  // Draw consecutive edges along the path.
+  for (let i = 0; i < pathUuids.length - 1; i++) {
+    const a = pathUuids[i];
+    const b = pathUuids[i + 1];
+    if (!a || !b) continue;
+    const ia = points.indexByUuid.get(String(a));
+    const ib = points.indexByUuid.get(String(b));
+    if (ia == null || ib == null) continue;
+
+    // Ensure this step is an actual synapse (in either direction).
+    const info = edgeInfoBetween(edgeByDir, a, b);
+    if (!info) continue;
+
+    const ax = positions[ia * 3 + 0];
+    const ay = positions[ia * 3 + 1];
+    const az = positions[ia * 3 + 2];
+    const bx = positions[ib * 3 + 0];
+    const by = positions[ib * 3 + 1];
+    const bz = positions[ib * 3 + 2];
+
+    linePos[p++] = ax;
+    linePos[p++] = ay;
+    linePos[p++] = az;
+    linePos[p++] = bx;
+    linePos[p++] = by;
+    linePos[p++] = bz;
+
+    const s01 = edgeStrength01(info);
+    const aOut = alpha * (0.7 + 0.3 * s01);
+    for (let k = 0; k < 2; k++) {
+      lineCol[c++] = base[0];
+      lineCol[c++] = base[1];
+      lineCol[c++] = base[2];
+      lineCol[c++] = aOut;
+    }
+  }
+  return { p, c };
+}
 
 function exposeDebugApi() {
   // Expose a small, stable debug API so Playwright can verify exploration flows
@@ -1413,6 +1669,9 @@ function exposeDebugApi() {
         }
         return best;
       },
+      getFocusTrail: () => focusTrail.slice(),
+      goBack: () => navigateBack(),
+      getOutputPathToFocus: () => outputPathToFocus.slice(),
     };
   } catch (_e) {
     // No-op.
@@ -1467,7 +1726,7 @@ function setFocusBadge(uuid) {
   const alias = getAlias(uuid);
   const desc = getDescription(uuid);
   const title = desc ? `${uuid} — ${desc}` : uuid;
-  el.focusBadge.title = title;
+  el.focusBadge.title = title + focusTrailTitle();
   if (alias) {
     el.focusBadge.innerHTML = `<span class="alias">${
       escapeHtml(alias)
@@ -1531,7 +1790,7 @@ function updateLabelsForFocus(focusUuid, opts) {
   if (!force && now - lastLabelUpdateMs < minIntervalMs) return;
   lastLabelUpdateMs = now;
 
-  // Label the focus and a small, high-signal subset of neighbours only.
+  // Label the focus and a small, high-signal subset of nearby neurons only.
   //
   // Important for iPhone/iPad: creating/updating 100-150 DOM nodes per frame can
   // tank performance. Keep the label set small and stable.
@@ -1542,7 +1801,10 @@ function updateLabelsForFocus(focusUuid, opts) {
       .slice(0, maxNeighbourLabels)
       .map((r) => r.fromUuid)
     : neighAll.slice(0, maxNeighbourLabels);
-  const want = [focusUuid, ...neigh];
+  // Always include the (local tail of the) output->focus path so users can see
+  // context without being drowned in hundreds of lines.
+  const pathTail = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
+  const want = Array.from(new Set([focusUuid, ...pathTail, ...neigh]));
 
   /** @type {{ uuid: string, text: string, x: number, y: number, isFocus: boolean, title: string, uuidSuffix: string|null }[]} */
   const out = [];
@@ -1567,7 +1829,7 @@ function updateLabelsForFocus(focusUuid, opts) {
     const isFocus = u === focusUuid;
     const text = labelText(u);
     const title = getDescription(u) ? `${u} — ${getDescription(u)}` : u;
-    // Depth-aware label styling: far stars get smaller + fainter labels.
+    // Depth-aware label styling: far neurons get smaller + fainter labels.
     // `p.depth` is NDC z in [-1, 1], where smaller tends to be closer.
     const depth01 = Math.min(1, Math.max(0, (p.depth + 1) / 2));
     const opacity = isFocus ? 1 : (0.15 + (1 - depth01) * 0.75);
@@ -1591,7 +1853,7 @@ function updateLabelsForFocus(focusUuid, opts) {
 function buildHudForIndex(idx) {
   if (!renderer || !renderer.meta?.length || idx < 0) {
     setHudText(
-      "No focus.\n\nTip: click a star to inspect it. The warmer/glowier stars are more suspicious.",
+      "No focus.\n\nTip: click a neuron to inspect it. The warmer/glowier neurons are more suspicious.",
     );
     return;
   }
@@ -1644,6 +1906,15 @@ function buildHudForIndex(idx) {
   // Synapse summary (top links).
   if (edgeByDir) {
     const focusUuid = m.uuid;
+
+    // Keep the HUD honest: show the true inbound synapse count, and how many we
+    // are rendering (noise-filtered) to avoid overwhelming the view.
+    if (typeof inboundTotalCount === "number" && inboundTotalCount > 0) {
+      const r = typeof inboundRenderedCount === "number"
+        ? inboundRenderedCount
+        : 0;
+      lines.push(`Inbound: ${inboundTotalCount} (rendering ${r})`);
+    }
 
     if (viewMode === "impact") {
       const alloc = computeInboundAllocationForFocus(focusUuid);
@@ -1744,7 +2015,7 @@ async function loadSnapshot(source, label) {
       graph.synapses,
     );
 
-    // Build star points and feed the renderer.
+    // Build neuron points and feed the renderer.
     points = buildStarPoints({
       snapshot: obj,
       neuronsByUuid: graph.neuronsByUuid,
@@ -1753,10 +2024,13 @@ async function loadSnapshot(source, label) {
 
     const focusIdx = pickDefaultFocusIndex(points, graph.neuronsByUuid);
     const focusUuid = focusIdx >= 0 ? points.meta[focusIdx]?.uuid : null;
+    focusTrail = focusUuid ? [focusUuid] : [];
+    updateBackButtonState();
     const positions = computePositionsForFocus({
       points,
       adjacency,
       focusUuid,
+      backUuid: null,
       maxDepth: FOCUS_MAX_DEPTH,
       ringStep: FOCUS_RING_STEP,
       farRadius: FOCUS_FAR_RADIUS,
@@ -1787,7 +2061,25 @@ async function loadSnapshot(source, label) {
 }
 
 function initStarfield() {
-  initThemeMode({ toggleButtonId: "themeToggle" });
+  // Hard-lock Starfield to dark mode for now.
+  //
+  // iPhone/Safari reports have shown the light theme can make stars/lines too
+  // subtle to see, which defeats the purpose of this view. Locking dark mode
+  // keeps contrast high and behaviour predictable while we iterate.
+  try {
+    document.documentElement.setAttribute("data-theme", "dark");
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    for (const meta of metas) meta.setAttribute("content", "#0a0e1a");
+    const btn = document.getElementById("themeToggle");
+    if (btn instanceof HTMLButtonElement) {
+      btn.disabled = true;
+      btn.textContent = "☾";
+      btn.title = "Theme: Dark (locked)";
+      btn.setAttribute("aria-label", btn.title);
+    }
+  } catch (_e) {
+    // No-op.
+  }
 
   // Mode toggle (Impact Flow vs Neighbourhood).
   if (el.modeToggle) {
@@ -1814,20 +2106,55 @@ function initStarfield() {
         renderer.onFocusChanged?.(
           renderer.focusIndex,
           renderer.meta[renderer.focusIndex],
+          renderer.focusIndex,
+          renderer.meta[renderer.focusIndex] ?? null,
         );
       }
     });
   }
+
+  // Back (focus trail).
+  if (el.backBtn instanceof HTMLButtonElement) {
+    el.backBtn.addEventListener("click", () => {
+      navigateBack();
+    });
+    updateBackButtonState();
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace") return;
+    // Don't steal Backspace when typing in inputs.
+    const t = e.target;
+    const tag = String(t?.tagName ?? "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    navigateBack();
+  });
 
   if (!(el.canvas instanceof HTMLCanvasElement)) {
     throw new Error("Missing #glCanvas");
   }
   renderer = new StarfieldRenderer(el.canvas);
   exposeDebugApi();
-  renderer.onFocusChanged = (idx, m) => {
+  renderer.onFocusChanged = (idx, m, _prevIdx, prevMeta) => {
     // Re-centre the whole neighbourhood around the newly focused neuron.
     const focusUuid = m?.uuid ?? null;
+    normaliseFocusTrailForCurrentFocus(focusUuid);
+    updateBackButtonState();
     if (points && adjacency && focusUuid) {
+      const backUuid = (focusTrail.length >= 2)
+        ? (focusTrail[focusTrail.length - 2] ?? null)
+        : (prevMeta?.uuid ?? null);
+      outputPathToFocus = (graph?.neuronsByUuid && inboundAdjacency)
+        ? computeOutputPathToFocus({
+          neuronsByUuid: graph.neuronsByUuid,
+          inboundAdj: inboundAdjacency,
+          focusUuid,
+        })
+        : [];
+      // Keep only the local tail of the output->focus path (avoid clutter).
+      // This keeps the path readable even when the focus is far upstream.
+      outputPathToFocus = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
       // Paths mode needs both the upstream positions (for rendering) and the BFS
       // distances (for selecting which upstream edges to render). Computing the
       // upstream layout is relatively expensive, so do it once and reuse.
@@ -1836,6 +2163,7 @@ function initStarfield() {
           points,
           inboundAdj: inboundAdjacency,
           focusUuid,
+          backUuid,
           maxDepth: UPSTREAM_MAX_DEPTH,
           ringStep: FOCUS_RING_STEP,
           farRadius: FOCUS_FAR_RADIUS,
@@ -1848,29 +2176,37 @@ function initStarfield() {
           points,
           adjacency,
           focusUuid,
+          backUuid,
           maxDepth: FOCUS_MAX_DEPTH,
           ringStep: FOCUS_RING_STEP,
           farRadius: FOCUS_FAR_RADIUS,
         });
       renderer.updatePositions(positions);
-      // Update synapse lines to direct neighbours.
+      // Update synapse lines: show (1) top inbound synapses into focus, and (2)
+      // the output->focus path (shortest-hop route) for context.
       if (edgeByDir) {
         if (upstreamLayout) {
-          const edges = buildUpstreamEdgesForFocus({
-            focusUuid,
-            inboundAdj: inboundAdjacency,
-            dist: upstreamLayout.dist,
-            maxDepth: UPSTREAM_MAX_DEPTH,
-          });
+          const alloc = computeInboundAllocationForFocus(focusUuid);
+          inboundTotalCount = alloc.rows.length;
+          const inbound = selectInboundEdgesForRender(alloc.rows);
+          inboundRenderedCount = inbound.length;
 
-          const linePos = new Float32Array(edges.length * 2 * 3);
-          const lineCol = new Float32Array(edges.length * 2 * 4);
+          // Reserve space for inbound + path (and no longer render the full
+          // upstream subgraph, which can be extremely dense).
+          const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+          const linePos = new Float32Array(
+            (inbound.length + pathEdges) * 2 * 3,
+          );
+          const lineCol = new Float32Array(
+            (inbound.length + pathEdges) * 2 * 4,
+          );
           let p = 0;
           let c = 0;
 
-          for (const e of edges) {
-            const iFrom = points.indexByUuid.get(e.fromUuid);
-            const iTo = points.indexByUuid.get(e.toUuid);
+          // Inbound synapses: upstream -> focus (in upstream layout coords).
+          for (const r of inbound) {
+            const iFrom = points.indexByUuid.get(r.fromUuid);
+            const iTo = points.indexByUuid.get(r.toUuid);
             if (iFrom == null || iTo == null) continue;
 
             const fx = upstreamLayout.positions[iFrom * 3 + 0];
@@ -1887,14 +2223,10 @@ function initStarfield() {
             linePos[p++] = ty;
             linePos[p++] = tz;
 
-            const positive = (e.weight ?? 0) >= 0;
+            const positive = (r.weight ?? 0) >= 0;
             const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
-            const s01 = e.share != null
-              ? clamp(Math.sqrt(Math.max(0, e.share)) * 2.2, 0, 1)
-              : edgeStrength01(
-                edgeInfoBetween(edgeByDir, e.fromUuid, e.toUuid),
-              );
-            const a = 0.05 + 0.85 * s01;
+            const s01 = clamp(Math.sqrt(Math.max(0, r.share ?? 0)) * 2.2, 0, 1);
+            const a = 0.12 + 0.75 * s01;
             for (let k = 0; k < 2; k++) {
               lineCol[c++] = base[0];
               lineCol[c++] = base[1];
@@ -1902,31 +2234,41 @@ function initStarfield() {
               lineCol[c++] = a;
             }
           }
+
+          ({ p, c } = appendOutputPathLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions: upstreamLayout.positions,
+            pathUuids: outputPathToFocus,
+            alpha: 0.95,
+          }));
           renderer.updateLines(linePos, lineCol);
         } else {
-          const neigh = viewMode === "impact"
-            ? getInboundFromUuidsForFocus(focusUuid)
-            : Array.from(adjacency.get(focusUuid) ?? []);
-          const linePos = new Float32Array(neigh.length * 2 * 3);
-          const lineCol = new Float32Array(neigh.length * 2 * 4);
+          const alloc = computeInboundAllocationForFocus(focusUuid);
+          inboundTotalCount = alloc.rows.length;
+          const inbound = selectInboundEdgesForRender(alloc.rows);
+          inboundRenderedCount = inbound.length;
+          const pathEdges = Math.max(0, outputPathToFocus.length - 1);
+
+          const linePos = new Float32Array(
+            (inbound.length + pathEdges) * 2 * 3,
+          );
+          const lineCol = new Float32Array(
+            (inbound.length + pathEdges) * 2 * 4,
+          );
           let p = 0;
           let c = 0;
 
-          // Precompute impact allocations (so line alpha reflects contribution).
-          const alloc = viewMode === "impact"
-            ? computeInboundAllocationForFocus(focusUuid)
-            : null;
-          const allocByFrom = alloc
-            ? new Map(alloc.rows.map((r) => [r.fromUuid, r]))
-            : new Map();
-
-          for (const u of neigh) {
-            const j = points.indexByUuid.get(u);
+          // Inbound synapses: focus origin -> upstream node.
+          for (const r of inbound) {
+            const j = points.indexByUuid.get(r.fromUuid);
             if (j == null) continue;
             const x = positions[j * 3 + 0];
             const y = positions[j * 3 + 1];
             const z = positions[j * 3 + 2];
-            // From focus origin to neighbour.
+
             linePos[p++] = 0;
             linePos[p++] = 0;
             linePos[p++] = 0;
@@ -1934,16 +2276,10 @@ function initStarfield() {
             linePos[p++] = y;
             linePos[p++] = z;
 
-            const info = edgeInfoBetween(edgeByDir, focusUuid, u);
-            const allocRow = allocByFrom.get(u) ?? null;
-            const s01 = viewMode === "impact"
-              ? clamp(Math.sqrt(Math.max(0, allocRow?.share ?? 0)) * 2.2, 0, 1)
-              : edgeStrength01(info);
-            const w = info?.weight ?? 0;
-            const positive = w >= 0;
+            const positive = (r.weight ?? 0) >= 0;
             const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
+            const s01 = clamp(Math.sqrt(Math.max(0, r.share ?? 0)) * 2.2, 0, 1);
             const a = 0.12 + 0.75 * s01;
-            // Same colour for both endpoints.
             for (let k = 0; k < 2; k++) {
               lineCol[c++] = base[0];
               lineCol[c++] = base[1];
@@ -1951,6 +2287,16 @@ function initStarfield() {
               lineCol[c++] = a;
             }
           }
+
+          ({ p, c } = appendOutputPathLines({
+            linePos,
+            lineCol,
+            p,
+            c,
+            positions,
+            pathUuids: outputPathToFocus,
+            alpha: 0.95,
+          }));
           renderer.updateLines(linePos, lineCol);
         }
       }
