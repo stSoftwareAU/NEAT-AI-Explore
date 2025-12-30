@@ -3,7 +3,15 @@
 A static HTML/JS/CSS viewer for exploring NEAT-AI creature snapshots. This is a
 debug tool for investigating why discovery candidates fail or succeed.
 
-[Example](https://stsoftwareau.github.io/NEAT-AI-Explore/?snapshotUrl=https://stsoftwareau.github.io/NEAT-AI-Explore/snapshot.json.gz)
+## Try it now (example snapshot)
+
+- **Explorer (trace view)**:
+  [Open Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/)
+- **Starfield (3D neighbourhood view)**:
+  [Open Starfield on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/starfield/)
+
+Both views **auto-load the default snapshot** on first open, so you can click
+straight in.
 
 ## GitHub Pages + PWA
 
@@ -61,9 +69,9 @@ human-facing version number. See [SemVer](https://semver.org/).
 
 ### Default snapshot (PWA-friendly)
 
-When opened with **no query parameters**, the app now **auto-loads**
-`snapshot.json.gz`. This makes the installed PWA usable on iPhone/iPad without
-needing the file picker.
+When opened with **no query parameters**, the app now **auto-loads** the default
+snapshot URL (hosted via GitHub Pages). This makes the installed PWA usable on
+iPhone/iPad without needing the file picker.
 
 ### Tooltips (single-file snapshots)
 
@@ -105,7 +113,8 @@ Also note:
 
 ## What the Explorer shows (example snapshot)
 
-This repo ships with an example snapshot at `docs/snapshot.json.gz`.
+The published app auto-loads a default snapshot (hosted separately so this repo
+doesn't churn with large snapshot artefacts).
 
 Some interesting findings from that snapshot:
 
@@ -261,49 +270,6 @@ Outputs:
 - `docs/screenshots/ipad-inbound-modal.png`
 
 Last updated: 20-Dec-2025
-
-## Creating a public GitHub repo (next to `../NEAT-AI`)
-
-This folder already exists at: `~/Develop/NEAT-AI-Explore`
-
-To publish it as a **public** GitHub repo:
-
-1. Create a new repo on GitHub (e.g. `NEAT-AI-Explore`) or use the GitHub CLI.
-2. From this directory:
-
-```bash
-cd ~/Develop/NEAT-AI-Explore
-git init
-git add .
-git commit -m "Initial commit"
-
-# Option A (recommended): GitHub CLI
-gh repo create NEAT-AI-Explore --public --source=. --remote=origin --push
-
-# Option B: manual remote
-# git remote add origin git@github.com:stSoftwareAU/NEAT-AI-Explore.git
-# git branch -M Develop
-# git push -u origin Develop
-```
-
-Then enable GitHub Pages:
-
-- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub
-  Actions**
-
-### Fixing `configure-pages` "HttpError: Not Found" on first deploy
-
-If the workflow fails with: `Get Pages site failed ... HttpError: Not Found`
-
-It usually means GitHub Pages has not been enabled for the repository yet (or
-the organisation requires it to be enabled manually).
-
-Fix:
-
-- Repo → **Settings** → **Pages** → **Build and deployment** → **Source: GitHub
-  Actions**
-
-Then re-run the workflow (or push again to `Develop`).
 
 ## Licence
 
