@@ -39,7 +39,13 @@ Deno.test("app defaults to loading snapshot.json.gz (no leading ./)", async () =
   const p = repoPath("docs", "app.js");
   const js = await Deno.readTextFile(p);
   assert(
-    js.includes('const DEFAULT_SNAPSHOT_URL = "snapshot.json.gz";'),
-    `Expected ${p} to define DEFAULT_SNAPSHOT_URL as snapshot.json.gz`,
+    js.includes(
+      'const DEFAULT_SNAPSHOT_URL =\n  "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz";',
+    ),
+    `Expected ${p} to default to the NEAT-AI-Snapshot GitHub Pages URL`,
+  );
+  assert(
+    !js.includes('const DEFAULT_SNAPSHOT_URL = "./snapshot.json.gz";'),
+    `Did not expect ${p} to default to "./snapshot.json.gz" (some static hosts treat "/./file" as distinct)`,
   );
 });

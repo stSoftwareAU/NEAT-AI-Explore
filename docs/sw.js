@@ -91,6 +91,20 @@ function isSameOrigin(url) {
   }
 }
 
+function isAllowedSnapshotOrigin(url) {
+  // We allow cross-origin snapshot caching for the official Snapshot hosts so
+  // the app can work offline while keeping the rest of the cache same-origin.
+  try {
+    const origin = new URL(url).origin;
+    if (origin === self.location.origin) return true;
+    if (origin === "https://stsoftwareau.github.io") return true;
+    if (origin === "https://raw.githubusercontent.com") return true;
+  } catch {
+    // Fall through.
+  }
+  return false;
+}
+
 function isJsonRequest(request) {
   const url = new URL(request.url);
   return url.pathname.endsWith(".json") ||
@@ -110,7 +124,9 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   const cache = await caches.open(RUNTIME_CACHE);
   try {
-    const res = await fetch(request, { cache: "no-store" });
+    // Use revalidation semantics so fresh snapshots are used when possible, but
+    // cached snapshots remain available offline.
+    const res = await fetch(request, { cache: "no-cache" });
     if (res && res.ok) cache.put(request, res.clone());
     return res;
   } catch {
@@ -124,10 +140,17 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
   if (!request.url.startsWith("http")) return;
-  if (!isSameOrigin(request.url)) return;
+  const sameOrigin = isSameOrigin(request.url);
+  const allowedSnapshotOrigin = isAllowedSnapshotOrigin(request.url);
+
+  // Only handle:
+  // - same-origin navigation/static assets
+  // - allowed snapshot origins for .json/.json.gz requests
+  if (!sameOrigin && !(allowedSnapshotOrigin && isJsonRequest(request))) return;
 
   // Navigation -> cached index.html as app shell.
   if (request.mode === "navigate") {
+    if (!sameOrigin) return;
     event.respondWith(cacheFirst("./index.html"));
     return;
   }
@@ -139,5 +162,6 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Everything else (css/js/images/manifest) -> cache first.
+  if (!sameOrigin) return;
   event.respondWith(cacheFirst(request));
 });

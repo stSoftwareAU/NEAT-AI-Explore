@@ -54,11 +54,27 @@ let lastInboundPage = 0;
 const INBOUND_PAGE_SIZE = 200;
 
 // Default snapshot used when the app is opened without a URL parameter.
-// This keeps the PWA immediately usable on iPhone/iPad without needing a file
-// picker (which can be awkward in standalone mode).
+//
+// We now host the snapshot in a dedicated repo (`NEAT-AI-Snapshot`) published via
+// GitHub Pages. This keeps the Explore repo program-only and avoids churn from
+// committing large binary snapshot artefacts.
+//
+// Offline behaviour:
+// - When online, we try to fetch the latest snapshot and cache it.
+// - When offline, we fall back to cached snapshots (Cache Storage).
+//
 // Note: avoid a leading "./" because some static hosts treat "/./file" as a
 // distinct path (and may 404) rather than normalising it.
-const DEFAULT_SNAPSHOT_URL = "snapshot.json.gz";
+const DEFAULT_SNAPSHOT_URL =
+  "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz";
+
+// Fallbacks used when GitHub Pages is blocked by CORS on some networks.
+// `raw.githubusercontent.com` typically ships permissive CORS headers.
+const SNAPSHOT_FALLBACK_URLS = [
+  "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/Develop/docs/snapshot.json.gz",
+  "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/main/docs/snapshot.json.gz",
+  "snapshot.json.gz", // last resort: same-origin (if present)
+];
 
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1
@@ -431,6 +447,20 @@ function isSameOriginUrl(url) {
   }
 }
 
+function isSnapshotCacheAllowedUrl(url) {
+  // We cache same-origin snapshots and the official Snapshot hosts so the app
+  // remains usable offline without caching arbitrary third-party URLs.
+  try {
+    const u = new URL(String(url), window.location.href);
+    if (u.origin === window.location.origin) return true;
+    if (u.origin === "https://stsoftwareau.github.io") return true;
+    if (u.origin === "https://raw.githubusercontent.com") return true;
+  } catch (_e) {
+    // Fall through.
+  }
+  return false;
+}
+
 // Cache metadata transport between `fetchJson` and `loadSnapshot`.
 //
 // IMPORTANT: Use a Symbol so this cannot collide with user snapshot JSON keys
@@ -448,7 +478,7 @@ function maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason) {
 
 async function fetchJson(url) {
   const u = normaliseSnapshotUrl(url);
-  const canUseCacheFallback = isSameOriginUrl(u) &&
+  const canUseCacheFallback = isSnapshotCacheAllowedUrl(u) &&
     typeof caches !== "undefined" &&
     typeof caches.match === "function";
 
@@ -458,7 +488,9 @@ async function fetchJson(url) {
 
   // Network-first: always attempt the fresh version when possible.
   try {
-    res = await fetch(u, { cache: "no-store" });
+    // `no-cache` tells the browser to revalidate when possible, while still
+    // allowing offline use of cached responses when the network is down.
+    res = await fetch(u, { cache: "no-cache" });
   } catch (e) {
     // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
     // fetch() rejects with TypeError("Failed to fetch") in that case.
@@ -470,6 +502,19 @@ async function fetchJson(url) {
       throw new Error(
         "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
       );
+    }
+
+    // GitHub Pages can be blocked by CORS on some networks. If the default
+    // snapshot URL fails, try the known fallbacks.
+    if (String(url) === DEFAULT_SNAPSHOT_URL) {
+      for (const fallback of SNAPSHOT_FALLBACK_URLS) {
+        if (!fallback || fallback === url) continue;
+        try {
+          return await fetchJson(fallback);
+        } catch (_e2) {
+          // Keep trying.
+        }
+      }
     }
 
     // Offline/unstable network: fall back to Cache Storage when available.
