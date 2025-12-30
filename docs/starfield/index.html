@@ -35,6 +35,16 @@
         <div class="browseGroup">
           <button id="fileBtn" class="button">Browse…</button>
           <button
+            id="backBtn"
+            class="button buttonSecondary"
+            type="button"
+            aria-label="Go back to the previous focus"
+            title="Back (previous focus)"
+            disabled
+          >
+            Back
+          </button>
+          <button
             id="modeToggle"
             class="button buttonSecondary"
             type="button"
@@ -47,10 +57,11 @@
             id="themeToggle"
             class="button buttonSecondary themeToggle"
             type="button"
-            aria-label="Theme mode (tap to cycle)"
-            title="Theme: Auto (tap to cycle)"
+            aria-label="Theme: Dark (locked)"
+            title="Theme: Dark (locked)"
+            disabled
           >
-            A
+            ☾
           </button>
         </div>
         <div
@@ -83,13 +94,14 @@
             heavy-tail, prunable)
           </div>
           <div class="legendHint">
-            Click a star to focus · Drag to look · WASD/Arrows to fly
+            Click a neuron to focus · Backspace/Back to go back · Drag to look ·
+            WASD/Arrows to fly
           </div>
         </div>
       </aside>
       <div class="help">
-        Drag to look · Wheel to zoom · WASD/Arrows to fly · Click a star to
-        focus
+        Drag to look · Wheel to zoom · WASD/Arrows to fly · Click a neuron to
+        focus · Backspace/Back to go back
       </div>
     </main>
 

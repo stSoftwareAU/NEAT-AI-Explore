@@ -130,6 +130,16 @@ html, body {
   border-color: var(--accent);
 }
 
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:disabled:hover {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: var(--border);
+}
+
 .buttonSecondary {
   background: var(--buttonSecondaryBg);
 }
