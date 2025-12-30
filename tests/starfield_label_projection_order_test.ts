@@ -28,11 +28,17 @@ Deno.test("starfield forces label projection after layout changes (Issue #25)", 
   assert(handlerStart >= 0, "Expected a mode toggle click handler.");
 
   const handlerEnd = js.indexOf("});", handlerStart);
-  assert(handlerEnd > handlerStart, "Expected to find end of mode toggle handler.");
+  assert(
+    handlerEnd > handlerStart,
+    "Expected to find end of mode toggle handler.",
+  );
 
   const handler = js.slice(handlerStart, handlerEnd);
   const focusChangedIdx = handler.indexOf("renderer.onFocusChanged");
-  assert(focusChangedIdx >= 0, "Expected mode toggle handler to call onFocusChanged.");
+  assert(
+    focusChangedIdx >= 0,
+    "Expected mode toggle handler to call onFocusChanged.",
+  );
 
   const beforeFocusChanged = handler.slice(0, focusChangedIdx);
   assert(
@@ -40,5 +46,3 @@ Deno.test("starfield forces label projection after layout changes (Issue #25)", 
     "Expected mode toggle handler not to update labels before onFocusChanged recomputes positions.",
   );
 });
-
-

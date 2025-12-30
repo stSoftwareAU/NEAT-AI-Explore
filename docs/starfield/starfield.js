@@ -1456,6 +1456,10 @@ function setHudText(s) {
 
 function setFocusBadge(uuid) {
   if (!el.focusBadge) return;
+  // Avoid stale hover tooltips when focus changes (or is cleared). The badge's
+  // child spans don't always carry a `title`, so the outer element must be
+  // cleared/updated consistently.
+  el.focusBadge.title = "";
   if (!uuid) {
     el.focusBadge.textContent = "";
     return;
@@ -1463,15 +1467,13 @@ function setFocusBadge(uuid) {
   const alias = getAlias(uuid);
   const desc = getDescription(uuid);
   const title = desc ? `${uuid} — ${desc}` : uuid;
+  el.focusBadge.title = title;
   if (alias) {
-    el.focusBadge.innerHTML = `<span class="alias" title="${
-      escapeHtml(title)
-    }">${escapeHtml(alias)}</span><span class="uuid">${
-      escapeHtml(uuid)
-    }</span>`;
+    el.focusBadge.innerHTML = `<span class="alias">${
+      escapeHtml(alias)
+    }</span><span class="uuid">${escapeHtml(uuid)}</span>`;
   } else {
     el.focusBadge.textContent = uuid;
-    el.focusBadge.title = title;
   }
 }
 
