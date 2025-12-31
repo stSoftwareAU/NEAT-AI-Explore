@@ -34,20 +34,32 @@
     <header class="appHeader">
       <h1>NEAT-AI Graph</h1>
       <div class="headerControls">
-        <input
-          id="fetchUrl"
-          class="input"
-          placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
-        />
-        <button id="fetchBtn" class="button">Fetch</button>
-        <input
-          id="fileInput"
-          type="file"
-          accept="application/json,.json,.gz,application/gzip,application/x-gzip"
-          style="display: none"
-        />
+        <details id="snapshotDetails" class="snapshotDetails" open>
+          <summary
+            class="button buttonSecondary buttonSmall snapshotSummary"
+            aria-label="Snapshot loader"
+            title="Snapshot loader"
+          >
+            Snapshot
+          </summary>
+          <div class="snapshotPanel" role="group" aria-label="Snapshot loader">
+            <input
+              id="fetchUrl"
+              class="input"
+              placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+            />
+            <button id="fetchBtn" class="button">Fetch</button>
+            <input
+              id="fileInput"
+              type="file"
+              accept="application/json,.json,.gz,application/gzip,application/x-gzip"
+              style="display: none"
+            />
+            <button id="fileBtn" class="button">Browse…</button>
+          </div>
+        </details>
+
         <div class="browseGroup">
-          <button id="fileBtn" class="button">Browse…</button>
           <button
             id="backBtn"
             class="button buttonSecondary"
@@ -66,16 +78,6 @@
             title="Mode: Impact Flow (tap to toggle)"
           >
             Impact
-          </button>
-          <button
-            id="themeToggle"
-            class="button buttonSecondary themeToggle"
-            type="button"
-            aria-label="Theme: Dark (locked)"
-            title="Theme: Dark (locked)"
-            disabled
-          >
-            ☾
           </button>
         </div>
         <div
