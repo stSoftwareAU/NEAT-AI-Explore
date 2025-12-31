@@ -22,8 +22,8 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 Deno.test("starfield supports back navigation + focus trail (path home)", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
-  const htmlPath = repoPath("docs", "starfield", "index.html");
+  const jsPath = repoPath("docs", "graph", "graph.js");
+  const htmlPath = repoPath("docs", "graph", "index.html");
 
   const js = await Deno.readTextFile(jsPath);
   const html = await Deno.readTextFile(htmlPath);
@@ -71,7 +71,7 @@ Deno.test("starfield supports back navigation + focus trail (path home)", async 
 });
 
 Deno.test("starfield uses an FPS-like depth bias for initial focus view", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
   assert(

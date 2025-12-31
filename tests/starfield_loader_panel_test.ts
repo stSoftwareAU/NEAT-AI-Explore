@@ -11,7 +11,7 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("graph explorer collapses loader controls after snapshot loads (Issue #37, 31-Dec-2025)", async () => {
-  const htmlPath = repoPath("docs", "starfield", "index.html");
+  const htmlPath = repoPath("docs", "graph", "index.html");
   const html = await Deno.readTextFile(htmlPath);
 
   assert(
@@ -23,7 +23,7 @@ Deno.test("graph explorer collapses loader controls after snapshot loads (Issue 
     `Expected ${htmlPath} to include a Snapshot summary label`,
   );
 
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
   assert(

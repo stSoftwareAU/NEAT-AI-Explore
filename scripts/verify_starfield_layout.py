@@ -1,15 +1,15 @@
 """
-Verify the Starfield view in a real browser (Playwright).
+Verify the Graph view in a real browser (Playwright).
 
 Captures key screenshots showing:
-- Initial render (starfield)
+- Initial render (graph)
 - Click-to-focus (HUD visible)
 - 3D interaction (drag-to-look + wheel zoom)
 
 Outputs:
-- docs/screenshots/starfield-desktop.png
-- docs/screenshots/starfield-desktop-focus.png
-- docs/screenshots/starfield-desktop-tilt.png
+- docs/screenshots/graph-desktop.png
+- docs/screenshots/graph-desktop-focus.png
+- docs/screenshots/graph-desktop-tilt.png
 
 Last updated: 30-Dec-2025
 """
@@ -68,7 +68,7 @@ def main() -> int:
     port = _free_port()
 
     with _serve_docs(port) as base_url:
-        url = base_url + "starfield/index.html"
+        url = base_url + "graph/index.html"
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
@@ -84,7 +84,7 @@ def main() -> int:
 
             # The key: do not screenshot until the snapshot has loaded.
             #
-            # In starfield.js, successful loads set:
+            # In graph.js, successful loads set:
             # - #status text to "Observations: ..."
             # - and kind "ok" (class: statusInline ok)
             page.wait_for_function(
@@ -128,7 +128,7 @@ def main() -> int:
                 timeout=10_000,
             )
 
-            out0 = out_dir / "starfield-desktop.png"
+            out0 = out_dir / "graph-desktop.png"
             page.screenshot(path=str(out0), full_page=False)
             print(f"Wrote {out0.relative_to(ROOT)}")
 
@@ -162,7 +162,7 @@ def main() -> int:
             )
             page.wait_for_timeout(250)
 
-            out1 = out_dir / "starfield-desktop-focus.png"
+            out1 = out_dir / "graph-desktop-focus.png"
             page.screenshot(path=str(out1), full_page=False)
             print(f"Wrote {out1.relative_to(ROOT)}")
 
@@ -174,7 +174,7 @@ def main() -> int:
             page.mouse.wheel(0, -480)
             page.wait_for_timeout(300)
 
-            out2 = out_dir / "starfield-desktop-tilt.png"
+            out2 = out_dir / "graph-desktop-tilt.png"
             page.screenshot(path=str(out2), full_page=False)
             print(f"Wrote {out2.relative_to(ROOT)}")
 

@@ -31,8 +31,8 @@ Deno.test("helpers/server.ts uses JSR std http file server", async () => {
   );
   assert(
     text.includes("spaEntryPointForPath") &&
-      text.includes("/starfield/index.html"),
-    "Expected helpers/server.ts SPA fallback to route /starfield/ to /starfield/index.html",
+      text.includes("/graph/index.html"),
+    "Expected helpers/server.ts SPA fallback to route /graph/ to /graph/index.html",
   );
 });
 

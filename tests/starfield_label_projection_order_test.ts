@@ -14,7 +14,7 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("starfield forces label projection after layout changes (Issue #25)", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
   // 1) Focus changes must bypass the 100ms throttle so labels use updated positions.

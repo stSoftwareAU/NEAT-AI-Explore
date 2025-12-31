@@ -63,49 +63,49 @@ Deno.test("service worker registers (and is awaited) before app auto-load runs (
 });
 
 Deno.test("service worker registers (and is awaited) before graph explorer auto-load runs (31-Dec-2025)", async () => {
-  const indexPath = repoPath("docs", "starfield", "index.html");
+  const indexPath = repoPath("docs", "graph", "index.html");
   const html = await Deno.readTextFile(indexPath);
 
-  // The graph explorer (starfield) also auto-loads the default snapshot on boot,
+  // The graph explorer also auto-loads the default snapshot on boot,
   // so it must give the service worker time to install/activate before the
   // first fetch runs (especially on iOS/PWA).
   const swRegisterIdx = html.indexOf("navigator.serviceWorker.register");
   const swReadyIdx = html.indexOf("navigator.serviceWorker.ready");
   const promiseRaceIdx = html.indexOf("Promise.race");
   const setTimeoutIdx = html.indexOf("setTimeout");
-  const appImportIdx = html.indexOf('import("./starfield.js?v=__BUILD_ID__")');
+  const appImportIdx = html.indexOf('import("./graph.js?v=__BUILD_ID__")');
 
   assert(
     swRegisterIdx !== -1,
-    "Expected starfield/index.html to register a service worker",
+    "Expected graph/index.html to register a service worker",
   );
   assert(
     swReadyIdx !== -1,
-    "Expected starfield/index.html to await navigator.serviceWorker.ready",
+    "Expected graph/index.html to await navigator.serviceWorker.ready",
   );
   assert(
     promiseRaceIdx !== -1,
-    "Expected starfield/index.html to use Promise.race for SW readiness timeout",
+    "Expected graph/index.html to use Promise.race for SW readiness timeout",
   );
   assert(
     setTimeoutIdx !== -1,
-    "Expected starfield/index.html to use setTimeout for SW readiness timeout",
+    "Expected graph/index.html to use setTimeout for SW readiness timeout",
   );
   assert(
     appImportIdx !== -1,
-    "Expected starfield/index.html to import starfield.js as a module",
+    "Expected graph/index.html to import graph.js as a module",
   );
 
   assert(
     swRegisterIdx < appImportIdx,
-    "Expected service worker registration to occur before importing starfield.js",
+    "Expected service worker registration to occur before importing graph.js",
   );
   assert(
     swReadyIdx < appImportIdx,
-    "Expected service worker readiness to be awaited before importing starfield.js",
+    "Expected service worker readiness to be awaited before importing graph.js",
   );
   assert(
     promiseRaceIdx < appImportIdx,
-    "Expected SW readiness timeout logic to occur before importing starfield.js",
+    "Expected SW readiness timeout logic to occur before importing graph.js",
   );
 });

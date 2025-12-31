@@ -25,7 +25,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 Deno.test("starfield paths mode computes upstream positions once per focus change (Issue #25)", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
   const start = js.indexOf("renderer.onFocusChanged = (idx, m");

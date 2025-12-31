@@ -23,11 +23,11 @@ const STATIC_FILES = [
   "./vendor/fflate.browser.js",
   "./manifest.webmanifest",
   "./favicon.ico",
-  // Starfield view (Issue #25): kept in its own folder to avoid destabilising
-  // the existing explorer view.
-  "./starfield/index.html",
-  `./starfield/starfield.js?v=${VERSION}`,
-  `./starfield/starfield.css?v=${VERSION}`,
+  // Graph view (Issue #25): kept in its own folder to avoid destabilising the
+  // existing explorer view.
+  "./graph/index.html",
+  `./graph/graph.js?v=${VERSION}`,
+  `./graph/graph.css?v=${VERSION}`,
   // Shared modules for multiple views.
   "./shared/snapshot_loader.js",
   "./shared/theme.js",
@@ -162,11 +162,11 @@ self.addEventListener("fetch", (event) => {
     if (!sameOrigin) return;
     // This site has multiple entry points under docs/:
     // - ./index.html (Explorer)
-    // - ./starfield/index.html (Starfield)
+    // - ./graph/index.html (Graph)
     //
     // IMPORTANT: If we always serve "./index.html" for navigation, then visiting
-    // "/starfield/" will load the explorer HTML, and its relative asset URLs
-    // (./styles.css, ./app.js) will resolve under "/starfield/" and 404.
+    // "/graph/" will load the explorer HTML, and its relative asset URLs
+    // (./styles.css, ./app.js) will resolve under "/graph/" and 404.
     // That produces a blank/unstyled page.
     const path = (() => {
       try {
@@ -175,9 +175,9 @@ self.addEventListener("fetch", (event) => {
         return "";
       }
     })();
-    const isStarfieldNav = /\/starfield(\/|$)/.test(path);
+    const isGraphNav = /\/graph(\/|$)/.test(path);
     event.respondWith(
-      cacheFirst(isStarfieldNav ? "./starfield/index.html" : "./index.html"),
+      cacheFirst(isGraphNav ? "./graph/index.html" : "./index.html"),
     );
     return;
   }

@@ -11,8 +11,8 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("starfield uses focus-centric layout (Issue #25)", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
-  const htmlPath = repoPath("docs", "starfield", "index.html");
+  const jsPath = repoPath("docs", "graph", "graph.js");
+  const htmlPath = repoPath("docs", "graph", "index.html");
 
   const js = await Deno.readTextFile(jsPath);
   const html = await Deno.readTextFile(htmlPath);

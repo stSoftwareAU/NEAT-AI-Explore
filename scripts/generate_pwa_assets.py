@@ -283,10 +283,10 @@ def generate_screenshots() -> None:
     iphone_modal_path = SHOTS_DIR / "iphone-inbound-modal.png"
     ipad_modal_path = SHOTS_DIR / "ipad-inbound-modal.png"
 
-    # Starfield / graph view (README).
-    starfield_desktop_path = SHOTS_DIR / "starfield-desktop.png"
-    starfield_focus_path = SHOTS_DIR / "starfield-desktop-focus.png"
-    starfield_tilt_path = SHOTS_DIR / "starfield-desktop-tilt.png"
+    # Graph view (README).
+    graph_desktop_path = SHOTS_DIR / "graph-desktop.png"
+    graph_focus_path = SHOTS_DIR / "graph-desktop-focus.png"
+    graph_tilt_path = SHOTS_DIR / "graph-desktop-tilt.png"
 
     # Always ensure output dir exists.
     SHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -301,9 +301,9 @@ def generate_screenshots() -> None:
         _placeholder_screenshot(iphone_path, (390, 844), "iPhone")
         _placeholder_screenshot(iphone_modal_path, (390, 844), "iPhone (inbound modal)")
         _placeholder_screenshot(ipad_modal_path, (820, 1180), "iPad (inbound modal)")
-        _placeholder_screenshot(starfield_desktop_path, (1280, 720), "Starfield (desktop)")
-        _placeholder_screenshot(starfield_focus_path, (1280, 720), "Starfield (focus HUD)")
-        _placeholder_screenshot(starfield_tilt_path, (1280, 720), "Starfield (tilt)")
+        _placeholder_screenshot(graph_desktop_path, (1280, 720), "Graph (desktop)")
+        _placeholder_screenshot(graph_focus_path, (1280, 720), "Graph (focus HUD)")
+        _placeholder_screenshot(graph_tilt_path, (1280, 720), "Graph (tilt)")
         return
 
     port = _free_port()
@@ -353,10 +353,10 @@ def generate_screenshots() -> None:
                 page.wait_for_selector("#pathModal.isOpen", timeout=10_000)
                 page.wait_for_timeout(150)
 
-            def load_starfield(page, viewport_label: str) -> None:
-                # Starfield currently auto-loads its default snapshot. We just wait
+            def load_graph(page, viewport_label: str) -> None:
+                # The graph view currently auto-loads its default snapshot. We just wait
                 # for the status element to flip to ok/warn so screenshots aren't blank.
-                page.goto(url + "starfield/", wait_until="domcontentloaded")
+                page.goto(url + "graph/", wait_until="domcontentloaded")
                 page.wait_for_function(
                     "() => {"
                     "  const el = document.getElementById('status');"
@@ -371,7 +371,7 @@ def generate_screenshots() -> None:
                         "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2",
                     )
                     if overflow:
-                        print(f"Warning: horizontal overflow detected in {viewport_label} (starfield)")
+                        print(f"Warning: horizontal overflow detected in {viewport_label} (graph)")
                 except Exception:
                     pass
 
@@ -416,10 +416,10 @@ def generate_screenshots() -> None:
             open_inbound_modal(page)
             page.screenshot(path=str(ipad_modal_path), full_page=True)
 
-            # Starfield (README) - desktop shots.
+            # Graph (README) - desktop shots.
             page = browser.new_page(viewport={"width": 1280, "height": 720})
-            load_starfield(page, "Desktop (starfield)")
-            page.screenshot(path=str(starfield_desktop_path), full_page=True)
+            load_graph(page, "Desktop (graph)")
+            page.screenshot(path=str(graph_desktop_path), full_page=True)
 
             # Click near the centre to focus a neuron, then capture the HUD.
             try:
@@ -427,7 +427,7 @@ def generate_screenshots() -> None:
                 page.wait_for_timeout(250)
             except Exception:
                 pass
-            page.screenshot(path=str(starfield_focus_path), full_page=True)
+            page.screenshot(path=str(graph_focus_path), full_page=True)
 
             # Drag to tilt, then capture.
             try:
@@ -438,7 +438,7 @@ def generate_screenshots() -> None:
                 page.wait_for_timeout(200)
             except Exception:
                 pass
-            page.screenshot(path=str(starfield_tilt_path), full_page=True)
+            page.screenshot(path=str(graph_tilt_path), full_page=True)
 
             browser.close()
 

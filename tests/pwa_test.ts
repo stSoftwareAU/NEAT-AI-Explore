@@ -41,9 +41,9 @@ Deno.test("docs PWA files exist", async () => {
   const indexPath = repoPath("docs", "index.html");
   const impactPath = repoPath("docs", "impact_attribution.js");
   const faviconPath = repoPath("docs", "favicon.ico");
-  const starfieldIndexPath = repoPath("docs", "starfield", "index.html");
-  const starfieldJsPath = repoPath("docs", "starfield", "starfield.js");
-  const starfieldCssPath = repoPath("docs", "starfield", "starfield.css");
+  const graphIndexPath = repoPath("docs", "graph", "index.html");
+  const graphJsPath = repoPath("docs", "graph", "graph.js");
+  const graphCssPath = repoPath("docs", "graph", "graph.css");
   const sharedSnapshotLoaderPath = repoPath(
     "docs",
     "shared",
@@ -57,9 +57,9 @@ Deno.test("docs PWA files exist", async () => {
   await Deno.stat(indexPath);
   await Deno.stat(impactPath);
   await Deno.stat(faviconPath);
-  await Deno.stat(starfieldIndexPath);
-  await Deno.stat(starfieldJsPath);
-  await Deno.stat(starfieldCssPath);
+  await Deno.stat(graphIndexPath);
+  await Deno.stat(graphJsPath);
+  await Deno.stat(graphCssPath);
   await Deno.stat(sharedSnapshotLoaderPath);
   await Deno.stat(sharedThemePath);
   await Deno.stat(sharedColourMapsPath);
@@ -98,9 +98,9 @@ Deno.test("service worker caches the app shell", async () => {
       '"./manifest.webmanifest"',
       '"./favicon.ico"',
       '"./icons/icon-192x192.png"',
-      '"./starfield/index.html"',
-      "`./starfield/starfield.js?v=${VERSION}`",
-      "`./starfield/starfield.css?v=${VERSION}`",
+      '"./graph/index.html"',
+      "`./graph/graph.js?v=${VERSION}`",
+      "`./graph/graph.css?v=${VERSION}`",
       '"./shared/snapshot_loader.js"',
       '"./shared/theme.js"',
       '"./shared/colour_maps.js"',
@@ -112,14 +112,14 @@ Deno.test("service worker caches the app shell", async () => {
     );
   }
 
-  // Ensure navigation routing serves the correct app shell for /starfield/.
+  // Ensure navigation routing serves the correct app shell for /graph/.
   assert(
     sw.includes('request.mode === "navigate"'),
     "Expected service worker to handle navigation requests",
   );
   assert(
-    sw.includes("./starfield/index.html"),
-    "Expected service worker to route /starfield/ navigations to ./starfield/index.html",
+    sw.includes("./graph/index.html"),
+    "Expected service worker to route /graph/ navigations to ./graph/index.html",
   );
 });
 
@@ -174,44 +174,44 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
   );
 });
 
-Deno.test("docs/starfield/index.html links manifest and registers service worker", async () => {
-  const indexPath = repoPath("docs", "starfield", "index.html");
+Deno.test("docs/graph/index.html links manifest and registers service worker", async () => {
+  const indexPath = repoPath("docs", "graph", "index.html");
   const html = await Deno.readTextFile(indexPath);
 
   assert(
     html.includes('rel="manifest"'),
-    "Expected docs/starfield/index.html to include a web manifest <link>",
+    "Expected docs/graph/index.html to include a web manifest <link>",
   );
   assert(
     html.includes("../manifest.webmanifest"),
-    'Expected docs/starfield/index.html to reference "../manifest.webmanifest"',
+    'Expected docs/graph/index.html to reference "../manifest.webmanifest"',
   );
   assert(
     html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
-    'Expected docs/starfield/index.html to include a favicon <link rel="icon" ...>',
+    'Expected docs/graph/index.html to include a favicon <link rel="icon" ...>',
   );
   assert(
     html.includes("../favicon.ico"),
-    'Expected docs/starfield/index.html to reference "../favicon.ico"',
+    'Expected docs/graph/index.html to reference "../favicon.ico"',
   );
   assert(
     html.includes("navigator.serviceWorker.register"),
-    "Expected docs/starfield/index.html to register a service worker",
+    "Expected docs/graph/index.html to register a service worker",
   );
   assert(
     html.includes("../sw.js"),
-    'Expected docs/starfield/index.html to reference "../sw.js"',
+    'Expected docs/graph/index.html to reference "../sw.js"',
   );
   assert(
-    html.includes("starfield.js?v=__BUILD_ID__"),
-    "Expected docs/starfield/index.html to cache-bust starfield.js with __BUILD_ID__",
+    html.includes("graph.js?v=__BUILD_ID__"),
+    "Expected docs/graph/index.html to cache-bust graph.js with __BUILD_ID__",
   );
   assert(
-    html.includes("starfield.css?v=__BUILD_ID__"),
-    "Expected docs/starfield/index.html to cache-bust starfield.css with __BUILD_ID__",
+    html.includes("graph.css?v=__BUILD_ID__"),
+    "Expected docs/graph/index.html to cache-bust graph.css with __BUILD_ID__",
   );
   assert(
     html.includes("sw.js?v=__BUILD_ID__"),
-    "Expected docs/starfield/index.html to cache-bust sw.js with __BUILD_ID__",
+    "Expected docs/graph/index.html to cache-bust sw.js with __BUILD_ID__",
   );
 });

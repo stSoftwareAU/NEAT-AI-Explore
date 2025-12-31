@@ -90,6 +90,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: 12px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -137,6 +138,11 @@ body {
 
 .snapshotDetails > summary {
   list-style: none;
+  /* summary defaults to display:list-item in many browsers, which can cause
+   * subtle baseline/centering misalignment against real <button> elements.
+   */
+  display: inline-flex;
+  align-items: center;
 }
 
 .snapshotDetails > summary::-webkit-details-marker {
@@ -161,6 +167,9 @@ body {
 }
 
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -191,9 +200,17 @@ body {
 }
 
 .statusInline {
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
+  line-height: 1;
   color: var(--muted);
   margin-left: 8px;
+  padding: 6px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(640px, 44vw);
 }
 
 .statusInline.ok {
@@ -451,6 +468,8 @@ body {
   .statusInline {
     flex: 1 1 100%;
     margin-left: 0;
+    max-width: none;
+    white-space: normal;
   }
   .legend {
     top: auto;
@@ -465,6 +484,17 @@ body {
     left: 12px;
     transform: none;
     max-width: min(720px, calc(100vw - 24px));
+  }
+}
+
+/* Tablet and below: keep the long status line from compressing the header
+ * controls. Prefer a clean second row for status.
+ */
+@media (max-width: 920px) {
+  .statusInline {
+    flex: 1 1 100%;
+    margin-left: 0;
+    max-width: none;
   }
 }
 
