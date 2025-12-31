@@ -23,6 +23,13 @@ Deno.test("starfield supports pinch-to-zoom on touch devices (Issue #39, 31-Dec-
     "Expected starfield.js to detect multi-touch for pinch zoom",
   );
   assert(
+    /if\s*\(ts\.length\s*>=\s*2\)\s*\{[\s\S]{0,400}this\.pinch\.active[\s\S]{0,400}zoomBy/
+      .test(
+        js,
+      ),
+    "Expected touchmove pinch branch to be gated by pinch.active to avoid zoom jumps",
+  );
+  assert(
     js.includes('addEventListener("touchmove"') &&
       js.includes("passive: false"),
     "Expected touchmove handler to be non-passive so it can preventDefault",
@@ -40,5 +47,23 @@ Deno.test("starfield canvas disables browser gesture handling (touch-action: non
   assert(
     css.includes(".glCanvas") && css.includes("touch-action: none"),
     "Expected starfield.css to set touch-action: none on the canvas",
+  );
+});
+
+Deno.test("starfield does not activate drag/pinch if a touch gesture started off-canvas (Issue #41, 31-Dec-2025)", async () => {
+  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const js = await Deno.readTextFile(jsPath);
+
+  assert(
+    js.includes("startedOnCanvas"),
+    "Expected starfield.js to track whether a touch gesture started on the canvas",
+  );
+  assert(
+    js.includes('addEventListener("touchend"'),
+    "Expected starfield.js to bind a touchend handler",
+  );
+  assert(
+    js.includes("if (!this.touch.startedOnCanvas)"),
+    "Expected touchend handler to bail out when the touch gesture started off-canvas",
   );
 });

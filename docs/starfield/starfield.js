@@ -1131,6 +1131,10 @@ class StarfieldRenderer {
     // Input state
     this.drag = { active: false, lastX: 0, lastY: 0 };
     this.pinch = { active: false, lastDist: 0 };
+    // Touch gesture origin tracking: prevents off-canvas gestures (e.g. header
+    // inputs/buttons) from accidentally enabling camera look/zoom via the
+    // window-level touchend/touchmove handlers (Issue #41, 31-Dec-2025).
+    this.touch = { startedOnCanvas: false };
     this.keys = new Set();
     this.focusIndex = -1;
 
@@ -1174,6 +1178,10 @@ class StarfieldRenderer {
       const ts = e.touches;
       if (!ts || ts.length === 0) return;
 
+      // This handler is bound to the canvas; if it fires, the touch gesture
+      // began on the canvas.
+      this.touch.startedOnCanvas = true;
+
       // Pinch zoom initialisation.
       if (ts.length >= 2) {
         this.pinch.active = true;
@@ -1192,6 +1200,16 @@ class StarfieldRenderer {
     window.addEventListener("touchend", (e) => {
       const ts = e.touches;
       if (!ts || ts.length === 0) {
+        this.drag.active = false;
+        this.pinch.active = false;
+        this.touch.startedOnCanvas = false;
+        return;
+      }
+
+      // Important: touchend fires at window scope, including for gestures that
+      // began on non-canvas UI. Never enable drag/pinch unless the current touch
+      // gesture started on the canvas (Issue #41, 31-Dec-2025).
+      if (!this.touch.startedOnCanvas) {
         this.drag.active = false;
         this.pinch.active = false;
         return;
@@ -1214,15 +1232,28 @@ class StarfieldRenderer {
       this.pinch.lastDist = touchDistance(ts[0], ts[1]);
     }, { passive: false });
 
+    window.addEventListener("touchcancel", () => {
+      this.drag.active = false;
+      this.pinch.active = false;
+      this.touch.startedOnCanvas = false;
+    }, { passive: true });
+
     window.addEventListener("touchmove", (e) => {
+      if (!this.touch.startedOnCanvas) return;
       const ts = e.touches;
       if (!ts || ts.length === 0) return;
 
-      // Prevent the browser from treating gestures as scroll/back/zoom when the
-      // user is manipulating the canvas.
-      e.preventDefault();
-
       if (ts.length >= 2) {
+        // If the gesture didn't start on the canvas, don't treat it as a pinch.
+        // Without this guard, a 2-finger gesture that begins on non-canvas UI
+        // (e.g. header inputs) can cause a large zoom jump because pinch.lastDist
+        // was never initialised (Issue #40, 31-Dec-2025).
+        if (!this.pinch.active) return;
+
+        // Prevent the browser from treating gestures as scroll/back/zoom when
+        // the user is manipulating the canvas.
+        e.preventDefault();
+
         // Pinch zoom.
         const d = touchDistance(ts[0], ts[1]);
         const dd = this.pinch.lastDist - d;
@@ -1235,6 +1266,11 @@ class StarfieldRenderer {
 
       // Single-finger look.
       if (!this.drag.active) return;
+
+      // Prevent the browser from treating gestures as scroll/back/zoom when the
+      // user is manipulating the canvas.
+      e.preventDefault();
+
       const t = ts[0];
       const dx = t.clientX - this.drag.lastX;
       const dy = t.clientY - this.drag.lastY;
