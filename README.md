@@ -1,14 +1,15 @@
 # NEAT-AI Explore
 
-A static HTML/JS/CSS viewer for exploring NEAT-AI creature snapshots. This is a
-debug tool for investigating why discovery candidates fail or succeed.
+A static HTML/JS/CSS viewer for exploring a **NEAT network snapshot** (neurons,
+synapses, impacts, and recorded activations). This is a debug tool for
+investigating why discovery candidates fail or succeed.
 
 ## Try it now (example snapshot)
 
-- **Explorer (trace view)**:
+- **Trace explorer**:
   [Open Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/)
-- **Starfield (3D neighbourhood view)**:
-  [Open Starfield on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/starfield/)
+- **Graph explorer (3D neighbourhood view)**:
+  [Open Graph Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/starfield/)
 - **Snapshot repo (default example snapshot)**:
   [NEAT-AI-Snapshot](https://github.com/stSoftwareAU/NEAT-AI-Snapshot)
   (published via GitHub Pages as
@@ -111,7 +112,7 @@ Also note:
 
 ## Features
 
-- **Trace Explorer**: Click an output neuron → see inbound synapses → click to
+- **Trace explorer**: Click an output neuron → see inbound synapses → click to
   go upstream toward observations → repeat until you reach inputs. Builds a
   breadcrumb trail.
 - **Synapse Sorting**: Sort inbound synapses by |weight|, weight, or |mean
@@ -120,6 +121,8 @@ Also note:
   stats.
 - **Reconstruction Checks**: If enabled in export, shows max value/activation
   deltas to identify recording or squash function mismatches.
+- **Graph explorer**: A 3D neighbourhood view of the NEAT network to build
+  intuition about local connectivity and high-impact pathways.
 
 ## What the Explorer shows (example snapshot)
 
@@ -169,31 +172,31 @@ viewports (see `scripts/generate_pwa_assets.py`).
 
 ![Desktop inbound modal](docs/screenshots/desktop-inbound-modal.png)
 
-## Starfield view (Issue #25)
+## Graph explorer (3D neighbourhood view)
 
-The starfield view is a fun/intuition-building alternative visualisation for
-large creatures.
+The graph explorer is an intuition-building alternative visualisation for large
+NEAT networks.
 
-- **Entry point**: `docs/starfield/index.html`
+- **Entry point**: `docs/starfield/index.html` (folder name is historical)
 - **Controls**:
   - Drag to look
   - Mouse wheel to zoom
   - WASD / arrow keys to fly
   - Click a star to focus it (HUD shows key properties + flags)
 - **Layout**: focus-centric neighbourhood view (directly linked neurons are
-  closest; moving focus recomputes the local starfield)
+  closest; moving focus recomputes the local neighbourhood layout)
 
-### Starfield (desktop)
+### Graph explorer (desktop)
 
-![Starfield desktop](docs/screenshots/starfield-desktop.png)
+![Graph explorer desktop](docs/screenshots/starfield-desktop.png)
 
-### Starfield (click-to-focus HUD)
+### Graph explorer (click-to-focus HUD)
 
-![Starfield focus HUD](docs/screenshots/starfield-desktop-focus.png)
+![Graph explorer focus HUD](docs/screenshots/starfield-desktop-focus.png)
 
-### Starfield (tilt + zoom)
+### Graph explorer (tilt + zoom)
 
-![Starfield tilt](docs/screenshots/starfield-desktop-tilt.png)
+![Graph explorer tilt](docs/screenshots/starfield-desktop-tilt.png)
 
 ## Direction terminology (to avoid confusion)
 
@@ -279,7 +282,7 @@ Outputs:
 - `docs/screenshots/ipad-screenshot.png`
 - `docs/screenshots/ipad-inbound-modal.png`
 
-Last updated: 20-Dec-2025
+Last updated: 31-Dec-2025
 
 ## Licence
 
