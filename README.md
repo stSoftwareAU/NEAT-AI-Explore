@@ -9,7 +9,7 @@ investigating why discovery candidates fail or succeed.
 - **Trace explorer**:
   [Open Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/)
 - **Graph explorer (3D neighbourhood view)**:
-  [Open Graph Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/starfield/)
+  [Open Graph Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/graph/)
 - **Snapshot repo (default example snapshot)**:
   [NEAT-AI-Snapshot](https://github.com/stSoftwareAU/NEAT-AI-Snapshot)
   (published via GitHub Pages as
@@ -177,26 +177,26 @@ viewports (see `scripts/generate_pwa_assets.py`).
 The graph explorer is an intuition-building alternative visualisation for large
 NEAT networks.
 
-- **Entry point**: `docs/starfield/index.html` (folder name is historical)
+- **Entry point**: `docs/graph/index.html`
 - **Controls**:
   - Drag to look
   - Mouse wheel to zoom
   - WASD / arrow keys to fly
-  - Click a star to focus it (HUD shows key properties + flags)
+  - Click a neuron to focus it (HUD shows key properties + flags)
 - **Layout**: focus-centric neighbourhood view (directly linked neurons are
   closest; moving focus recomputes the local neighbourhood layout)
 
 ### Graph explorer (desktop)
 
-![Graph explorer desktop](docs/screenshots/starfield-desktop.png)
+![Graph explorer desktop](docs/screenshots/graph-desktop.png)
 
 ### Graph explorer (click-to-focus HUD)
 
-![Graph explorer focus HUD](docs/screenshots/starfield-desktop-focus.png)
+![Graph explorer focus HUD](docs/screenshots/graph-desktop-focus.png)
 
 ### Graph explorer (tilt + zoom)
 
-![Graph explorer tilt](docs/screenshots/starfield-desktop-tilt.png)
+![Graph explorer tilt](docs/screenshots/graph-desktop-tilt.png)
 
 ## Direction terminology (to avoid confusion)
 

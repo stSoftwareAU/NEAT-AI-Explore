@@ -14,7 +14,7 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("starfield hard-locks dark mode for visibility (and hides theme selector) (31-Dec-2025)", async () => {
-  const htmlPath = repoPath("docs", "starfield", "index.html");
+  const htmlPath = repoPath("docs", "graph", "index.html");
   const html = await Deno.readTextFile(htmlPath);
 
   assert(
@@ -22,7 +22,7 @@ Deno.test("starfield hard-locks dark mode for visibility (and hides theme select
     `Expected ${htmlPath} to omit the theme selector (Issue #38)`,
   );
 
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
   assert(
     js.includes('setAttribute("data-theme", "dark")'),

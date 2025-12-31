@@ -10,16 +10,12 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
-Deno.test("PWA supports light/dark/auto theme mode", async () => {
+Deno.test("PWA hard-locks dark mode (theme toggle removed) (31-Dec-2025)", async () => {
   const indexPath = repoPath("docs", "index.html");
   const html = await Deno.readTextFile(indexPath);
   assert(
-    html.includes('id="themeToggle"'),
-    `Expected ${indexPath} to include a #themeToggle control`,
-  );
-  assert(
-    /id="themeToggle"[\s\S]*?>\s*A\s*</.test(html),
-    `Expected ${indexPath} to default the theme toggle to "A" (auto)`,
+    !html.includes('id="themeToggle"'),
+    `Expected ${indexPath} to omit the theme selector (dark mode only)`,
   );
   assert(
     /<meta\s+name="theme-color"\s+content="#f5f7fb"\s*\/?>/i.test(html),
@@ -45,36 +41,7 @@ Deno.test("PWA supports light/dark/auto theme mode", async () => {
   const appPath = repoPath("docs", "app.js");
   const js = await Deno.readTextFile(appPath);
   assert(
-    js.includes("localStorage") && js.includes("themeMode"),
-    `Expected ${appPath} to persist themeMode in localStorage`,
-  );
-  assert(
-    js.includes("safeGetThemeMode"),
-    `Expected ${appPath} to include a safeGetThemeMode() helper (private browsing can throw on localStorage access)`,
-  );
-  assert(
-    js.includes("themeModeMemory"),
-    `Expected ${appPath} to include an in-memory theme mode fallback (localStorage can be blocked)`,
-  );
-  assert(
-    !/btn\.addEventListener\("click",[\s\S]*?safeGetThemeMode\(\)/s.test(js),
-    `Expected ${appPath} click handler to avoid reading theme mode from localStorage each click (blocked storage makes it stick)`,
-  );
-  assert(
-    /btn\.addEventListener\("click",[\s\S]*?cycleThemeMode\(themeModeMemory\)/s
-      .test(js),
-    `Expected ${appPath} click handler to cycle from an in-memory theme mode state`,
-  );
-  assert(
-    !/addEventListener\?\.\("change",[\s\S]*?safeGetThemeMode\(\)/s.test(js),
-    `Expected ${appPath} prefers-colour-scheme change handler to avoid reading theme mode from localStorage (it can be blocked)`,
-  );
-  assert(
-    js.includes("data-theme") || js.includes("dataset.theme"),
-    `Expected ${appPath} to apply theme via a data-theme attribute`,
-  );
-  assert(
-    js.includes("themeToggle"),
-    `Expected ${appPath} to wire up a theme toggle control`,
+    js.includes('setAttribute("data-theme", "dark")'),
+    `Expected ${appPath} to hard-lock data-theme="dark"`,
   );
 });

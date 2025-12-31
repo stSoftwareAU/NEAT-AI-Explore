@@ -35,10 +35,10 @@ function shouldSpaFallback(req: Request): boolean {
 function spaEntryPointForPath(pathname: string): string {
   // This repo publishes multiple entry points under docs/:
   // - /index.html (Explorer)
-  // - /starfield/index.html (Starfield)
+  // - /graph/index.html (Graph)
   //
-  // Local dev should mirror GitHub Pages so links like /starfield/ work.
-  if (/^\/starfield(\/|$)/.test(pathname)) return "/starfield/index.html";
+  // Local dev should mirror GitHub Pages so links like /graph/ work.
+  if (/^\/graph(\/|$)/.test(pathname)) return "/graph/index.html";
   return "/index.html";
 }
 

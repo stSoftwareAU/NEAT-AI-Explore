@@ -13,7 +13,7 @@
       media="(prefers-color-scheme: dark)"
     />
 
-    <link rel="stylesheet" href="./starfield.css?v=__BUILD_ID__" />
+    <link rel="stylesheet" href="./graph.css?v=__BUILD_ID__" />
     <link rel="manifest" href="../manifest.webmanifest" />
     <link rel="icon" href="../favicon.ico" />
     <link
@@ -158,7 +158,13 @@
       // pending forever if installation/activation fails. Use a timeout so the
       // app still boots in degraded mode.
       (async () => {
-        if ("serviceWorker" in navigator) {
+        // Local/dev escape hatch: allow disabling the Service Worker so you can
+        // debug without navigation routing/caching surprises.
+        // Usage: append `?noSw=1` to the URL.
+        const params = new URLSearchParams(location.search);
+        const noSw = params.get("noSw") === "1";
+
+        if (!noSw && "serviceWorker" in navigator) {
           try {
             await navigator.serviceWorker.register(
               "../sw.js?v=__BUILD_ID__",
@@ -175,7 +181,7 @@
         }
 
         // Start the app once SW registration has had a chance to settle.
-        await import("./starfield.js?v=__BUILD_ID__");
+        await import("./graph.js?v=__BUILD_ID__");
       })();
     </script>
   </body>

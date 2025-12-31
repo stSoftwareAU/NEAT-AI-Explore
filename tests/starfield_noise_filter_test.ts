@@ -11,7 +11,7 @@ function repoPath(...parts: string[]): string {
 }
 
 Deno.test("starfield filters noisy inbound edges while preserving true counts (30-Dec-2025)", async () => {
-  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
   assert(
