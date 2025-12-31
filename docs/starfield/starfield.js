@@ -1130,6 +1130,11 @@ class StarfieldRenderer {
 
     // Input state
     this.drag = { active: false, lastX: 0, lastY: 0 };
+    this.pinch = { active: false, lastDist: 0 };
+    // Touch gesture origin tracking: prevents off-canvas gestures (e.g. header
+    // inputs/buttons) from accidentally enabling camera look/zoom via the
+    // window-level touchend/touchmove handlers (Issue #41, 31-Dec-2025).
+    this.touch = { startedOnCanvas: false };
     this.keys = new Set();
     this.focusIndex = -1;
 
@@ -1163,21 +1168,110 @@ class StarfieldRenderer {
       this.pitch = clamp(this.pitch, -1.35, 1.35);
     });
 
-    // Touch drag
+    // Touch controls:
+    // - 1 finger: look (yaw/pitch)
+    // - 2 fingers: pinch zoom (Issue #39, 31-Dec-2025)
+    const touchDistance = (t0, t1) =>
+      Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+
     c.addEventListener("touchstart", (e) => {
-      const t = e.touches[0];
-      if (!t) return;
+      const ts = e.touches;
+      if (!ts || ts.length === 0) return;
+
+      // This handler is bound to the canvas; if it fires, the touch gesture
+      // began on the canvas.
+      this.touch.startedOnCanvas = true;
+
+      // Pinch zoom initialisation.
+      if (ts.length >= 2) {
+        this.pinch.active = true;
+        this.drag.active = false;
+        this.pinch.lastDist = touchDistance(ts[0], ts[1]);
+        return;
+      }
+
+      const t = ts[0];
       this.drag.active = true;
+      this.pinch.active = false;
       this.drag.lastX = t.clientX;
       this.drag.lastY = t.clientY;
+    }, { passive: false });
+
+    window.addEventListener("touchend", (e) => {
+      const ts = e.touches;
+      if (!ts || ts.length === 0) {
+        this.drag.active = false;
+        this.pinch.active = false;
+        this.touch.startedOnCanvas = false;
+        return;
+      }
+
+      // Important: touchend fires at window scope, including for gestures that
+      // began on non-canvas UI. Never enable drag/pinch unless the current touch
+      // gesture started on the canvas (Issue #41, 31-Dec-2025).
+      if (!this.touch.startedOnCanvas) {
+        this.drag.active = false;
+        this.pinch.active = false;
+        return;
+      }
+
+      // If we lifted one finger but still have one touch, transition back to
+      // look mode smoothly.
+      if (ts.length === 1) {
+        const t = ts[0];
+        this.drag.active = true;
+        this.pinch.active = false;
+        this.drag.lastX = t.clientX;
+        this.drag.lastY = t.clientY;
+        return;
+      }
+
+      // Still pinching (2+ fingers).
+      this.pinch.active = true;
+      this.drag.active = false;
+      this.pinch.lastDist = touchDistance(ts[0], ts[1]);
+    }, { passive: false });
+
+    window.addEventListener("touchcancel", () => {
+      this.drag.active = false;
+      this.pinch.active = false;
+      this.touch.startedOnCanvas = false;
     }, { passive: true });
-    window.addEventListener("touchend", () => (this.drag.active = false), {
-      passive: true,
-    });
+
     window.addEventListener("touchmove", (e) => {
+      if (!this.touch.startedOnCanvas) return;
+      const ts = e.touches;
+      if (!ts || ts.length === 0) return;
+
+      if (ts.length >= 2) {
+        // If the gesture didn't start on the canvas, don't treat it as a pinch.
+        // Without this guard, a 2-finger gesture that begins on non-canvas UI
+        // (e.g. header inputs) can cause a large zoom jump because pinch.lastDist
+        // was never initialised (Issue #40, 31-Dec-2025).
+        if (!this.pinch.active) return;
+
+        // Prevent the browser from treating gestures as scroll/back/zoom when
+        // the user is manipulating the canvas.
+        e.preventDefault();
+
+        // Pinch zoom.
+        const d = touchDistance(ts[0], ts[1]);
+        const dd = this.pinch.lastDist - d;
+        this.pinch.lastDist = d;
+
+        // Tuned so iPhone/iPad pinch feels similar to mouse wheel.
+        this.zoomBy(dd * 0.22);
+        return;
+      }
+
+      // Single-finger look.
       if (!this.drag.active) return;
-      const t = e.touches[0];
-      if (!t) return;
+
+      // Prevent the browser from treating gestures as scroll/back/zoom when the
+      // user is manipulating the canvas.
+      e.preventDefault();
+
+      const t = ts[0];
       const dx = t.clientX - this.drag.lastX;
       const dy = t.clientY - this.drag.lastY;
       this.drag.lastX = t.clientX;
@@ -1185,7 +1279,7 @@ class StarfieldRenderer {
       this.yaw += dx * 0.005;
       this.pitch += dy * 0.005;
       this.pitch = clamp(this.pitch, -1.35, 1.35);
-    }, { passive: true });
+    }, { passive: false });
 
     window.addEventListener("keydown", (e) => {
       this.keys.add(e.key.toLowerCase());
@@ -1196,8 +1290,7 @@ class StarfieldRenderer {
 
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
-      this.pos.z += e.deltaY * 0.05;
-      this.pos.z = clamp(this.pos.z, 20, 520);
+      this.zoomBy(e.deltaY * 0.09);
     }, { passive: false });
 
     c.addEventListener("click", (e) => {
@@ -1205,6 +1298,44 @@ class StarfieldRenderer {
       const idx = this.pickStarIndex(e.clientX, e.clientY);
       if (idx >= 0) this.setFocus(idx);
     });
+  }
+
+  getForwardVector() {
+    // Forward vector (yaw/pitch) in camera space.
+    const cy = Math.cos(this.yaw);
+    const sy = Math.sin(this.yaw);
+    const cp = Math.cos(this.pitch);
+    const sp = Math.sin(this.pitch);
+    return { x: sy * cp, y: -sp, z: cy * cp };
+  }
+
+  clampDistance(minDist, maxDist) {
+    const d = Math.hypot(this.pos.x, this.pos.y, this.pos.z);
+    if (!Number.isFinite(d) || d <= 1e-9) return;
+    if (d < minDist) {
+      const s = minDist / d;
+      this.pos.x *= s;
+      this.pos.y *= s;
+      this.pos.z *= s;
+    } else if (d > maxDist) {
+      const s = maxDist / d;
+      this.pos.x *= s;
+      this.pos.y *= s;
+      this.pos.z *= s;
+    }
+  }
+
+  zoomBy(delta) {
+    // Zoom along the current view direction, not world Z. This makes zoom feel
+    // correct after yaw/pitch and helps users “open up” the neighbourhood view
+    // to see linked neurons (Issue #39, 31-Dec-2025).
+    const f = this.getForwardVector();
+    this.pos.x += f.x * delta;
+    this.pos.y += f.y * delta;
+    this.pos.z += f.z * delta;
+
+    // Allow a wider zoom range than the original 520 limit.
+    this.clampDistance(20, 1400);
   }
 
   setData({ positions, colours, sizes, meta }) {
@@ -2109,10 +2240,21 @@ async function loadSnapshot(source, label) {
       `Observations: ${inputCount.toLocaleString()}, Neurons: ${neuronCount.toLocaleString()} & Synapses: ${graph.synapses.length.toLocaleString()}`,
       "ok",
     );
+
+    // Keep the header aligned: once a snapshot is loaded, collapse the loader
+    // controls (Fetch/Browse) unless the user re-opens them (Issue #37,
+    // 31-Dec-2025).
+    const details = document.getElementById("snapshotDetails");
+    if (details instanceof HTMLDetailsElement) details.open = false;
   } catch (e) {
     hideProgress();
     setStatus(e?.message ?? String(e), "bad");
     console.error(e);
+
+    // If load failed, keep the loader controls visible so the user can recover
+    // quickly without hunting for the panel.
+    const details = document.getElementById("snapshotDetails");
+    if (details instanceof HTMLDetailsElement) details.open = true;
   }
 }
 
@@ -2126,13 +2268,6 @@ function initStarfield() {
     document.documentElement.setAttribute("data-theme", "dark");
     const metas = document.querySelectorAll('meta[name="theme-color"]');
     for (const meta of metas) meta.setAttribute("content", "#0a0e1a");
-    const btn = document.getElementById("themeToggle");
-    if (btn instanceof HTMLButtonElement) {
-      btn.disabled = true;
-      btn.textContent = "☾";
-      btn.title = "Theme: Dark (locked)";
-      btn.setAttribute("aria-label", btn.title);
-    }
   } catch (_e) {
     // No-op.
   }

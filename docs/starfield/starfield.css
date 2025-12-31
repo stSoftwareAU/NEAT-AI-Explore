@@ -118,6 +118,38 @@ body {
   gap: 6px;
 }
 
+.snapshotDetails {
+  /* Collapsible loader so the header stays tidy after a snapshot loads
+   * (Issue #37, 31-Dec-2025).
+   */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+@media (min-width: 920px) {
+  .snapshotDetails {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.snapshotDetails > summary {
+  list-style: none;
+}
+
+.snapshotDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.snapshotPanel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .input {
   padding: 6px 10px;
   border-radius: 6px;
@@ -156,17 +188,6 @@ body {
 
 .buttonSecondary {
   background: var(--buttonSecondaryBg);
-}
-
-.button.themeToggle {
-  width: 38px;
-  min-width: 38px;
-  padding: 6px 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  letter-spacing: 0.2px;
 }
 
 .statusInline {
@@ -235,6 +256,10 @@ body {
   height: 100%;
   display: block;
   background: transparent;
+  /* Ensure touch devices can drag/pinch the canvas without the browser
+   * interpreting gestures as page scroll/zoom (Issue #39, 31-Dec-2025).
+   */
+  touch-action: none;
 }
 
 .labelOverlay {

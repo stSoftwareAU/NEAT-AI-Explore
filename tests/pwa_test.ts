@@ -99,8 +99,8 @@ Deno.test("service worker caches the app shell", async () => {
       '"./favicon.ico"',
       '"./icons/icon-192x192.png"',
       '"./starfield/index.html"',
-      '"./starfield/starfield.js"',
-      '"./starfield/starfield.css"',
+      "`./starfield/starfield.js?v=${VERSION}`",
+      "`./starfield/starfield.css?v=${VERSION}`",
       '"./shared/snapshot_loader.js"',
       '"./shared/theme.js"',
       '"./shared/colour_maps.js"',
@@ -171,5 +171,47 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
   assert(
     html.includes("sw.js?v=__BUILD_ID__"),
     "Expected docs/index.html to cache-bust sw.js with __BUILD_ID__",
+  );
+});
+
+Deno.test("docs/starfield/index.html links manifest and registers service worker", async () => {
+  const indexPath = repoPath("docs", "starfield", "index.html");
+  const html = await Deno.readTextFile(indexPath);
+
+  assert(
+    html.includes('rel="manifest"'),
+    "Expected docs/starfield/index.html to include a web manifest <link>",
+  );
+  assert(
+    html.includes("../manifest.webmanifest"),
+    'Expected docs/starfield/index.html to reference "../manifest.webmanifest"',
+  );
+  assert(
+    html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
+    'Expected docs/starfield/index.html to include a favicon <link rel="icon" ...>',
+  );
+  assert(
+    html.includes("../favicon.ico"),
+    'Expected docs/starfield/index.html to reference "../favicon.ico"',
+  );
+  assert(
+    html.includes("navigator.serviceWorker.register"),
+    "Expected docs/starfield/index.html to register a service worker",
+  );
+  assert(
+    html.includes("../sw.js"),
+    'Expected docs/starfield/index.html to reference "../sw.js"',
+  );
+  assert(
+    html.includes("starfield.js?v=__BUILD_ID__"),
+    "Expected docs/starfield/index.html to cache-bust starfield.js with __BUILD_ID__",
+  );
+  assert(
+    html.includes("starfield.css?v=__BUILD_ID__"),
+    "Expected docs/starfield/index.html to cache-bust starfield.css with __BUILD_ID__",
+  );
+  assert(
+    html.includes("sw.js?v=__BUILD_ID__"),
+    "Expected docs/starfield/index.html to cache-bust sw.js with __BUILD_ID__",
   );
 });

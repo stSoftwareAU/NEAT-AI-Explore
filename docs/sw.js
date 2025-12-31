@@ -26,8 +26,8 @@ const STATIC_FILES = [
   // Starfield view (Issue #25): kept in its own folder to avoid destabilising
   // the existing explorer view.
   "./starfield/index.html",
-  "./starfield/starfield.js",
-  "./starfield/starfield.css",
+  `./starfield/starfield.js?v=${VERSION}`,
+  `./starfield/starfield.css?v=${VERSION}`,
   // Shared modules for multiple views.
   "./shared/snapshot_loader.js",
   "./shared/theme.js",
