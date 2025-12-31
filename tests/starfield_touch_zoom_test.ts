@@ -67,3 +67,33 @@ Deno.test("starfield does not activate drag/pinch if a touch gesture started off
     "Expected touchend handler to bail out when the touch gesture started off-canvas",
   );
 });
+
+Deno.test("starfield tracks touch origin as the first touch only (not any touch) (Issue #42, 31-Dec-2025)", async () => {
+  const jsPath = repoPath("docs", "starfield", "starfield.js");
+  const js = await Deno.readTextFile(jsPath);
+
+  assert(
+    /window\.addEventListener\([\s\S]{0,80}"touchstart"/.test(js),
+    "Expected starfield.js to listen for touchstart at window scope to track gesture origin",
+  );
+  assert(
+    js.includes("ts.length === 1") || js.includes("ts.length==1"),
+    "Expected starfield.js to treat the 0→1 touch transition as the gesture origin",
+  );
+
+  // If the gesture starts off-canvas and a later touch begins on-canvas, the
+  // canvas touchstart event fires with multiple touches present. In that case,
+  // we must NOT flip startedOnCanvas to true.
+  const canvasStart = js.indexOf('c.addEventListener("touchstart"');
+  assert(canvasStart !== -1, "Expected starfield.js to bind canvas touchstart");
+  const canvasEnd = js.indexOf("}, { passive: false });", canvasStart);
+  assert(
+    canvasEnd !== -1,
+    "Expected starfield.js canvas touchstart handler to end with passive: false options",
+  );
+  const canvasHandler = js.slice(canvasStart, canvasEnd);
+  assert(
+    !/startedOnCanvas\s*=/.test(canvasHandler),
+    "Expected canvas touchstart handler to not assign startedOnCanvas (origin must be tracked from the first touch only)",
+  );
+});

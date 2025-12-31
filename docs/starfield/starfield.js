@@ -1174,13 +1174,43 @@ class StarfieldRenderer {
     const touchDistance = (t0, t1) =>
       Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 
+    // Track whether the *gesture origin* (the 0→1 touch transition) began on
+    // the canvas. This must not flip to true if a later touch begins on-canvas
+    // while the first touch began off-canvas (Issue #42, 31-Dec-2025).
+    //
+    // Use capture so this runs before the canvas touchstart handler when the
+    // gesture begins on the canvas.
+    window.addEventListener(
+      "touchstart",
+      (e) => {
+        const ts = e.touches;
+        if (!ts || ts.length === 0) return;
+
+        // Only evaluate origin at the start of a gesture (0→1 touch).
+        if (ts.length !== 1) return;
+
+        const path = typeof e.composedPath === "function"
+          ? e.composedPath()
+          : [];
+        this.touch.startedOnCanvas = e.target === c || path.includes(c);
+
+        if (!this.touch.startedOnCanvas) {
+          // Defensive: ensure off-canvas gesture origin cannot accidentally
+          // enable camera controls via other window-level touch handlers.
+          this.drag.active = false;
+          this.pinch.active = false;
+        }
+      },
+      { passive: true, capture: true },
+    );
+
     c.addEventListener("touchstart", (e) => {
       const ts = e.touches;
       if (!ts || ts.length === 0) return;
 
-      // This handler is bound to the canvas; if it fires, the touch gesture
-      // began on the canvas.
-      this.touch.startedOnCanvas = true;
+      // If the gesture started off-canvas (e.g. header UI), ignore later
+      // touches that happen to begin on the canvas.
+      if (!this.touch.startedOnCanvas) return;
 
       // Pinch zoom initialisation.
       if (ts.length >= 2) {
