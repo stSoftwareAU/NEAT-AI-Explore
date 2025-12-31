@@ -35,6 +35,7 @@ const MAX_FOCUS_TRAIL = 64;
 
 // Line budget (reduce clutter for high-fan-in NEAT neurons).
 const MAX_INBOUND_LINES = 80;
+const MAX_INBOUND_LINES_OUTPUT = 220;
 const MIN_INBOUND_LINES = 16;
 const MIN_INBOUND_SHARE = 0.004; // 0.4% of inbound allocation (tuned for signal)
 
@@ -56,7 +57,13 @@ const el = {
   legend: document.getElementById("legend"),
   legendToggle: document.getElementById("legendToggle"),
   modeToggle: document.getElementById("modeToggle"),
+  glyphToggle: document.getElementById("glyphToggle"),
+  glyphGallery: document.getElementById("glyphGallery"),
 };
+
+// Glyph style is user-facing: "neuron" is a more recognisable silhouette,
+// "abstract" is the v1 squash-family shapes.
+let glyphStyle = "neuron";
 
 function setStatus(msg, kind = "") {
   if (!el.status) return;
@@ -180,6 +187,350 @@ const GLYPH = {
   CAPSULE: 6, // smooth saturating monotonic
   RING_LOBE: 7, // periodic / oscillatory
 };
+
+function glyphLabel(kind) {
+  if (kind === GLYPH.CIRCLE) return "Circle";
+  if (kind === GLYPH.WEDGE) return "Wedge";
+  if (kind === GLYPH.DIAMOND) return "Diamond";
+  if (kind === GLYPH.CHEVRON) return "Chevron";
+  if (kind === GLYPH.SQUARE) return "Square";
+  if (kind === GLYPH.SPLIT) return "Split";
+  if (kind === GLYPH.CAPSULE) return "Capsule";
+  return "Ring-lobe";
+}
+
+function glyphMeaning(kind) {
+  if (kind === GLYPH.CIRCLE) return "Identity-ish / linear";
+  if (kind === GLYPH.WEDGE) return "Rectifier family";
+  if (kind === GLYPH.DIAMOND) return "Polynomial / power-ish";
+  if (kind === GLYPH.CHEVRON) return "Sign-lossy / absolute-ish";
+  if (kind === GLYPH.SQUARE) return "Step / discrete / brittle";
+  if (kind === GLYPH.SPLIT) return "Conditional / min/max / selection";
+  if (kind === GLYPH.CAPSULE) return "Smooth saturating / bounded";
+  return "Periodic / oscillatory";
+}
+
+function renderGlyphGallery() {
+  if (!(el.glyphGallery instanceof HTMLElement)) return;
+
+  const container = el.glyphGallery;
+  container.textContent = "";
+
+  /** @type {Array<{ kind: number, name: string, desc: string }>} */
+  const items = [
+    {
+      kind: GLYPH.CIRCLE,
+      name: glyphLabel(GLYPH.CIRCLE),
+      desc: glyphMeaning(GLYPH.CIRCLE),
+    },
+    {
+      kind: GLYPH.WEDGE,
+      name: glyphLabel(GLYPH.WEDGE),
+      desc: glyphMeaning(GLYPH.WEDGE),
+    },
+    {
+      kind: GLYPH.DIAMOND,
+      name: glyphLabel(GLYPH.DIAMOND),
+      desc: glyphMeaning(GLYPH.DIAMOND),
+    },
+    {
+      kind: GLYPH.CHEVRON,
+      name: glyphLabel(GLYPH.CHEVRON),
+      desc: glyphMeaning(GLYPH.CHEVRON),
+    },
+    {
+      kind: GLYPH.SQUARE,
+      name: glyphLabel(GLYPH.SQUARE),
+      desc: glyphMeaning(GLYPH.SQUARE),
+    },
+    {
+      kind: GLYPH.SPLIT,
+      name: glyphLabel(GLYPH.SPLIT),
+      desc: glyphMeaning(GLYPH.SPLIT),
+    },
+    {
+      kind: GLYPH.CAPSULE,
+      name: glyphLabel(GLYPH.CAPSULE),
+      desc: glyphMeaning(GLYPH.CAPSULE),
+    },
+    {
+      kind: GLYPH.RING_LOBE,
+      name: glyphLabel(GLYPH.RING_LOBE),
+      desc: glyphMeaning(GLYPH.RING_LOBE),
+    },
+  ];
+
+  for (const it of items) {
+    const card = document.createElement("div");
+    card.className = "glyphCard";
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "glyphSwatch";
+    canvas.width = 44;
+    canvas.height = 44;
+    drawGlyphSwatch(canvas, { kind: it.kind, style: glyphStyle });
+
+    const text = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "glyphName";
+    name.textContent = it.name;
+    const desc = document.createElement("div");
+    desc.className = "glyphDesc";
+    desc.textContent = it.desc;
+    text.appendChild(name);
+    text.appendChild(desc);
+
+    card.appendChild(canvas);
+    card.appendChild(text);
+    container.appendChild(card);
+  }
+}
+
+function drawGlyphSwatch(canvas, { kind, style }) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Clear to transparent so it sits nicely on the legend background.
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+
+  // Base colour tuned for dark UI.
+  const base = "rgba(96,165,250,0.95)";
+  const outline = "rgba(0,0,0,0.65)";
+
+  if (style === "neuron") {
+    drawNeuronIcon(ctx, { kind, base, outline });
+  } else {
+    drawAbstractIcon(ctx, { kind, base, outline, scale: 18 });
+  }
+
+  ctx.restore();
+}
+
+function drawAbstractIcon(ctx, { kind, base, outline, scale }) {
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.fillStyle = base;
+  ctx.strokeStyle = outline;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  const s = scale;
+
+  // Helper: circle.
+  const circle = (r) => {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.closePath();
+  };
+
+  if (kind === GLYPH.CIRCLE) {
+    circle(s * 0.9);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.SQUARE) {
+    ctx.beginPath();
+    ctx.rect(-s * 0.82, -s * 0.82, s * 1.64, s * 1.64);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.DIAMOND) {
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.05);
+    ctx.lineTo(s * 1.05, 0);
+    ctx.lineTo(0, s * 1.05);
+    ctx.lineTo(-s * 1.05, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.CAPSULE) {
+    const r = s * 0.55;
+    const half = s * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(-half, -r);
+    ctx.arcTo(half, -r, half, r, r);
+    ctx.arcTo(half, r, -half, r, r);
+    ctx.arcTo(-half, r, -half, -r, r);
+    ctx.arcTo(-half, -r, half, -r, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.WEDGE) {
+    circle(s * 0.92);
+    ctx.save();
+    ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, -s * 1.2);
+    ctx.lineTo(s * 1.2, 0);
+    ctx.lineTo(-s * 0.10, s * 1.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.SPLIT) {
+    circle(s * 0.92);
+    ctx.fill();
+    ctx.stroke();
+    // Chord cut.
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, -s * 1.2);
+    ctx.lineTo(s * 1.2, s * 0.20);
+    ctx.lineTo(s * 1.2, s * 1.2);
+    ctx.lineTo(-s * 1.2, s * 1.2);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0,0,0,1)";
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+
+  if (kind === GLYPH.CHEVRON) {
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.95, -s * 0.10);
+    ctx.lineTo(0, s * 0.95);
+    ctx.lineTo(s * 0.95, -s * 0.10);
+    ctx.lineTo(s * 0.75, -s * 0.50);
+    ctx.lineTo(0, s * 0.45);
+    ctx.lineTo(-s * 0.75, -s * 0.50);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  // RING_LOBE (periodic): wavy annulus approximation.
+  ctx.save();
+  ctx.fillStyle = base;
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 2;
+  const outerR = s * 0.90;
+  const innerR = s * 0.52;
+  ctx.beginPath();
+  for (let i = 0; i <= 64; i++) {
+    const t = (i / 64) * Math.PI * 2;
+    const wobble = 1 + 0.10 * Math.sin(2 * t);
+    const r = outerR * wobble;
+    const x = Math.cos(t) * r;
+    const y = Math.sin(t) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  // Inner loop in reverse so even-odd fill creates a hole.
+  for (let i = 64; i >= 0; i--) {
+    const t = (i / 64) * Math.PI * 2;
+    const wobble = 1 + 0.10 * Math.sin(2 * t);
+    const r = innerR * wobble;
+    const x = Math.cos(t) * r;
+    const y = Math.sin(t) * r;
+    if (i === 64) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill("evenodd");
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawNeuronIcon(ctx, { kind, base, outline }) {
+  // Scale tuned for a 44px swatch. The icon is intentionally “cartoon”, not anatomical.
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = outline;
+  ctx.fillStyle = base;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // Soma.
+  const somaX = -6;
+  const somaR = 13;
+  ctx.beginPath();
+  ctx.arc(somaX, 0, somaR, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Dendrites (left).
+  const dend = (x0, y0, x1, y1) => {
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x1, y1, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  dend(somaX - 8, 0, -19, 0);
+  dend(somaX - 6, 6, -17, 14);
+  dend(somaX - 6, -6, -17, -14);
+
+  // Axon (right) + beads.
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(somaX + somaR - 1, 0);
+  ctx.lineTo(18, 0);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(245, 158, 11, 0.95)";
+  for (const bx of [2, 9, 15]) {
+    ctx.beginPath();
+    ctx.ellipse(bx, 0, 4.2, 3.0, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Terminal.
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = outline;
+  ctx.fillStyle = base;
+  ctx.beginPath();
+  ctx.moveTo(18, 0);
+  ctx.lineTo(22, 6);
+  ctx.moveTo(18, 0);
+  ctx.lineTo(22, -6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(23, 6, 2.0, 0, Math.PI * 2);
+  ctx.arc(23, -6, 2.0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner glyph mark inside soma (encode squash family).
+  ctx.save();
+  ctx.translate(somaX, 0);
+  drawAbstractIcon(ctx, {
+    kind,
+    base: "rgba(255,255,255,0.22)",
+    outline: "rgba(0,0,0,0)",
+    scale: 9,
+  });
+  ctx.restore();
+
+  ctx.restore();
+}
 
 function glyphKindForNeuron(type, squash) {
   const t = String(type ?? "").toLowerCase();
@@ -794,13 +1145,23 @@ function computeInboundAllocationForFocus(focusUuid) {
   };
 }
 
-function selectInboundEdgesForRender(rows) {
+function inboundLineCapForFocus(focusUuid) {
+  if (!focusUuid || !graph?.neuronsByUuid) return MAX_INBOUND_LINES;
+  const uuid = String(focusUuid);
+  if (uuid.startsWith("output-")) return MAX_INBOUND_LINES_OUTPUT;
+  const t = String(graph.neuronsByUuid.get(uuid)?.type ?? "").toLowerCase();
+  if (t === "output") return MAX_INBOUND_LINES_OUTPUT;
+  return MAX_INBOUND_LINES;
+}
+
+function selectInboundEdgesForRender(rows, focusUuid) {
   const all = Array.isArray(rows) ? rows : [];
+  const cap = inboundLineCapForFocus(focusUuid);
   const strong = all.filter((r) => (r?.share ?? 0) >= MIN_INBOUND_SHARE);
-  const out = strong.slice(0, MAX_INBOUND_LINES);
+  const out = strong.slice(0, cap);
   if (out.length >= MIN_INBOUND_LINES) return out;
   // Guarantee a minimum number of inbound lines so the view never feels empty.
-  return all.slice(0, Math.min(MAX_INBOUND_LINES, MIN_INBOUND_LINES));
+  return all.slice(0, Math.min(cap, MIN_INBOUND_LINES));
 }
 
 function computeReachableFromOutputs({ neuronsByUuid, synapses }) {
@@ -922,6 +1283,38 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
   const bias = new Float32Array(n);
   const types = new Float32Array(n);
   const warn = new Float32Array(n);
+  const inDeg = new Float32Array(n);
+  const outDeg = new Float32Array(n);
+
+  // Degree counts (encode local “dendrite/axon-ness” hints in glyphs).
+  /** @type {Map<string, number>} */
+  const inCounts = new Map();
+  /** @type {Map<string, number>} */
+  const outCounts = new Map();
+  for (const s of synapses ?? []) {
+    if (!s) continue;
+    const from = s.fromUuid;
+    const to = s.toUuid;
+    if (typeof from === "string") {
+      outCounts.set(from, (outCounts.get(from) ?? 0) + 1);
+    }
+    if (typeof to === "string") {
+      inCounts.set(to, (inCounts.get(to) ?? 0) + 1);
+    }
+  }
+
+  let maxIn = 1;
+  let maxOut = 1;
+  for (const u of uuids) {
+    maxIn = Math.max(maxIn, inCounts.get(u) ?? 0);
+    maxOut = Math.max(maxOut, outCounts.get(u) ?? 0);
+  }
+  const degTo01 = (count, max) => {
+    const c = Math.max(0, Number(count ?? 0));
+    const m = Math.max(1, Number(max ?? 1));
+    // Log scale so huge fan-in/out doesn't flatten everything.
+    return Math.min(1, Math.log10(c + 1) / Math.log10(m + 1));
+  };
 
   /** @type {{ uuid: string, type: string, squash: string, impact: number|null, risk: any }[]} */
   const meta = new Array(n);
@@ -968,6 +1361,8 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     bias[i] = biasToSigned01(biasVal);
     types[i] = typeCode(type);
     warn[i] = warnFlag01(nonFinite, sat);
+    inDeg[i] = degTo01(inCounts.get(uuid) ?? 0, maxIn);
+    outDeg[i] = degTo01(outCounts.get(uuid) ?? 0, maxOut);
 
     meta[i] = { uuid, type, squash, impact, risk };
   }
@@ -980,6 +1375,8 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     bias,
     types,
     warn,
+    inDeg,
+    outDeg,
     meta,
     indexByUuid,
   };
@@ -1130,6 +1527,8 @@ class StarfieldRenderer {
       attribute float aBias;
       attribute float aType;
       attribute float aWarn;
+      attribute float aInDeg;
+      attribute float aOutDeg;
 
       uniform mat4 uProj;
       uniform mat4 uView;
@@ -1142,6 +1541,8 @@ class StarfieldRenderer {
       varying float vBias;
       varying float vType;
       varying float vWarn;
+      varying float vInDeg;
+      varying float vOutDeg;
 
       void main() {
         vec4 viewPos = uView * vec4(aPos, 1.0);
@@ -1157,10 +1558,13 @@ class StarfieldRenderer {
         vBias = aBias;
         vType = aType;
         vWarn = aWarn;
+        vInDeg = aInDeg;
+        vOutDeg = aOutDeg;
       }
     `,
       `
       precision mediump float;
+      uniform float uGlyphStyle;
       varying vec4 vCol;
       varying float vDepth;
       varying float vFocus;
@@ -1168,6 +1572,8 @@ class StarfieldRenderer {
       varying float vBias;
       varying float vType;
       varying float vWarn;
+      varying float vInDeg;
+      varying float vOutDeg;
 
       float smoothInside(float d, float edge) {
         // d <= 0 inside. edge is in sprite UV units.
@@ -1190,6 +1596,80 @@ class StarfieldRenderer {
       float sdCapsuleX(vec2 p, float halfLen, float r) {
         vec2 q = vec2(abs(p.x) - halfLen, p.y);
         return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+      }
+
+      float sdSegment(vec2 p, vec2 a, vec2 b, float r) {
+        vec2 pa = p - a;
+        vec2 ba = b - a;
+        float h = clamp(dot(pa, ba) / max(1e-6, dot(ba, ba)), 0.0, 1.0);
+        return length(pa - ba * h) - r;
+      }
+
+      float neuronDist(vec2 p, float inDeg01, float outDeg01) {
+        // A compact, recognisable cartoon neuron silhouette:
+        // - Soma (cell body) on the left
+        // - Dendrite branches to the far left
+        // - Axon to the right with myelin beads + terminal
+        //
+        // Note: keep this cheap: a few capsule segments + circles.
+
+        vec2 somaC = vec2(-0.22, 0.0);
+        float somaR = 0.60;
+        float d = sdCircle(p - somaC, somaR);
+
+        // Dendrites: scale thickness with in-degree, and *increase* branch count
+        // (in a bundled/stylised way) so high fan-in doesn't look like "5 inputs".
+        float dendR = 0.065 + 0.11 * inDeg01;
+
+        // Base dendrites (always).
+        d = min(d, sdSegment(p, somaC + vec2(-0.35, 0.0), vec2(-1.08, 0.00), dendR));
+        d = min(d, sdSegment(p, somaC + vec2(-0.27, 0.18), vec2(-0.98, 0.58), dendR * 0.90));
+        d = min(d, sdSegment(p, somaC + vec2(-0.27, -0.18), vec2(-0.98, -0.58), dendR * 0.90));
+
+        // Extra branches (thresholded so the silhouette changes with inDeg01).
+        if (inDeg01 > 0.18) {
+          d = min(d, sdSegment(p, somaC + vec2(-0.22, 0.30), vec2(-0.70, 0.86), dendR * 0.75));
+        }
+        if (inDeg01 > 0.33) {
+          d = min(d, sdSegment(p, somaC + vec2(-0.22, -0.30), vec2(-0.70, -0.86), dendR * 0.75));
+        }
+        if (inDeg01 > 0.50) {
+          d = min(d, sdSegment(p, somaC + vec2(-0.42, 0.10), vec2(-1.05, 0.32), dendR * 0.70));
+        }
+        if (inDeg01 > 0.66) {
+          d = min(d, sdSegment(p, somaC + vec2(-0.42, -0.10), vec2(-1.05, -0.32), dendR * 0.70));
+        }
+        if (inDeg01 > 0.82) {
+          d = min(d, sdSegment(p, somaC + vec2(-0.30, 0.42), vec2(-0.90, 0.96), dendR * 0.60));
+          d = min(d, sdSegment(p, somaC + vec2(-0.30, -0.42), vec2(-0.90, -0.96), dendR * 0.60));
+        }
+
+        // Axon: only show it when there is meaningful out-degree. This matches
+        // the expectation that output neurons often have 0 outgoing synapses.
+        if (outDeg01 > 0.05) {
+          float axR = 0.055 + 0.12 * outDeg01;
+          vec2 axA = somaC + vec2(0.55, 0.0);
+          vec2 axB = vec2(0.98, 0.0);
+          d = min(d, sdSegment(p, axA, axB, axR));
+
+          // Myelin beads (3 ovals along axon).
+          d = min(d, sdCircle(p - vec2(0.22, 0.0), axR + 0.10));
+          d = min(d, sdCircle(p - vec2(0.50, 0.0), axR + 0.10));
+          d = min(d, sdCircle(p - vec2(0.78, 0.0), axR + 0.10));
+
+          // Axon terminal: branch count grows a little with out-degree.
+          float termR = axR * 0.75;
+          vec2 t0 = vec2(0.98, 0.0);
+          d = min(d, sdSegment(p, t0, t0 + vec2(0.30, 0.18), termR));
+          d = min(d, sdSegment(p, t0, t0 + vec2(0.30, -0.18), termR));
+          if (outDeg01 > 0.45) {
+            d = min(d, sdSegment(p, t0, t0 + vec2(0.32, 0.00), termR * 0.90));
+          }
+          d = min(d, sdCircle(p - (t0 + vec2(0.32, 0.20)), termR + 0.05));
+          d = min(d, sdCircle(p - (t0 + vec2(0.32, -0.20)), termR + 0.05));
+        }
+
+        return d;
       }
 
       float glyphDist(vec2 p, float glyph) {
@@ -1283,12 +1763,21 @@ class StarfieldRenderer {
 
       void main() {
         vec2 uv = gl_PointCoord.xy * 2.0 - 1.0;
-        float d = glyphDist(uv, vGlyph);
-        float fill = glyphFill(uv, vGlyph);
+        float isNeuron = step(0.5, uGlyphStyle);
+        float dGlyph = glyphDist(uv, vGlyph);
+        float dNeuron = neuronDist(uv, vInDeg, vOutDeg);
+        float d = mix(dGlyph, dNeuron, isNeuron);
+
+        float fillGlyph = glyphFill(uv, vGlyph);
+        float fillNeuron = smoothInside(dNeuron, 0.05);
+        float fill = mix(fillGlyph, fillNeuron, isNeuron);
         if (fill <= 0.001) discard;
 
         float r2 = dot(uv, uv);
         float glow = smoothstep(1.25, 0.25, r2);
+        // In neuron mode, reduce the halo so the node reads as a "body" rather
+        // than a star.
+        glow *= mix(1.0, 0.32, isNeuron);
 
         // Risk score comes in on alpha (0..1). Turn it into glow boost.
         float risk = clamp(vCol.a, 0.0, 1.0);
@@ -1336,6 +1825,22 @@ class StarfieldRenderer {
         finalCol = mix(finalCol, vec3(1.0, 0.35, 0.15), 0.35 * damage);
         finalCol = mix(finalCol, vec3(0.0), 0.35 * outline); // darker membrane edge
 
+        // In neuron mode, overlay the squash-family glyph inside the soma as an
+        // embossed mark so you still get the “function family” signal.
+        if (isNeuron > 0.5) {
+          vec2 somaUv = (uv - vec2(-0.22, 0.0)) / 0.72;
+          float inner = glyphFill(somaUv, vGlyph) * smoothInside(sdCircle(somaUv, 0.98), 0.04);
+          finalCol = mix(finalCol, vec3(1.0), 0.16 * inner);
+
+          // Simple faux-3D shading for a more "3D-ish" feel on the sprite.
+          float rr = min(1.0, r2);
+          float nz = sqrt(max(0.0, 1.0 - rr));
+          vec3 nrm = normalize(vec3(uv.xy, nz + 0.001));
+          vec3 light = normalize(vec3(-0.55, 0.75, 1.0));
+          float diff = clamp(dot(nrm, light), 0.0, 1.0);
+          finalCol *= (0.70 + 0.55 * diff);
+        }
+
         float alpha = fill * (0.75 + 0.20 * glow) * depthFade;
         alpha += risk * 0.25 * glow;
         alpha += vFocus * 0.45 * glow;
@@ -1353,9 +1858,12 @@ class StarfieldRenderer {
     this.aBias = gl.getAttribLocation(this.program, "aBias");
     this.aType = gl.getAttribLocation(this.program, "aType");
     this.aWarn = gl.getAttribLocation(this.program, "aWarn");
+    this.aInDeg = gl.getAttribLocation(this.program, "aInDeg");
+    this.aOutDeg = gl.getAttribLocation(this.program, "aOutDeg");
     this.uProj = gl.getUniformLocation(this.program, "uProj");
     this.uView = gl.getUniformLocation(this.program, "uView");
     this.uPixelRatio = gl.getUniformLocation(this.program, "uPixelRatio");
+    this.uGlyphStyle = gl.getUniformLocation(this.program, "uGlyphStyle");
 
     this.bufPos = gl.createBuffer();
     this.bufCol = gl.createBuffer();
@@ -1365,6 +1873,8 @@ class StarfieldRenderer {
     this.bufBias = gl.createBuffer();
     this.bufType = gl.createBuffer();
     this.bufWarn = gl.createBuffer();
+    this.bufInDeg = gl.createBuffer();
+    this.bufOutDeg = gl.createBuffer();
 
     // Lines (synapses) program
     this.lineProgram = createProgram(
@@ -1423,6 +1933,8 @@ class StarfieldRenderer {
     this.touch = { startedOnCanvas: false };
     this.keys = new Set();
     this.focusIndex = -1;
+    // Glyph style: 0=abstract (v1), 1=neuron silhouette.
+    this.glyphStyle01 = 1;
 
     this._bindEvents();
   }
@@ -1682,7 +2194,18 @@ class StarfieldRenderer {
     this.clampDistance(20, 1400);
   }
 
-  setData({ positions, colours, sizes, glyphs, bias, types, warn, meta }) {
+  setData({
+    positions,
+    colours,
+    sizes,
+    glyphs,
+    bias,
+    types,
+    warn,
+    inDeg,
+    outDeg,
+    meta,
+  }) {
     const gl = this.gl;
     this.count = Math.floor(positions.length / 3);
     this.meta = meta ?? [];
@@ -1712,6 +2235,12 @@ class StarfieldRenderer {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufWarn);
     gl.bufferData(gl.ARRAY_BUFFER, warn, gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufInDeg);
+    gl.bufferData(gl.ARRAY_BUFFER, inDeg, gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
+    gl.bufferData(gl.ARRAY_BUFFER, outDeg, gl.STATIC_DRAW);
   }
 
   updatePositions(positions) {
@@ -1841,6 +2370,7 @@ class StarfieldRenderer {
     gl.uniformMatrix4fv(this.uProj, false, proj);
     gl.uniformMatrix4fv(this.uView, false, view);
     gl.uniform1f(this.uPixelRatio, this.pixelRatio);
+    gl.uniform1f(this.uGlyphStyle, this.glyphStyle01);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufPos);
@@ -1874,6 +2404,14 @@ class StarfieldRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufWarn);
     gl.enableVertexAttribArray(this.aWarn);
     gl.vertexAttribPointer(this.aWarn, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufInDeg);
+    gl.enableVertexAttribArray(this.aInDeg);
+    gl.vertexAttribPointer(this.aInDeg, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
+    gl.enableVertexAttribArray(this.aOutDeg);
+    gl.vertexAttribPointer(this.aOutDeg, 1, gl.FLOAT, false, 0, 0);
 
     gl.drawArrays(gl.POINTS, 0, this.count);
   }
@@ -2427,7 +2965,11 @@ function updateLabelsForFocus(focusUuid, opts) {
   if (!force && now - lastLabelUpdateMs < minIntervalMs) return;
   lastLabelUpdateMs = now;
 
-  // Label the focus and a small, high-signal subset of nearby neurons only.
+  // Label a small, high-signal subset of nearby neurons only.
+  //
+  // The current focus already appears in the top-centre focus badge, so
+  // rendering a second "focus label" over the star is visual duplication and
+  // makes the view feel noisy (Issue #44, 31-Dec-2025).
   //
   // Important for iPhone/iPad: creating/updating 100-150 DOM nodes per frame can
   // tank performance. Keep the label set small and stable.
@@ -2441,7 +2983,7 @@ function updateLabelsForFocus(focusUuid, opts) {
   // Always include the (local tail of the) output->focus path so users can see
   // context without being drowned in hundreds of lines.
   const pathTail = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
-  const want = Array.from(new Set([focusUuid, ...pathTail, ...neigh]));
+  const want = Array.from(new Set([...pathTail, ...neigh]));
 
   /** @type {{ uuid: string, text: string, x: number, y: number, isFocus: boolean, title: string, uuidSuffix: string|null }[]} */
   const out = [];
@@ -2463,14 +3005,14 @@ function updateLabelsForFocus(focusUuid, opts) {
     const x = p.sx / dpr;
     const y = p.sy / dpr;
 
-    const isFocus = u === focusUuid;
+    const isFocus = false;
     const text = labelText(u);
     const title = getDescription(u) ? `${u} — ${getDescription(u)}` : u;
     // Depth-aware label styling: far neurons get smaller + fainter labels.
     // `p.depth` is NDC z in [-1, 1], where smaller tends to be closer.
     const depth01 = Math.min(1, Math.max(0, (p.depth + 1) / 2));
-    const opacity = isFocus ? 1 : (0.15 + (1 - depth01) * 0.75);
-    const scale = isFocus ? 1.05 : (0.72 + (1 - depth01) * 0.45);
+    const opacity = 0.15 + (1 - depth01) * 0.75;
+    const scale = 0.72 + (1 - depth01) * 0.45;
     out.push({
       uuid: u,
       text,
@@ -2502,6 +3044,19 @@ function buildHudForIndex(idx) {
   const mae = stats?.meanAbsoluteError ?? stats?.mean_absolute_error ?? null;
   const directNeighbours = adjacency?.get?.(m.uuid)?.size ?? 0;
   const desc = getDescription(m.uuid);
+  const synCounts = (() => {
+    // Derived counts from the raw synapse list so we can debug "why does this
+    // neuron show an axon / why so many rays?" in a snapshot-agnostic way.
+    const syn = graph?.synapses ?? [];
+    let inN = 0;
+    let outN = 0;
+    for (const s of syn) {
+      if (!s) continue;
+      if (s.toUuid === m.uuid) inN += 1;
+      if (s.fromUuid === m.uuid) outN += 1;
+    }
+    return { inN, outN };
+  })();
   const ignoredInputs = (() => {
     if (!graph?.creature) return [];
     const inputCount = graph.creature.input ?? 0;
@@ -2532,6 +3087,8 @@ function buildHudForIndex(idx) {
   if (mae != null) lines.push(`MAE:   ${fmtSig(mae, 6)}`);
   lines.push(`Risk:  ${fmtSig(m.risk?.score ?? 0, 3)}`);
   lines.push(`Links: ${directNeighbours}`);
+  lines.push(`Synapses: in=${synCounts.inN}  out=${synCounts.outN}`);
+  lines.push(`Glyph: ${glyphStyle}`);
   if (ignoredInputs.length) {
     lines.push(`Ignored observations: ${ignoredInputs.length}`);
     const top = ignoredInputs.slice(0, 8).map((u) => labelText(u)).join(", ");
@@ -2680,6 +3237,8 @@ async function loadSnapshot(source, label) {
       bias: points.bias,
       types: points.types,
       warn: points.warn,
+      inDeg: points.inDeg,
+      outDeg: points.outDeg,
       meta: points.meta,
     });
     renderer.resetCamera();
@@ -2710,6 +3269,21 @@ async function loadSnapshot(source, label) {
     const details = document.getElementById("snapshotDetails");
     if (details instanceof HTMLDetailsElement) details.open = true;
   }
+}
+
+function applyGlyphStyleUi() {
+  const isNeuron = glyphStyle === "neuron";
+
+  if (el.glyphToggle instanceof HTMLButtonElement) {
+    el.glyphToggle.textContent = isNeuron ? "Glyph: Neuron" : "Glyph: Abstract";
+    el.glyphToggle.title = `Glyph: ${
+      isNeuron ? "Neuron" : "Abstract"
+    } (tap to toggle)`;
+    el.glyphToggle.setAttribute("aria-label", el.glyphToggle.title);
+  }
+
+  if (renderer) renderer.glyphStyle01 = isNeuron ? 1 : 0;
+  renderGlyphGallery();
 }
 
 function initStarfield() {
@@ -2758,6 +3332,15 @@ function initStarfield() {
     });
   }
 
+  // Glyph toggle (Neuron-ish vs Abstract).
+  if (el.glyphToggle instanceof HTMLButtonElement) {
+    applyGlyphStyleUi();
+    el.glyphToggle.addEventListener("click", () => {
+      glyphStyle = glyphStyle === "neuron" ? "abstract" : "neuron";
+      applyGlyphStyleUi();
+    });
+  }
+
   // Back (focus trail).
   if (el.backBtn instanceof HTMLButtonElement) {
     el.backBtn.addEventListener("click", () => {
@@ -2780,6 +3363,7 @@ function initStarfield() {
     throw new Error("Missing #glCanvas");
   }
   renderer = new StarfieldRenderer(el.canvas);
+  applyGlyphStyleUi();
   exposeDebugApi();
   initPanels();
   renderer.onFocusChanged = (idx, m, _prevIdx, prevMeta) => {
@@ -2834,7 +3418,7 @@ function initStarfield() {
         if (upstreamLayout) {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
-          const inbound = selectInboundEdgesForRender(alloc.rows);
+          const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
           inboundRenderedCount = inbound.length;
 
           // Reserve space for inbound + path (and no longer render the full
@@ -2908,7 +3492,7 @@ function initStarfield() {
         } else {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
-          const inbound = selectInboundEdgesForRender(alloc.rows);
+          const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
           inboundRenderedCount = inbound.length;
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
           const trailEdges = Math.max(0, getTrailIndexPairs().length);

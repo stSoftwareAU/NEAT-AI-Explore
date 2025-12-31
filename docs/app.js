@@ -184,6 +184,7 @@ const el = {
   traceBreadcrumb: document.getElementById("traceBreadcrumb"),
   traceBackBtn: document.getElementById("traceBackBtn"),
   traceClearBtn: document.getElementById("traceClearBtn"),
+  graphBtn: document.getElementById("graphBtn"),
   currentNeuronTitle: document.getElementById("currentNeuronTitle"),
   neuronProps: document.getElementById("neuronProps"),
   impactBreakdown: document.getElementById("impactBreakdown"),
@@ -3380,6 +3381,12 @@ const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
 initThemeMode();
 initTouchTooltips();
 initInboundFilters();
+
+// Provide an easy on-ramp to the 3D graph explorer, carrying the current query
+// params (e.g. snapshotUrl / snapshotUrlB64) across.
+if (el.graphBtn instanceof HTMLAnchorElement) {
+  el.graphBtn.href = `./graph/${window.location.search ?? ""}`;
+}
 
 function decodeBase64UrlToUtf8(base64Url) {
   // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
