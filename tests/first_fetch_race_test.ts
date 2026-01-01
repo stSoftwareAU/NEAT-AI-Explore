@@ -25,7 +25,7 @@ Deno.test("service worker registers (and is awaited) before app auto-load runs (
   const swReadyIdx = html.indexOf("navigator.serviceWorker.ready");
   const promiseRaceIdx = html.indexOf("Promise.race");
   const setTimeoutIdx = html.indexOf("setTimeout");
-  const appImportIdx = html.indexOf('import("./app.js?v=__BUILD_ID__")');
+  const appImportIdx = html.indexOf("import(`./app.js?v=${v}`)");
 
   assert(
     swRegisterIdx !== -1,
@@ -73,7 +73,7 @@ Deno.test("service worker registers (and is awaited) before graph explorer auto-
   const swReadyIdx = html.indexOf("navigator.serviceWorker.ready");
   const promiseRaceIdx = html.indexOf("Promise.race");
   const setTimeoutIdx = html.indexOf("setTimeout");
-  const appImportIdx = html.indexOf('import("./graph.js?v=__BUILD_ID__")');
+  const appImportIdx = html.indexOf("import(`./graph.js?v=${v}`)");
 
   assert(
     swRegisterIdx !== -1,

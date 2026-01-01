@@ -71,6 +71,15 @@
             Back
           </button>
           <button
+            id="zoomBtn"
+            class="button buttonSecondary"
+            type="button"
+            aria-label="Zoom to focused neuron"
+            title="Zoom to focus"
+          >
+            Zoom
+          </button>
+          <button
             id="modeToggle"
             class="button buttonSecondary"
             type="button"
@@ -159,7 +168,7 @@
               <div>
                 <span class="k">Size</span>: log scale of neuron impact ·
                 <span class="k">Colour</span>: type + hidden squash flavour ·
-                <span class="k">Nucleus</span>: bias offset ·
+                <span class="k">Nucleus</span>: squash family ·
                 <span class="k">Branches</span>: in/out degree hints
               </div>
             </div>
@@ -207,7 +216,16 @@
         }
 
         // Start the app once SW registration has had a chance to settle.
-        await import("./graph.js?v=__BUILD_ID__");
+        //
+        // Dev ergonomics:
+        // On local servers, `__BUILD_ID__` is not replaced, so `graph.js?v=__BUILD_ID__`
+        // can get cached aggressively by browsers. When we detect the placeholder,
+        // fall back to a time-based cache buster so local iteration is reliable.
+        const buildId = "__BUILD_ID__";
+        const v = buildId.includes("__BUILD_ID__")
+          ? String(Date.now())
+          : buildId;
+        await import(`./graph.js?v=${v}`);
       })();
     </script>
   </body>

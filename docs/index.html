@@ -242,7 +242,16 @@
         }
 
         // Start the app once SW registration has had a chance to settle.
-        await import("./app.js?v=__BUILD_ID__");
+        //
+        // Dev ergonomics:
+        // On local servers, `__BUILD_ID__` is not replaced, so `app.js?v=__BUILD_ID__`
+        // can get cached aggressively by browsers. When we detect the placeholder,
+        // fall back to a time-based cache buster so local iteration is reliable.
+        const buildId = "__BUILD_ID__";
+        const v = buildId.includes("__BUILD_ID__")
+          ? String(Date.now())
+          : buildId;
+        await import(`./app.js?v=${v}`);
       })();
     </script>
 
