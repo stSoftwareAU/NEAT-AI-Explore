@@ -17,22 +17,17 @@ Deno.test("neuron glyph morphology varies with in/out degree (Issue #44, 31-Dec-
   const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
-  // We expect the shader to *hide* the axon when out-degree is near zero.
+  // The neuron glyph is now a "cell icon" (soma + nucleus + organelles). We no
+  // longer draw dendrite/axon silhouettes inside the sprite (synapses are drawn
+  // separately as ribbons).
+  //
+  // Degree still influences the glyph via subtle membrane ruffling/size tweaks.
   assert(
-    js.includes("if (outDeg01 > 0.05)"),
-    "Expected neuron glyph shader to gate axon rendering on outDeg01",
+    js.includes("float ruffle = 0.03 + 0.02 * inDeg01"),
+    "Expected neuron glyph shader to modulate membrane ruffling by inDeg01",
   );
-
-  // We expect additional dendrite branches to be added as inDeg01 increases.
-  const thresholds = [
-    "if (inDeg01 > 0.18)",
-    "if (inDeg01 > 0.33)",
-    "if (inDeg01 > 0.50)",
-  ];
-  for (const t of thresholds) {
-    assert(
-      js.includes(t),
-      `Expected neuron glyph shader to include dendrite branch threshold ${t}`,
-    );
-  }
+  assert(
+    js.includes("r += 0.02 * outDeg01"),
+    "Expected neuron glyph shader to incorporate outDeg01 into the cell body",
+  );
 });

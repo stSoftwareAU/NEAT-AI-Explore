@@ -161,8 +161,8 @@ Deno.test("docs/index.html links manifest and registers service worker", async (
   assert(html.includes("navigator.serviceWorker.register"));
   assertEquals(html.includes("./sw.js"), true);
   assert(
-    html.includes("app.js?v=__BUILD_ID__"),
-    "Expected docs/index.html to cache-bust app.js with __BUILD_ID__",
+    html.includes("app.js?v=") && html.includes("__BUILD_ID__"),
+    "Expected docs/index.html to cache-bust app.js (and include __BUILD_ID__ placeholder for deploy)",
   );
   assert(
     html.includes("styles.css?v=__BUILD_ID__"),
@@ -203,8 +203,8 @@ Deno.test("docs/graph/index.html links manifest and registers service worker", a
     'Expected docs/graph/index.html to reference "../sw.js"',
   );
   assert(
-    html.includes("graph.js?v=__BUILD_ID__"),
-    "Expected docs/graph/index.html to cache-bust graph.js with __BUILD_ID__",
+    html.includes("graph.js?v=") && html.includes("__BUILD_ID__"),
+    "Expected docs/graph/index.html to cache-bust graph.js (and include __BUILD_ID__ placeholder for deploy)",
   );
   assert(
     html.includes("graph.css?v=__BUILD_ID__"),

@@ -45,6 +45,7 @@ const el = {
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
   backBtn: document.getElementById("backBtn"),
+  zoomBtn: document.getElementById("zoomBtn"),
   progressContainer: document.getElementById("progressContainer"),
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
@@ -1285,6 +1286,7 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
   const warn = new Float32Array(n);
   const inDeg = new Float32Array(n);
   const outDeg = new Float32Array(n);
+  const vis = new Float32Array(n);
 
   // Degree counts (encode local “dendrite/axon-ness” hints in glyphs).
   /** @type {Map<string, number>} */
@@ -1363,6 +1365,9 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     warn[i] = warnFlag01(nonFinite, sat);
     inDeg[i] = degTo01(inCounts.get(uuid) ?? 0, maxIn);
     outDeg[i] = degTo01(outCounts.get(uuid) ?? 0, maxOut);
+    // Visibility mask is updated on focus changes. Default to faint so the view
+    // reads as a network (not a starfield) with a highlighted neighbourhood.
+    vis[i] = 0.10;
 
     meta[i] = { uuid, type, squash, impact, risk };
   }
@@ -1377,6 +1382,7 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     warn,
     inDeg,
     outDeg,
+    vis,
     meta,
     indexByUuid,
   };
@@ -1529,6 +1535,7 @@ class StarfieldRenderer {
       attribute float aWarn;
       attribute float aInDeg;
       attribute float aOutDeg;
+      attribute float aVis;
 
       uniform mat4 uProj;
       uniform mat4 uView;
@@ -1543,6 +1550,7 @@ class StarfieldRenderer {
       varying float vWarn;
       varying float vInDeg;
       varying float vOutDeg;
+      varying float vVis;
 
       void main() {
         vec4 viewPos = uView * vec4(aPos, 1.0);
@@ -1551,7 +1559,12 @@ class StarfieldRenderer {
 
         // Perspective-ish size: closer neurons are bigger.
         float depthScale = clamp(140.0 / max(6.0, vDepth), 0.5, 6.0);
-        gl_PointSize = (aSize + 8.0 * aFocus) * depthScale * uPixelRatio;
+        // Focus should be obvious, but never a giant "blue sun". Clamp in CSS px
+        // (then scale by pixel ratio) so the focused neuron remains readable.
+        float focusBoost = 2.0 * aFocus;
+        float sizeCss = (aSize + focusBoost) * depthScale;
+        sizeCss = clamp(sizeCss, 2.0, 58.0);
+        gl_PointSize = sizeCss * uPixelRatio;
         vCol = aCol;
         vFocus = aFocus;
         vGlyph = aGlyph;
@@ -1560,6 +1573,7 @@ class StarfieldRenderer {
         vWarn = aWarn;
         vInDeg = aInDeg;
         vOutDeg = aOutDeg;
+        vVis = aVis;
       }
     `,
       `
@@ -1574,6 +1588,7 @@ class StarfieldRenderer {
       varying float vWarn;
       varying float vInDeg;
       varying float vOutDeg;
+      varying float vVis;
 
       float smoothInside(float d, float edge) {
         // d <= 0 inside. edge is in sprite UV units.
@@ -1605,68 +1620,39 @@ class StarfieldRenderer {
         return length(pa - ba * h) - r;
       }
 
-      float neuronDist(vec2 p, float inDeg01, float outDeg01) {
-        // A compact, recognisable cartoon neuron silhouette:
-        // - Soma (cell body) on the left
-        // - Dendrite branches to the far left
-        // - Axon to the right with myelin beads + terminal
-        //
-        // Note: keep this cheap: a few capsule segments + circles.
+      float neuronDist(vec2 p, float inDeg01, float outDeg01, float typeCode01) {
+        // Cell-icon style (matches the supplied mock-up more closely):
+        // - Clean cell body silhouette (no dendrite/axon silhouette in the sprite)
+        // - Type drives the body silhouette
+        // - Connectivity is expressed by synapse ribbons (lines), not rays
 
-        vec2 somaC = vec2(-0.22, 0.0);
-        float somaR = 0.60;
-        float d = sdCircle(p - somaC, somaR);
+        vec2 c = vec2(0.0, 0.0);
+        float isInput = step(0.5, typeCode01) * (1.0 - step(1.5, typeCode01));
+        float isOutput = step(1.5, typeCode01) * (1.0 - step(2.5, typeCode01));
+        float isConst = step(2.5, typeCode01);
 
-        // Dendrites: scale thickness with in-degree, and *increase* branch count
-        // (in a bundled/stylised way) so high fan-in doesn't look like "5 inputs".
-        float dendR = 0.065 + 0.11 * inDeg01;
+        // Base radius, with subtle impact of degree to keep some "activity" feel.
+        float r = 0.78;
+        r += 0.06 * inDeg01;
+        r += 0.02 * outDeg01;
+        if (isOutput > 0.5) r += 0.10;
+        if (isInput > 0.5) r -= 0.06;
 
-        // Base dendrites (always).
-        d = min(d, sdSegment(p, somaC + vec2(-0.35, 0.0), vec2(-1.08, 0.00), dendR));
-        d = min(d, sdSegment(p, somaC + vec2(-0.27, 0.18), vec2(-0.98, 0.58), dendR * 0.90));
-        d = min(d, sdSegment(p, somaC + vec2(-0.27, -0.18), vec2(-0.98, -0.58), dendR * 0.90));
+        // Slightly ruffled membrane so it reads as a cell, not a flat dot.
+        float theta = atan(p.y, p.x);
+        float ruffle = 0.03 + 0.02 * inDeg01;
+        float rr = r + ruffle * sin(theta * 6.0 + 1.1) + 0.012 * sin(theta * 13.0 + 0.4);
 
-        // Extra branches (thresholded so the silhouette changes with inDeg01).
-        if (inDeg01 > 0.18) {
-          d = min(d, sdSegment(p, somaC + vec2(-0.22, 0.30), vec2(-0.70, 0.86), dendR * 0.75));
+        float d = sdCircle(p - c, rr);
+
+        // Type-specific silhouette tweaks.
+        if (isConst > 0.5) {
+          // Constant: boxy cell (rounded-square feel).
+          d = min(d, sdBox(p - c, vec2(0.72, 0.62)));
         }
-        if (inDeg01 > 0.33) {
-          d = min(d, sdSegment(p, somaC + vec2(-0.22, -0.30), vec2(-0.70, -0.86), dendR * 0.75));
-        }
-        if (inDeg01 > 0.50) {
-          d = min(d, sdSegment(p, somaC + vec2(-0.42, 0.10), vec2(-1.05, 0.32), dendR * 0.70));
-        }
-        if (inDeg01 > 0.66) {
-          d = min(d, sdSegment(p, somaC + vec2(-0.42, -0.10), vec2(-1.05, -0.32), dendR * 0.70));
-        }
-        if (inDeg01 > 0.82) {
-          d = min(d, sdSegment(p, somaC + vec2(-0.30, 0.42), vec2(-0.90, 0.96), dendR * 0.60));
-          d = min(d, sdSegment(p, somaC + vec2(-0.30, -0.42), vec2(-0.90, -0.96), dendR * 0.60));
-        }
-
-        // Axon: only show it when there is meaningful out-degree. This matches
-        // the expectation that output neurons often have 0 outgoing synapses.
-        if (outDeg01 > 0.05) {
-          float axR = 0.055 + 0.12 * outDeg01;
-          vec2 axA = somaC + vec2(0.55, 0.0);
-          vec2 axB = vec2(0.98, 0.0);
-          d = min(d, sdSegment(p, axA, axB, axR));
-
-          // Myelin beads (3 ovals along axon).
-          d = min(d, sdCircle(p - vec2(0.22, 0.0), axR + 0.10));
-          d = min(d, sdCircle(p - vec2(0.50, 0.0), axR + 0.10));
-          d = min(d, sdCircle(p - vec2(0.78, 0.0), axR + 0.10));
-
-          // Axon terminal: branch count grows a little with out-degree.
-          float termR = axR * 0.75;
-          vec2 t0 = vec2(0.98, 0.0);
-          d = min(d, sdSegment(p, t0, t0 + vec2(0.30, 0.18), termR));
-          d = min(d, sdSegment(p, t0, t0 + vec2(0.30, -0.18), termR));
-          if (outDeg01 > 0.45) {
-            d = min(d, sdSegment(p, t0, t0 + vec2(0.32, 0.00), termR * 0.90));
-          }
-          d = min(d, sdCircle(p - (t0 + vec2(0.32, 0.20)), termR + 0.05));
-          d = min(d, sdCircle(p - (t0 + vec2(0.32, -0.20)), termR + 0.05));
+        if (isInput > 0.5) {
+          // Input: slight teardrop (sensor-like).
+          d = min(d, sdCircle(p - vec2(-0.18, 0.0), rr * 0.92));
         }
 
         return d;
@@ -1765,7 +1751,7 @@ class StarfieldRenderer {
         vec2 uv = gl_PointCoord.xy * 2.0 - 1.0;
         float isNeuron = step(0.5, uGlyphStyle);
         float dGlyph = glyphDist(uv, vGlyph);
-        float dNeuron = neuronDist(uv, vInDeg, vOutDeg);
+        float dNeuron = neuronDist(uv, vInDeg, vOutDeg, vType);
         float d = mix(dGlyph, dNeuron, isNeuron);
 
         float fillGlyph = glyphFill(uv, vGlyph);
@@ -1786,16 +1772,28 @@ class StarfieldRenderer {
         float depthFade = clamp(1.2 - (vDepth / 180.0), 0.15, 1.0);
 
         vec3 base = vCol.rgb;
-        // Focus gets a strong "you are here" cyan tint.
+        // Focus gets a "you are here" tint, but in neuron mode keep it subtle so
+        // the cell doesn't become a giant blue blob.
         vec3 focusTint = vec3(0.35, 0.95, 1.0);
         vec3 tint = mix(base, vec3(1.0, 0.45, 0.35), risk); // warm warning tint
-        tint = mix(tint, focusTint, clamp(vFocus, 0.0, 1.0));
+        float focusMix = mix(1.0, 0.22, isNeuron);
+        tint = mix(tint, focusTint, clamp(vFocus, 0.0, 1.0) * focusMix);
 
-        // Bias nucleus: spatial offset (left/right) plus subtle type marker dots.
-        float biasMag = abs(vBias);
-        float biasSign = (vBias >= 0.0) ? 1.0 : -1.0;
-        vec2 nucleusOffset = vec2(biasSign * biasMag * 0.45, 0.0);
-        float nucleus = smoothInside(sdCircle(uv - nucleusOffset, 0.22), 0.04);
+        // Nucleus indicates squash/activation family (Issue #44, 1-Jan-2026).
+        // Render a nucleus circle + a squash-family mark inside it.
+        vec2 nucleusC = vec2(-0.15, 0.05);
+        float nucleusBase = smoothInside(sdCircle(uv - nucleusC, 0.30), 0.05);
+        vec2 nucleusUv = (uv - nucleusC) / 0.30;
+        float nucleusMask = smoothInside(sdCircle(nucleusUv, 0.92), 0.06);
+        float nucleusMark = glyphFill(nucleusUv, vGlyph) * nucleusMask;
+        float nucleus = max(nucleusBase * 0.85, nucleusMark);
+
+        // Mitochondria: small capsule-ish dots inside the cell for “cellness”.
+        // Keep it deterministic and cheap (3 fixed positions).
+        float mito = 0.0;
+        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(0.30, 0.18), 0.10, 0.06), 0.04));
+        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(0.24, -0.22), 0.11, 0.06), 0.04));
+        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(-0.05, -0.28), 0.09, 0.06), 0.04));
 
         // Type markers: small dots at consistent corners (no text).
         // 1=input, 2=output, 3=constant.
@@ -1808,21 +1806,24 @@ class StarfieldRenderer {
           typeDot = smoothInside(sdCircle(uv, 0.14), 0.04);
         }
 
-        // Damage overlay: emphasise non-finite values with a broken alpha mask.
-        float damage = 0.0;
-        if (vWarn > 0.9) {
-          float ang = atan(uv.y, uv.x);
-          float stripes = step(0.25, fract((ang + 3.14159) * 2.2)); // broken arcs
-          damage = stripes * smoothstep(1.0, 0.2, r2);
-        }
-
         // Membrane outline: keep it subtle but present so glyphs read as bodies.
         float edge = 0.045;
         float outline = smoothstep(edge * 2.0, edge, abs(d));
 
-        vec3 nucleusTint = mix(tint, vec3(1.0), 0.25);
-        vec3 finalCol = mix(tint, nucleusTint, clamp(nucleus + typeDot, 0.0, 1.0));
-        finalCol = mix(finalCol, vec3(1.0, 0.35, 0.15), 0.35 * damage);
+        // Error halo: show warnings/risk as a halo around the cell rather than
+        // stripes across the soma (matches the neuron mock-up intent).
+        float warn01 = clamp(max(vWarn, risk), 0.0, 1.0);
+        // d is signed distance to the body: 0 at membrane, >0 outside.
+        float outside = step(0.0, d);
+        float haloRing = smoothstep(0.06, 0.00, abs(d - 0.14)) * outside;
+        vec3 haloCol = vec3(1.0, 0.55, 0.20);
+
+        vec3 nucleusTint = vec3(0.08, 0.10, 0.12);
+        vec3 mitoTint = vec3(0.98, 0.78, 0.20);
+        vec3 finalCol = mix(tint, nucleusTint, clamp(nucleus, 0.0, 1.0));
+        finalCol = mix(finalCol, mitoTint, 0.55 * mito);
+        finalCol = mix(finalCol, vec3(1.0), 0.12 * typeDot);
+        finalCol = mix(finalCol, haloCol, 0.55 * warn01 * haloRing);
         finalCol = mix(finalCol, vec3(0.0), 0.35 * outline); // darker membrane edge
 
         // In neuron mode, overlay the squash-family glyph inside the soma as an
@@ -1843,8 +1844,16 @@ class StarfieldRenderer {
 
         float alpha = fill * (0.75 + 0.20 * glow) * depthFade;
         alpha += risk * 0.25 * glow;
-        alpha += vFocus * 0.45 * glow;
+        alpha += 0.65 * warn01 * haloRing;
+
+        // Focus highlight: in neuron mode prefer a membrane outline rather than
+        // more glow, so the shape stays readable.
+        float focusAlpha = vFocus * mix(0.45 * glow, 0.55 * outline, isNeuron);
+        alpha += focusAlpha;
         alpha = max(alpha, 0.65 * (nucleus + typeDot));
+        // Visibility mask: fade non-neighbourhood neurons so the view reads as a
+        // network, not a starfield (Issue #44, 1-Jan-2026).
+        alpha *= mix(0.06, 1.0, clamp(vVis, 0.0, 1.0));
         gl_FragColor = vec4(finalCol, clamp(alpha, 0.0, 1.0));
       }
     `,
@@ -1860,6 +1869,7 @@ class StarfieldRenderer {
     this.aWarn = gl.getAttribLocation(this.program, "aWarn");
     this.aInDeg = gl.getAttribLocation(this.program, "aInDeg");
     this.aOutDeg = gl.getAttribLocation(this.program, "aOutDeg");
+    this.aVis = gl.getAttribLocation(this.program, "aVis");
     this.uProj = gl.getUniformLocation(this.program, "uProj");
     this.uView = gl.getUniformLocation(this.program, "uView");
     this.uPixelRatio = gl.getUniformLocation(this.program, "uPixelRatio");
@@ -1875,6 +1885,7 @@ class StarfieldRenderer {
     this.bufWarn = gl.createBuffer();
     this.bufInDeg = gl.createBuffer();
     this.bufOutDeg = gl.createBuffer();
+    this.bufVis = gl.createBuffer();
 
     // Lines (synapses) program
     this.lineProgram = createProgram(
@@ -1905,6 +1916,71 @@ class StarfieldRenderer {
     this.bufLinePos = gl.createBuffer();
     this.bufLineCol = gl.createBuffer();
     this.lineCount = 0;
+
+    // Synapse ribbon program (v2):
+    // Render synapses as proper thick ribbons (triangles) so width is reliable
+    // in WebGL1 (gl.LINES lineWidth is not portable).
+    //
+    // We expand each line segment in clip space in the vertex shader using the
+    // segment direction projected into view space. This keeps thickness stable
+    // in screen pixels (Issue #44, 1-Jan-2026).
+    this.synProgram = createProgram(
+      gl,
+      `
+      attribute vec3 aPos;
+      attribute vec3 aDir;
+      attribute float aSide;
+      attribute float aWidthPx;
+      attribute vec4 aCol;
+      uniform mat4 uProj;
+      uniform mat4 uView;
+      uniform vec2 uViewport;
+      varying vec4 vCol;
+      void main() {
+        vec4 viewPos = uView * vec4(aPos, 1.0);
+        vec3 viewDir3 = (uView * vec4(aPos + aDir, 1.0)).xyz - viewPos.xyz;
+        // NaN guard:
+        // When a synapse segment is nearly parallel to the camera view direction,
+        // viewDir3.xy can be ~zero length. normalize(vec2(0)) yields NaNs in
+        // GLSL, which then corrupts clip-space expansion and can cause flicker
+        // or missing ribbon segments (Issue #44, 1-Jan-2026).
+        vec2 viewDir2 = viewDir3.xy;
+        float viewLen2 = dot(viewDir2, viewDir2);
+        vec2 d = viewDir2 * inversesqrt(max(viewLen2, 1e-8));
+        // Perpendicular in screen plane (view space XY).
+        vec2 p = vec2(-d.y, d.x);
+
+        vec4 clip = uProj * viewPos;
+        // Convert px -> NDC offset, then to clip via *w.
+        vec2 pxToNdc = vec2(2.0 / max(1.0, uViewport.x), 2.0 / max(1.0, uViewport.y));
+        vec2 ndcOffset = p * (aSide * aWidthPx) * pxToNdc;
+        clip.xy += ndcOffset * clip.w;
+        gl_Position = clip;
+        vCol = aCol;
+      }
+    `,
+      `
+      precision mediump float;
+      varying vec4 vCol;
+      void main() {
+        gl_FragColor = vCol;
+      }
+    `,
+    );
+    this.synAPos = gl.getAttribLocation(this.synProgram, "aPos");
+    this.synADir = gl.getAttribLocation(this.synProgram, "aDir");
+    this.synASide = gl.getAttribLocation(this.synProgram, "aSide");
+    this.synAWidth = gl.getAttribLocation(this.synProgram, "aWidthPx");
+    this.synACol = gl.getAttribLocation(this.synProgram, "aCol");
+    this.synUProj = gl.getUniformLocation(this.synProgram, "uProj");
+    this.synUView = gl.getUniformLocation(this.synProgram, "uView");
+    this.synUViewport = gl.getUniformLocation(this.synProgram, "uViewport");
+    this.bufSynPos = gl.createBuffer();
+    this.bufSynCol = gl.createBuffer();
+    this.bufSynDir = gl.createBuffer();
+    this.bufSynSide = gl.createBuffer();
+    this.bufSynWidth = gl.createBuffer();
+    this.synVertCount = 0;
 
     this.count = 0;
     this.meta = [];
@@ -2138,6 +2214,18 @@ class StarfieldRenderer {
     }, { passive: false });
 
     window.addEventListener("keydown", (e) => {
+      // Support discrete zoom steps on key press. This helps users who don't
+      // have a wheel/trackpad handy (or are using keyboard-only navigation).
+      // Note: zoomBy() is along the current view direction.
+      const t = /** @type {any} */ (e.target);
+      const tag = String(t?.tagName ?? "").toLowerCase();
+      if (tag !== "input" && tag !== "textarea") {
+        const k = String(e.key ?? "").toLowerCase();
+        // Larger step so a single key press is visible.
+        if (k === "+" || k === "=" || k === "]") this.zoomBy(-180);
+        if (k === "-" || k === "_" || k === "[") this.zoomBy(180);
+        if (k === "z") this.zoomToFocus(70);
+      }
       this.keys.add(e.key.toLowerCase());
     });
     window.addEventListener("keyup", (e) => {
@@ -2194,6 +2282,31 @@ class StarfieldRenderer {
     this.clampDistance(20, 1400);
   }
 
+  zoomToFocus(distance = 70) {
+    // Zoom the camera to the focused neuron so the cell body + nucleus are
+    // readable without manual fiddling (Issue #44, 1-Jan-2026).
+    //
+    // In focus-centric layouts, the focus is at/near the origin, but we still
+    // use the current focus position so this works for alternate layouts.
+    let fx = 0;
+    let fy = 0;
+    let fz = 0;
+    const idx = this.focusIndex ?? -1;
+    if (idx >= 0 && this.positions) {
+      fx = this.positions[idx * 3 + 0] ?? 0;
+      fy = this.positions[idx * 3 + 1] ?? 0;
+      fz = this.positions[idx * 3 + 2] ?? 0;
+    }
+
+    // Reset view direction so the user gets a stable, repeatable close-up.
+    this.yaw = 0;
+    this.pitch = 0;
+    this.pos.x = fx;
+    this.pos.y = fy;
+    this.pos.z = fz + distance;
+    this.clampDistance(20, 1400);
+  }
+
   setData({
     positions,
     colours,
@@ -2204,6 +2317,7 @@ class StarfieldRenderer {
     warn,
     inDeg,
     outDeg,
+    vis,
     meta,
   }) {
     const gl = this.gl;
@@ -2241,6 +2355,15 @@ class StarfieldRenderer {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
     gl.bufferData(gl.ARRAY_BUFFER, outDeg, gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
+    gl.bufferData(gl.ARRAY_BUFFER, vis, gl.DYNAMIC_DRAW);
+  }
+
+  updateVisibility(vis) {
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
+    gl.bufferData(gl.ARRAY_BUFFER, vis, gl.DYNAMIC_DRAW);
   }
 
   updatePositions(positions) {
@@ -2266,6 +2389,22 @@ class StarfieldRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, linePositions, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLineCol);
     gl.bufferData(gl.ARRAY_BUFFER, lineColours, gl.DYNAMIC_DRAW);
+  }
+
+  updateSynapses({ positions, dirs, sides, widths, colours }) {
+    const gl = this.gl;
+    this.synVertCount = Math.floor(positions.length / 3);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynPos);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynDir);
+    gl.bufferData(gl.ARRAY_BUFFER, dirs, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynSide);
+    gl.bufferData(gl.ARRAY_BUFFER, sides, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynWidth);
+    gl.bufferData(gl.ARRAY_BUFFER, widths, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynCol);
+    gl.bufferData(gl.ARRAY_BUFFER, colours, gl.DYNAMIC_DRAW);
   }
 
   resizeToDisplaySize() {
@@ -2365,6 +2504,37 @@ class StarfieldRenderer {
       gl.drawArrays(gl.LINES, 0, this.lineCount);
     }
 
+    // Draw synapse ribbons next.
+    if (this.synVertCount > 0) {
+      gl.useProgram(this.synProgram);
+      gl.uniformMatrix4fv(this.synUProj, false, proj);
+      gl.uniformMatrix4fv(this.synUView, false, view);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform2f(this.synUViewport, this.canvas.width, this.canvas.height);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynPos);
+      gl.enableVertexAttribArray(this.synAPos);
+      gl.vertexAttribPointer(this.synAPos, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynDir);
+      gl.enableVertexAttribArray(this.synADir);
+      gl.vertexAttribPointer(this.synADir, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynSide);
+      gl.enableVertexAttribArray(this.synASide);
+      gl.vertexAttribPointer(this.synASide, 1, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynWidth);
+      gl.enableVertexAttribArray(this.synAWidth);
+      gl.vertexAttribPointer(this.synAWidth, 1, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynCol);
+      gl.enableVertexAttribArray(this.synACol);
+      gl.vertexAttribPointer(this.synACol, 4, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, this.synVertCount);
+    }
+
     // Then draw neurons.
     gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uProj, false, proj);
@@ -2412,6 +2582,10 @@ class StarfieldRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
     gl.enableVertexAttribArray(this.aOutDeg);
     gl.vertexAttribPointer(this.aOutDeg, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
+    gl.enableVertexAttribArray(this.aVis);
+    gl.vertexAttribPointer(this.aVis, 1, gl.FLOAT, false, 0, 0);
 
     gl.drawArrays(gl.POINTS, 0, this.count);
   }
@@ -2613,7 +2787,7 @@ function appendTrailLines({ linePos, lineCol, p, c, positions, alpha = 0.55 }) {
 }
 
 // ============================================================================
-// Synapse cables (v1)
+// Synapse ribbons (v2)
 // ============================================================================
 
 // Use a small fixed segment count so cables read as curved without blowing up
@@ -2688,6 +2862,142 @@ function appendCurvedEdge({
   }
 
   return { p, c };
+}
+
+function appendSynapseRibbonSegment({
+  pos,
+  dir,
+  side,
+  width,
+  col,
+  p,
+  d,
+  s,
+  w,
+  c,
+  ax,
+  ay,
+  az,
+  bx,
+  by,
+  bz,
+  widthPx,
+  rgba,
+}) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+
+  // Two triangles for the segment, expanded in shader using aSide (+/-1).
+  // Triangle 1: A-, A+, B-
+  // Triangle 2: B-, A+, B+
+  const push = (x, y, z, sx) => {
+    pos[p++] = x;
+    pos[p++] = y;
+    pos[p++] = z;
+    dir[d++] = dx;
+    dir[d++] = dy;
+    dir[d++] = dz;
+    side[s++] = sx;
+    width[w++] = widthPx;
+    col[c++] = rgba[0];
+    col[c++] = rgba[1];
+    col[c++] = rgba[2];
+    col[c++] = rgba[3];
+    return { p, d, s, w, c };
+  };
+
+  ({ p, d, s, w, c } = push(ax, ay, az, -1.0));
+  ({ p, d, s, w, c } = push(ax, ay, az, +1.0));
+  ({ p, d, s, w, c } = push(bx, by, bz, -1.0));
+
+  ({ p, d, s, w, c } = push(bx, by, bz, -1.0));
+  ({ p, d, s, w, c } = push(ax, ay, az, +1.0));
+  ({ p, d, s, w, c } = push(bx, by, bz, +1.0));
+
+  return { p, d, s, w, c };
+}
+
+function appendSynapseRibbon({
+  pos,
+  dir,
+  side,
+  width,
+  col,
+  p,
+  d,
+  s,
+  w,
+  c,
+  ax,
+  ay,
+  az,
+  bx,
+  by,
+  bz,
+  rgba, // [r,g,b,a]
+  bend01, // 0..1
+  bendSign, // -1 or +1
+  widthPx,
+}) {
+  // Quadratic bezier control point (same curve as appendCurvedEdge).
+  const mx = (ax + bx) * 0.5;
+  const my = (ay + by) * 0.5;
+  const mz = (az + bz) * 0.5;
+
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+
+  const lenXY = Math.hypot(dx, dy);
+  const px = lenXY > 1e-6 ? (-dy / lenXY) : 1;
+  const py = lenXY > 1e-6 ? (dx / lenXY) : 0;
+
+  const chord = Math.hypot(dx, dy, dz);
+  const bend = chord * (0.08 + 0.22 * bend01) * bendSign;
+
+  const cx = mx + px * bend;
+  const cy = my + py * bend;
+  const cz = mz + 0.10 * chord * bend01;
+
+  let lastX = ax;
+  let lastY = ay;
+  let lastZ = az;
+
+  for (let seg = 1; seg <= CURVE_SEGMENTS; seg++) {
+    const t = seg / CURVE_SEGMENTS;
+    const it = 1 - t;
+    const x = it * it * ax + 2 * it * t * cx + t * t * bx;
+    const y = it * it * ay + 2 * it * t * cy + t * t * by;
+    const z = it * it * az + 2 * it * t * cz + t * t * bz;
+
+    ({ p, d, s, w, c } = appendSynapseRibbonSegment({
+      pos,
+      dir,
+      side,
+      width,
+      col,
+      p,
+      d,
+      s,
+      w,
+      c,
+      ax: lastX,
+      ay: lastY,
+      az: lastZ,
+      bx: x,
+      by: y,
+      bz: z,
+      widthPx,
+      rgba,
+    }));
+
+    lastX = x;
+    lastY = y;
+    lastZ = z;
+  }
+
+  return { p, d, s, w, c };
 }
 
 function appendOutputPathLines({
@@ -3239,6 +3549,7 @@ async function loadSnapshot(source, label) {
       warn: points.warn,
       inDeg: points.inDeg,
       outDeg: points.outDeg,
+      vis: points.vis,
       meta: points.meta,
     });
     renderer.resetCamera();
@@ -3348,6 +3659,12 @@ function initStarfield() {
     });
     updateBackButtonState();
   }
+  // Zoom to focus.
+  if (el.zoomBtn instanceof HTMLButtonElement) {
+    el.zoomBtn.addEventListener("click", () => {
+      renderer?.zoomToFocus?.(70);
+    });
+  }
   window.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace") return;
     // Don't steal Backspace when typing in inputs.
@@ -3372,9 +3689,9 @@ function initStarfield() {
     normaliseFocusTrailForCurrentFocus(focusUuid);
     updateBackButtonState();
     if (points && adjacency && focusUuid) {
-      const backUuid = (focusTrail.length >= 2)
-        ? (focusTrail[focusTrail.length - 2] ?? null)
-        : (prevMeta?.uuid ?? null);
+      // Recompute the output->focus path before any downstream consumers read it.
+      // This avoids stale visibility highlighting when changing focus quickly
+      // (Issue #44, 1-Jan-2026).
       outputPathToFocus = (graph?.neuronsByUuid && inboundAdjacency)
         ? computeOutputPathToFocus({
           neuronsByUuid: graph.neuronsByUuid,
@@ -3385,6 +3702,30 @@ function initStarfield() {
       // Keep only the local tail of the output->focus path (avoid clutter).
       // This keeps the path readable even when the focus is far upstream.
       outputPathToFocus = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
+
+      // Visibility mask: keep the focus neighbourhood readable by fading the
+      // rest of the network (Issue #44, 1-Jan-2026).
+      if (points.vis && renderer?.updateVisibility) {
+        points.vis.fill(0.08);
+        const allocForVis = computeInboundAllocationForFocus(focusUuid);
+        const inboundForVis = selectInboundEdgesForRender(
+          allocForVis.rows,
+          focusUuid,
+        );
+        const pathTail = outputPathToFocus;
+        const trail = focusTrail.slice(-Math.min(8, focusTrail.length));
+        const want = new Set([focusUuid, ...pathTail, ...trail]);
+        for (const r of inboundForVis) want.add(r.fromUuid);
+        for (const u of want) {
+          const i = points.indexByUuid.get(String(u));
+          if (i != null) points.vis[i] = 1.0;
+        }
+        renderer.updateVisibility(points.vis);
+      }
+
+      const backUuid = (focusTrail.length >= 2)
+        ? (focusTrail[focusTrail.length - 2] ?? null)
+        : (prevMeta?.uuid ?? null);
       // Paths mode needs both the upstream positions (for rendering) and the BFS
       // distances (for selecting which upstream edges to render). Computing the
       // upstream layout is relatively expensive, so do it once and reuse.
@@ -3421,15 +3762,29 @@ function initStarfield() {
           const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
           inboundRenderedCount = inbound.length;
 
-          // Reserve space for inbound + path (and no longer render the full
-          // upstream subgraph, which can be extremely dense).
+          // Synapse ribbons (v2): render inbound synapses as thick lines
+          // (triangles) so width is reliable in WebGL1.
+          const synVertsPerEdge = CURVE_SEGMENTS * 6;
+          const synVertCount = inbound.length * synVertsPerEdge;
+          const synPos = new Float32Array(synVertCount * 3);
+          const synDir = new Float32Array(synVertCount * 3);
+          const synSide = new Float32Array(synVertCount);
+          const synWidth = new Float32Array(synVertCount);
+          const synCol = new Float32Array(synVertCount * 4);
+          let sp = 0;
+          let sd = 0;
+          let ss = 0;
+          let sw = 0;
+          let sc = 0;
+
+          // Reserve space for the output->focus path + trail (thin guide lines).
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
           const trailEdges = Math.max(0, getTrailIndexPairs().length);
           const linePos = new Float32Array(
-            (inbound.length * CURVE_SEGMENTS + pathEdges + trailEdges) * 2 * 3,
+            (pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length * CURVE_SEGMENTS + pathEdges + trailEdges) * 2 * 4,
+            (pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -3454,20 +3809,39 @@ function initStarfield() {
             const h = hash32(`${r.fromUuid}→${r.toUuid}::bend`);
             const u = u32ToU01(h);
             const bendSign = (h & 1) === 0 ? -1 : 1;
-            ({ p, c } = appendCurvedEdge({
-              linePos,
-              lineCol,
-              p,
-              c,
+
+            // Width mapping:
+            // - Primary: |weight| * impact (signal strength)
+            // - Kept bounded so a high fan-in output neuron remains readable.
+            const fromImpact = impactsByUuid?.[r.fromUuid] ?? 0;
+            const widthSignal = Math.abs(r.weight ?? 0) *
+              Math.abs(fromImpact ?? 0);
+            const widthPx = clamp(
+              1.2 + 6.0 * Math.sqrt(widthSignal + 1e-12),
+              1.2,
+              7.0,
+            );
+            ({ p: sp, d: sd, s: ss, w: sw, c: sc } = appendSynapseRibbon({
+              pos: synPos,
+              dir: synDir,
+              side: synSide,
+              width: synWidth,
+              col: synCol,
+              p: sp,
+              d: sd,
+              s: ss,
+              w: sw,
+              c: sc,
               ax: fx,
               ay: fy,
               az: fz,
               bx: tx,
               by: ty,
               bz: tz,
-              col: [base[0], base[1], base[2], a],
+              rgba: [base[0], base[1], base[2], a],
               bend01: u,
               bendSign,
+              widthPx,
             }));
           }
 
@@ -3489,19 +3863,38 @@ function initStarfield() {
             alpha: 0.55,
           }));
           renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
+          renderer.updateSynapses({
+            positions: synPos.slice(0, sp),
+            dirs: synDir.slice(0, sd),
+            sides: synSide.slice(0, ss),
+            widths: synWidth.slice(0, sw),
+            colours: synCol.slice(0, sc),
+          });
         } else {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
           const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
           inboundRenderedCount = inbound.length;
+          const synVertsPerEdge = CURVE_SEGMENTS * 6;
+          const synVertCount = inbound.length * synVertsPerEdge;
+          const synPos = new Float32Array(synVertCount * 3);
+          const synDir = new Float32Array(synVertCount * 3);
+          const synSide = new Float32Array(synVertCount);
+          const synWidth = new Float32Array(synVertCount);
+          const synCol = new Float32Array(synVertCount * 4);
+          let sp = 0;
+          let sd = 0;
+          let ss = 0;
+          let sw = 0;
+          let sc = 0;
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
           const trailEdges = Math.max(0, getTrailIndexPairs().length);
 
           const linePos = new Float32Array(
-            (inbound.length * CURVE_SEGMENTS + pathEdges + trailEdges) * 2 * 3,
+            (pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (inbound.length * CURVE_SEGMENTS + pathEdges + trailEdges) * 2 * 4,
+            (pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -3521,20 +3914,36 @@ function initStarfield() {
             const h = hash32(`${r.fromUuid}→${r.toUuid}::bend`);
             const u = u32ToU01(h);
             const bendSign = (h & 1) === 0 ? -1 : 1;
-            ({ p, c } = appendCurvedEdge({
-              linePos,
-              lineCol,
-              p,
-              c,
+
+            const fromImpact = impactsByUuid?.[r.fromUuid] ?? 0;
+            const widthSignal = Math.abs(r.weight ?? 0) *
+              Math.abs(fromImpact ?? 0);
+            const widthPx = clamp(
+              1.2 + 6.0 * Math.sqrt(widthSignal + 1e-12),
+              1.2,
+              7.0,
+            );
+            ({ p: sp, d: sd, s: ss, w: sw, c: sc } = appendSynapseRibbon({
+              pos: synPos,
+              dir: synDir,
+              side: synSide,
+              width: synWidth,
+              col: synCol,
+              p: sp,
+              d: sd,
+              s: ss,
+              w: sw,
+              c: sc,
               ax: 0,
               ay: 0,
               az: 0,
               bx: x,
               by: y,
               bz: z,
-              col: [base[0], base[1], base[2], a],
+              rgba: [base[0], base[1], base[2], a],
               bend01: u,
               bendSign,
+              widthPx,
             }));
           }
 
@@ -3556,6 +3965,13 @@ function initStarfield() {
             alpha: 0.55,
           }));
           renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
+          renderer.updateSynapses({
+            positions: synPos.slice(0, sp),
+            dirs: synDir.slice(0, sd),
+            sides: synSide.slice(0, ss),
+            widths: synWidth.slice(0, sw),
+            colours: synCol.slice(0, sc),
+          });
         }
       }
       renderer.resetCamera();
