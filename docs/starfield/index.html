@@ -13,7 +13,9 @@
       media="(prefers-color-scheme: dark)"
     />
 
-    <link rel="stylesheet" href="./starfield.css?v=__BUILD_ID__" />
+    <!-- Reuse the main graph explorer styling so the Starfield page stays in
+         lock-step with the renderer/UI in docs/graph/graph.js. -->
+    <link rel="stylesheet" href="../graph/graph.css?v=__BUILD_ID__" />
     <link rel="manifest" href="../manifest.webmanifest" />
     <link rel="icon" href="../favicon.ico" />
     <link
@@ -71,6 +73,15 @@
             Back
           </button>
           <button
+            id="zoomBtn"
+            class="button buttonSecondary"
+            type="button"
+            aria-label="Zoom to focused neuron"
+            title="Zoom to focus"
+          >
+            Zoom
+          </button>
+          <button
             id="modeToggle"
             class="button buttonSecondary"
             type="button"
@@ -78,6 +89,15 @@
             title="Mode: Impact Flow (tap to toggle)"
           >
             Impact
+          </button>
+          <button
+            id="glyphToggle"
+            class="button buttonSecondary"
+            type="button"
+            aria-label="Glyph style (Neuron / Abstract)"
+            title="Glyph: Neuron (tap to toggle)"
+          >
+            Glyph: Neuron
           </button>
         </div>
         <div
@@ -138,6 +158,23 @@
             Tap a neuron to focus · Backspace/Back to go back · Drag to look ·
             WASD/Arrows to fly
           </div>
+          <details class="legendDetails" open>
+            <summary class="legendSummary">Glyphs</summary>
+            <div
+              id="glyphGallery"
+              class="glyphGallery"
+              aria-label="Glyph gallery"
+            >
+            </div>
+            <div class="glyphMapping" aria-label="Glyph mapping notes">
+              <div>
+                <span class="k">Size</span>: log scale of neuron impact ·
+                <span class="k">Colour</span>: type + hidden squash flavour ·
+                <span class="k">Nucleus</span>: squash family ·
+                <span class="k">Branches</span>: in/out degree hints
+              </div>
+            </div>
+          </details>
         </div>
       </aside>
       <div class="help">
@@ -158,7 +195,13 @@
       // pending forever if installation/activation fails. Use a timeout so the
       // app still boots in degraded mode.
       (async () => {
-        if ("serviceWorker" in navigator) {
+        // Local/dev escape hatch: allow disabling the Service Worker so you can
+        // debug without navigation routing/caching surprises.
+        // Usage: append `?noSw=1` to the URL.
+        const params = new URLSearchParams(location.search);
+        const noSw = params.get("noSw") === "1";
+
+        if (!noSw && "serviceWorker" in navigator) {
           try {
             await navigator.serviceWorker.register(
               "../sw.js?v=__BUILD_ID__",

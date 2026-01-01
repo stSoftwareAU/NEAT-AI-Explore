@@ -22,4 +22,24 @@ Deno.test("starfield page imports an existing JS entrypoint (Issue #44, 1-Jan-20
 
   const js = await Deno.readTextFile(jsPath);
   assert(js.trim().length > 0, "Expected docs/starfield/starfield.js to exist");
+  assert(
+    js.includes('import "../graph/graph.js"') ||
+      js.includes('import "../graph/graph.js";'),
+    "Expected docs/starfield/starfield.js to delegate to docs/graph/graph.js",
+  );
+
+  // Regression guard:
+  // The starfield entrypoint must remain a thin wrapper (import-only). If it
+  // contains a full renderer implementation, the starfield page can drift and
+  // miss new graph explorer features (visibility masks, synapse ribbons, zoom
+  // controls, updated glyphs, etc.).
+  const lineCount = js.split("\n").length;
+  assert(
+    lineCount < 80,
+    `Expected docs/starfield/starfield.js to stay thin (<80 lines), got ${lineCount}`,
+  );
+  assert(
+    !js.includes("class StarfieldRenderer") && !js.includes("initStarfield"),
+    "Expected docs/starfield/starfield.js not to embed a renderer implementation",
+  );
 });
