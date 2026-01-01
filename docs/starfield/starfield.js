@@ -1,4 +1,18 @@
 /**
+ * Starfield page entrypoint.
+ *
+ * The Starfield renderer currently lives in `docs/graph/graph.js` (historical
+ * naming: the "graph explorer" is rendered as a starfield). This thin module
+ * exists so `docs/starfield/index.html` can import a stable, local entrypoint
+ * without duplicating the large renderer bundle.
+ *
+ * Issue #44 (1-Jan-2026): `docs/starfield/index.html` referenced `starfield.js`,
+ * but the file was missing, causing a 404 and a non-functional page.
+ */
+
+import "../graph/graph.js";
+
+/**
  * NEAT-AI Explore - Starfield view (Issue #25)
  *
  * A fun, intuitive 3D visualisation of a full creature graph. Each neuron is a
@@ -35,7 +49,6 @@ const MAX_FOCUS_TRAIL = 64;
 
 // Line budget (reduce clutter for high-fan-in NEAT neurons).
 const MAX_INBOUND_LINES = 80;
-const MAX_INBOUND_LINES_OUTPUT = 220;
 const MIN_INBOUND_LINES = 16;
 const MIN_INBOUND_SHARE = 0.004; // 0.4% of inbound allocation (tuned for signal)
 
@@ -45,7 +58,6 @@ const el = {
   fileInput: document.getElementById("fileInput"),
   fileBtn: document.getElementById("fileBtn"),
   backBtn: document.getElementById("backBtn"),
-  zoomBtn: document.getElementById("zoomBtn"),
   progressContainer: document.getElementById("progressContainer"),
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
@@ -58,13 +70,7 @@ const el = {
   legend: document.getElementById("legend"),
   legendToggle: document.getElementById("legendToggle"),
   modeToggle: document.getElementById("modeToggle"),
-  glyphToggle: document.getElementById("glyphToggle"),
-  glyphGallery: document.getElementById("glyphGallery"),
 };
-
-// Glyph style is user-facing: "neuron" is a more recognisable silhouette,
-// "abstract" is the v1 squash-family shapes.
-let glyphStyle = "neuron";
 
 function setStatus(msg, kind = "") {
   if (!el.status) return;
@@ -165,442 +171,6 @@ function getNeuronSquash(neuronsByUuid, uuid) {
 function getNeuronBias(neuronsByUuid, uuid) {
   const n = neuronsByUuid.get(uuid);
   return typeof n?.bias === "number" ? n.bias : null;
-}
-
-// ============================================================================
-// Glyph system (v1, shader-friendly)
-// ============================================================================
-
-// Glyph kinds are small integer codes passed to the WebGL point-sprite shader.
-// Keep this list short so the visual language stays learnable at a glance.
-//
-// Notes (Australian English):
-// - Shapes encode squash *families*, not every individual squash. The long tail
-//   can be disambiguated via the HUD rather than visual noise.
-// - Bias is encoded spatially via a nucleus offset (not colour).
-const GLYPH = {
-  CIRCLE: 0, // identity-ish
-  WEDGE: 1, // rectifier-ish
-  DIAMOND: 2, // polynomial / power-ish
-  CHEVRON: 3, // sign-lossy / absolute-ish
-  SQUARE: 4, // step / brittle / discrete
-  SPLIT: 5, // conditional / min/max / selection
-  CAPSULE: 6, // smooth saturating monotonic
-  RING_LOBE: 7, // periodic / oscillatory
-};
-
-function glyphLabel(kind) {
-  if (kind === GLYPH.CIRCLE) return "Circle";
-  if (kind === GLYPH.WEDGE) return "Wedge";
-  if (kind === GLYPH.DIAMOND) return "Diamond";
-  if (kind === GLYPH.CHEVRON) return "Chevron";
-  if (kind === GLYPH.SQUARE) return "Square";
-  if (kind === GLYPH.SPLIT) return "Split";
-  if (kind === GLYPH.CAPSULE) return "Capsule";
-  return "Ring-lobe";
-}
-
-function glyphMeaning(kind) {
-  if (kind === GLYPH.CIRCLE) return "Identity-ish / linear";
-  if (kind === GLYPH.WEDGE) return "Rectifier family";
-  if (kind === GLYPH.DIAMOND) return "Polynomial / power-ish";
-  if (kind === GLYPH.CHEVRON) return "Sign-lossy / absolute-ish";
-  if (kind === GLYPH.SQUARE) return "Step / discrete / brittle";
-  if (kind === GLYPH.SPLIT) return "Conditional / min/max / selection";
-  if (kind === GLYPH.CAPSULE) return "Smooth saturating / bounded";
-  return "Periodic / oscillatory";
-}
-
-function renderGlyphGallery() {
-  if (!(el.glyphGallery instanceof HTMLElement)) return;
-
-  const container = el.glyphGallery;
-  container.textContent = "";
-
-  /** @type {Array<{ kind: number, name: string, desc: string }>} */
-  const items = [
-    {
-      kind: GLYPH.CIRCLE,
-      name: glyphLabel(GLYPH.CIRCLE),
-      desc: glyphMeaning(GLYPH.CIRCLE),
-    },
-    {
-      kind: GLYPH.WEDGE,
-      name: glyphLabel(GLYPH.WEDGE),
-      desc: glyphMeaning(GLYPH.WEDGE),
-    },
-    {
-      kind: GLYPH.DIAMOND,
-      name: glyphLabel(GLYPH.DIAMOND),
-      desc: glyphMeaning(GLYPH.DIAMOND),
-    },
-    {
-      kind: GLYPH.CHEVRON,
-      name: glyphLabel(GLYPH.CHEVRON),
-      desc: glyphMeaning(GLYPH.CHEVRON),
-    },
-    {
-      kind: GLYPH.SQUARE,
-      name: glyphLabel(GLYPH.SQUARE),
-      desc: glyphMeaning(GLYPH.SQUARE),
-    },
-    {
-      kind: GLYPH.SPLIT,
-      name: glyphLabel(GLYPH.SPLIT),
-      desc: glyphMeaning(GLYPH.SPLIT),
-    },
-    {
-      kind: GLYPH.CAPSULE,
-      name: glyphLabel(GLYPH.CAPSULE),
-      desc: glyphMeaning(GLYPH.CAPSULE),
-    },
-    {
-      kind: GLYPH.RING_LOBE,
-      name: glyphLabel(GLYPH.RING_LOBE),
-      desc: glyphMeaning(GLYPH.RING_LOBE),
-    },
-  ];
-
-  for (const it of items) {
-    const card = document.createElement("div");
-    card.className = "glyphCard";
-
-    const canvas = document.createElement("canvas");
-    canvas.className = "glyphSwatch";
-    canvas.width = 44;
-    canvas.height = 44;
-    drawGlyphSwatch(canvas, { kind: it.kind, style: glyphStyle });
-
-    const text = document.createElement("div");
-    const name = document.createElement("div");
-    name.className = "glyphName";
-    name.textContent = it.name;
-    const desc = document.createElement("div");
-    desc.className = "glyphDesc";
-    desc.textContent = it.desc;
-    text.appendChild(name);
-    text.appendChild(desc);
-
-    card.appendChild(canvas);
-    card.appendChild(text);
-    container.appendChild(card);
-  }
-}
-
-function drawGlyphSwatch(canvas, { kind, style }) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  // Clear to transparent so it sits nicely on the legend background.
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-
-  // Base colour tuned for dark UI.
-  const base = "rgba(96,165,250,0.95)";
-  const outline = "rgba(0,0,0,0.65)";
-
-  if (style === "neuron") {
-    drawNeuronIcon(ctx, { kind, base, outline });
-  } else {
-    drawAbstractIcon(ctx, { kind, base, outline, scale: 18 });
-  }
-
-  ctx.restore();
-}
-
-function drawAbstractIcon(ctx, { kind, base, outline, scale }) {
-  ctx.save();
-  ctx.lineWidth = 2;
-  ctx.fillStyle = base;
-  ctx.strokeStyle = outline;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-
-  const s = scale;
-
-  // Helper: circle.
-  const circle = (r) => {
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.closePath();
-  };
-
-  if (kind === GLYPH.CIRCLE) {
-    circle(s * 0.9);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.SQUARE) {
-    ctx.beginPath();
-    ctx.rect(-s * 0.82, -s * 0.82, s * 1.64, s * 1.64);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.DIAMOND) {
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 1.05);
-    ctx.lineTo(s * 1.05, 0);
-    ctx.lineTo(0, s * 1.05);
-    ctx.lineTo(-s * 1.05, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.CAPSULE) {
-    const r = s * 0.55;
-    const half = s * 0.55;
-    ctx.beginPath();
-    ctx.moveTo(-half, -r);
-    ctx.arcTo(half, -r, half, r, r);
-    ctx.arcTo(half, r, -half, r, r);
-    ctx.arcTo(-half, r, -half, -r, r);
-    ctx.arcTo(-half, -r, half, -r, r);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.WEDGE) {
-    circle(s * 0.92);
-    ctx.save();
-    ctx.clip();
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.10, -s * 1.2);
-    ctx.lineTo(s * 1.2, 0);
-    ctx.lineTo(-s * 0.10, s * 1.2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.SPLIT) {
-    circle(s * 0.92);
-    ctx.fill();
-    ctx.stroke();
-    // Chord cut.
-    ctx.save();
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.10, -s * 1.2);
-    ctx.lineTo(s * 1.2, s * 0.20);
-    ctx.lineTo(s * 1.2, s * 1.2);
-    ctx.lineTo(-s * 1.2, s * 1.2);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(0,0,0,1)";
-    ctx.fill();
-    ctx.restore();
-    ctx.restore();
-    return;
-  }
-
-  if (kind === GLYPH.CHEVRON) {
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.95, -s * 0.10);
-    ctx.lineTo(0, s * 0.95);
-    ctx.lineTo(s * 0.95, -s * 0.10);
-    ctx.lineTo(s * 0.75, -s * 0.50);
-    ctx.lineTo(0, s * 0.45);
-    ctx.lineTo(-s * 0.75, -s * 0.50);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  // RING_LOBE (periodic): wavy annulus approximation.
-  ctx.save();
-  ctx.fillStyle = base;
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 2;
-  const outerR = s * 0.90;
-  const innerR = s * 0.52;
-  ctx.beginPath();
-  for (let i = 0; i <= 64; i++) {
-    const t = (i / 64) * Math.PI * 2;
-    const wobble = 1 + 0.10 * Math.sin(2 * t);
-    const r = outerR * wobble;
-    const x = Math.cos(t) * r;
-    const y = Math.sin(t) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  // Inner loop in reverse so even-odd fill creates a hole.
-  for (let i = 64; i >= 0; i--) {
-    const t = (i / 64) * Math.PI * 2;
-    const wobble = 1 + 0.10 * Math.sin(2 * t);
-    const r = innerR * wobble;
-    const x = Math.cos(t) * r;
-    const y = Math.sin(t) * r;
-    if (i === 64) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill("evenodd");
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawNeuronIcon(ctx, { kind, base, outline }) {
-  // Scale tuned for a 44px swatch. The icon is intentionally “cartoon”, not anatomical.
-  ctx.save();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = outline;
-  ctx.fillStyle = base;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-
-  // Soma.
-  const somaX = -6;
-  const somaR = 13;
-  ctx.beginPath();
-  ctx.arc(somaX, 0, somaR, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Dendrites (left).
-  const dend = (x0, y0, x1, y1) => {
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x1, y1, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  dend(somaX - 8, 0, -19, 0);
-  dend(somaX - 6, 6, -17, 14);
-  dend(somaX - 6, -6, -17, -14);
-
-  // Axon (right) + beads.
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(somaX + somaR - 1, 0);
-  ctx.lineTo(18, 0);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(245, 158, 11, 0.95)";
-  for (const bx of [2, 9, 15]) {
-    ctx.beginPath();
-    ctx.ellipse(bx, 0, 4.2, 3.0, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  // Terminal.
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = outline;
-  ctx.fillStyle = base;
-  ctx.beginPath();
-  ctx.moveTo(18, 0);
-  ctx.lineTo(22, 6);
-  ctx.moveTo(18, 0);
-  ctx.lineTo(22, -6);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(23, 6, 2.0, 0, Math.PI * 2);
-  ctx.arc(23, -6, 2.0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Inner glyph mark inside soma (encode squash family).
-  ctx.save();
-  ctx.translate(somaX, 0);
-  drawAbstractIcon(ctx, {
-    kind,
-    base: "rgba(255,255,255,0.22)",
-    outline: "rgba(0,0,0,0)",
-    scale: 9,
-  });
-  ctx.restore();
-
-  ctx.restore();
-}
-
-function glyphKindForNeuron(type, squash) {
-  const t = String(type ?? "").toLowerCase();
-  if (t === "input") return GLYPH.CIRCLE;
-  if (t === "constant") return GLYPH.CIRCLE;
-
-  const s = String(squash ?? "IDENTITY");
-  const u = s.toUpperCase();
-
-  // Explicitly cover the current published snapshot’s common squashes so v1 is
-  // immediately useful (Issue #43, 31-Dec-2025).
-  if (u === "BENT_IDENTITY" || u === "IDENTITY") return GLYPH.CIRCLE;
-  if (u === "SQUARE" || u === "CUBE") return GLYPH.DIAMOND;
-  if (u === "ABSOLUTE") return GLYPH.CHEVRON;
-  if (u === "STEP" || u === "BIPOLAR") return GLYPH.SQUARE;
-  if (u === "IF" || u === "MINIMUM" || u === "MAXIMUM") return GLYPH.SPLIT;
-
-  // Rectifier family.
-  if (
-    u.includes("RELU") || u.includes("LEAKY") || u === "ELU" || u === "SELU" ||
-    u === "SOFTPLUS"
-  ) {
-    return GLYPH.WEDGE;
-  }
-
-  // Periodic family.
-  if (u === "SINE" || u === "COSINE" || u === "TAN") return GLYPH.RING_LOBE;
-
-  // Smooth saturating / bounded family.
-  if (
-    u.includes("TANH") || u.includes("SIGMOID") || u === "LOGISTIC" ||
-    u === "LOGSIGMOID" || u === "SOFTSIGN" || u === "ARCTAN" || u === "ISRU" ||
-    u === "BIPOLAR_SIGMOID"
-  ) {
-    return GLYPH.CAPSULE;
-  }
-
-  // Smooth-gated (modern NN) family: treat as capsule by default to keep
-  // silhouette count low.
-  if (u === "GELU" || u === "SWISH" || u === "MISH") return GLYPH.CAPSULE;
-
-  // Fallback: neutral.
-  return GLYPH.CIRCLE;
-}
-
-function typeCode(type) {
-  const t = String(type ?? "").toLowerCase();
-  if (t === "input") return 1;
-  if (t === "output") return 2;
-  if (t === "constant") return 3;
-  return 0; // hidden/default
-}
-
-function biasToSigned01(bias) {
-  if (typeof bias !== "number" || !Number.isFinite(bias) || bias === 0) {
-    return 0;
-  }
-  const mag = Math.min(1, Math.sqrt(Math.abs(bias)) / 3.0);
-  return (bias >= 0 ? 1 : -1) * mag;
-}
-
-function warnFlag01(nonFinite, sat) {
-  const nfTotal = (nonFinite?.activation ?? 0) + (nonFinite?.value ?? 0) +
-    (nonFinite?.errors ?? 0);
-  if (nfTotal > 0) return 1;
-  const dead = sat?.fracDead ?? 0;
-  const clampFrac = sat?.fracClamped ?? 0;
-  if (dead > 0.7 || clampFrac > 0.7) return 0.5;
-  return 0;
 }
 
 // ============================================================================
@@ -1146,23 +716,13 @@ function computeInboundAllocationForFocus(focusUuid) {
   };
 }
 
-function inboundLineCapForFocus(focusUuid) {
-  if (!focusUuid || !graph?.neuronsByUuid) return MAX_INBOUND_LINES;
-  const uuid = String(focusUuid);
-  if (uuid.startsWith("output-")) return MAX_INBOUND_LINES_OUTPUT;
-  const t = String(graph.neuronsByUuid.get(uuid)?.type ?? "").toLowerCase();
-  if (t === "output") return MAX_INBOUND_LINES_OUTPUT;
-  return MAX_INBOUND_LINES;
-}
-
-function selectInboundEdgesForRender(rows, focusUuid) {
+function selectInboundEdgesForRender(rows) {
   const all = Array.isArray(rows) ? rows : [];
-  const cap = inboundLineCapForFocus(focusUuid);
   const strong = all.filter((r) => (r?.share ?? 0) >= MIN_INBOUND_SHARE);
-  const out = strong.slice(0, cap);
+  const out = strong.slice(0, MAX_INBOUND_LINES);
   if (out.length >= MIN_INBOUND_LINES) return out;
   // Guarantee a minimum number of inbound lines so the view never feels empty.
-  return all.slice(0, Math.min(cap, MIN_INBOUND_LINES));
+  return all.slice(0, Math.min(MAX_INBOUND_LINES, MIN_INBOUND_LINES));
 }
 
 function computeReachableFromOutputs({ neuronsByUuid, synapses }) {
@@ -1280,43 +840,6 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
   const n = uuids.length;
   const colours = new Float32Array(n * 4);
   const sizes = new Float32Array(n);
-  const glyphs = new Float32Array(n);
-  const bias = new Float32Array(n);
-  const types = new Float32Array(n);
-  const warn = new Float32Array(n);
-  const inDeg = new Float32Array(n);
-  const outDeg = new Float32Array(n);
-  const vis = new Float32Array(n);
-
-  // Degree counts (encode local “dendrite/axon-ness” hints in glyphs).
-  /** @type {Map<string, number>} */
-  const inCounts = new Map();
-  /** @type {Map<string, number>} */
-  const outCounts = new Map();
-  for (const s of synapses ?? []) {
-    if (!s) continue;
-    const from = s.fromUuid;
-    const to = s.toUuid;
-    if (typeof from === "string") {
-      outCounts.set(from, (outCounts.get(from) ?? 0) + 1);
-    }
-    if (typeof to === "string") {
-      inCounts.set(to, (inCounts.get(to) ?? 0) + 1);
-    }
-  }
-
-  let maxIn = 1;
-  let maxOut = 1;
-  for (const u of uuids) {
-    maxIn = Math.max(maxIn, inCounts.get(u) ?? 0);
-    maxOut = Math.max(maxOut, outCounts.get(u) ?? 0);
-  }
-  const degTo01 = (count, max) => {
-    const c = Math.max(0, Number(count ?? 0));
-    const m = Math.max(1, Number(max ?? 1));
-    // Log scale so huge fan-in/out doesn't flatten everything.
-    return Math.min(1, Math.log10(c + 1) / Math.log10(m + 1));
-  };
 
   /** @type {{ uuid: string, type: string, squash: string, impact: number|null, risk: any }[]} */
   const meta = new Array(n);
@@ -1329,7 +852,6 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     indexByUuid.set(uuid, i);
     const type = getNeuronType(neuronsByUuid, uuid);
     const squash = getNeuronSquash(neuronsByUuid, uuid);
-    const biasVal = getNeuronBias(neuronsByUuid, uuid);
     const impact = (typeof impacts?.[uuid] === "number") ? impacts[uuid] : null;
     const rec = recByUuid?.[uuid] ?? null;
 
@@ -1359,33 +881,10 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
     }
     sizes[i] = Math.min(18, Math.max(2, base));
 
-    glyphs[i] = glyphKindForNeuron(type, squash);
-    bias[i] = biasToSigned01(biasVal);
-    types[i] = typeCode(type);
-    warn[i] = warnFlag01(nonFinite, sat);
-    inDeg[i] = degTo01(inCounts.get(uuid) ?? 0, maxIn);
-    outDeg[i] = degTo01(outCounts.get(uuid) ?? 0, maxOut);
-    // Visibility mask is updated on focus changes. Default to faint so the view
-    // reads as a network (not a starfield) with a highlighted neighbourhood.
-    vis[i] = 0.10;
-
     meta[i] = { uuid, type, squash, impact, risk };
   }
 
-  return {
-    uuids,
-    colours,
-    sizes,
-    glyphs,
-    bias,
-    types,
-    warn,
-    inDeg,
-    outDeg,
-    vis,
-    meta,
-    indexByUuid,
-  };
+  return { uuids, colours, sizes, meta, indexByUuid };
 }
 
 // ============================================================================
@@ -1529,13 +1028,6 @@ class StarfieldRenderer {
       attribute vec4 aCol;
       attribute float aSize;
       attribute float aFocus;
-      attribute float aGlyph;
-      attribute float aBias;
-      attribute float aType;
-      attribute float aWarn;
-      attribute float aInDeg;
-      attribute float aOutDeg;
-      attribute float aVis;
 
       uniform mat4 uProj;
       uniform mat4 uView;
@@ -1544,13 +1036,6 @@ class StarfieldRenderer {
       varying vec4 vCol;
       varying float vDepth;
       varying float vFocus;
-      varying float vGlyph;
-      varying float vBias;
-      varying float vType;
-      varying float vWarn;
-      varying float vInDeg;
-      varying float vOutDeg;
-      varying float vVis;
 
       void main() {
         vec4 viewPos = uView * vec4(aPos, 1.0);
@@ -1559,211 +1044,25 @@ class StarfieldRenderer {
 
         // Perspective-ish size: closer neurons are bigger.
         float depthScale = clamp(140.0 / max(6.0, vDepth), 0.5, 6.0);
-        // Focus should be obvious, but never a giant "blue sun". Clamp in CSS px
-        // (then scale by pixel ratio) so the focused neuron remains readable.
-        float focusBoost = 2.0 * aFocus;
-        float sizeCss = (aSize + focusBoost) * depthScale;
-        sizeCss = clamp(sizeCss, 2.0, 58.0);
-        gl_PointSize = sizeCss * uPixelRatio;
+        gl_PointSize = (aSize + 8.0 * aFocus) * depthScale * uPixelRatio;
         vCol = aCol;
         vFocus = aFocus;
-        vGlyph = aGlyph;
-        vBias = aBias;
-        vType = aType;
-        vWarn = aWarn;
-        vInDeg = aInDeg;
-        vOutDeg = aOutDeg;
-        vVis = aVis;
       }
     `,
       `
       precision mediump float;
-      uniform float uGlyphStyle;
       varying vec4 vCol;
       varying float vDepth;
       varying float vFocus;
-      varying float vGlyph;
-      varying float vBias;
-      varying float vType;
-      varying float vWarn;
-      varying float vInDeg;
-      varying float vOutDeg;
-      varying float vVis;
-
-      float smoothInside(float d, float edge) {
-        // d <= 0 inside. edge is in sprite UV units.
-        return smoothstep(edge, -edge, d);
-      }
-
-      float sdCircle(vec2 p, float r) {
-        return length(p) - r;
-      }
-
-      float sdBox(vec2 p, vec2 b) {
-        vec2 q = abs(p) - b;
-        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
-      }
-
-      float sdDiamond(vec2 p, float r) {
-        return (abs(p.x) + abs(p.y)) - r;
-      }
-
-      float sdCapsuleX(vec2 p, float halfLen, float r) {
-        vec2 q = vec2(abs(p.x) - halfLen, p.y);
-        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-      }
-
-      float sdSegment(vec2 p, vec2 a, vec2 b, float r) {
-        vec2 pa = p - a;
-        vec2 ba = b - a;
-        float h = clamp(dot(pa, ba) / max(1e-6, dot(ba, ba)), 0.0, 1.0);
-        return length(pa - ba * h) - r;
-      }
-
-      float neuronDist(vec2 p, float inDeg01, float outDeg01, float typeCode01) {
-        // Cell-icon style (matches the supplied mock-up more closely):
-        // - Clean cell body silhouette (no dendrite/axon silhouette in the sprite)
-        // - Type drives the body silhouette
-        // - Connectivity is expressed by synapse ribbons (lines), not rays
-
-        vec2 c = vec2(0.0, 0.0);
-        float isInput = step(0.5, typeCode01) * (1.0 - step(1.5, typeCode01));
-        float isOutput = step(1.5, typeCode01) * (1.0 - step(2.5, typeCode01));
-        float isConst = step(2.5, typeCode01);
-
-        // Base radius, with subtle impact of degree to keep some "activity" feel.
-        float r = 0.78;
-        r += 0.06 * inDeg01;
-        r += 0.02 * outDeg01;
-        if (isOutput > 0.5) r += 0.10;
-        if (isInput > 0.5) r -= 0.06;
-
-        // Slightly ruffled membrane so it reads as a cell, not a flat dot.
-        float theta = atan(p.y, p.x);
-        float ruffle = 0.03 + 0.02 * inDeg01;
-        float rr = r + ruffle * sin(theta * 6.0 + 1.1) + 0.012 * sin(theta * 13.0 + 0.4);
-
-        float d = sdCircle(p - c, rr);
-
-        // Type-specific silhouette tweaks.
-        if (isConst > 0.5) {
-          // Constant: boxy cell (rounded-square feel).
-          d = min(d, sdBox(p - c, vec2(0.72, 0.62)));
-        }
-        if (isInput > 0.5) {
-          // Input: slight teardrop (sensor-like).
-          d = min(d, sdCircle(p - vec2(-0.18, 0.0), rr * 0.92));
-        }
-
-        return d;
-      }
-
-      float glyphDist(vec2 p, float glyph) {
-        // Signed distance: d <= 0 inside. Used to render a membrane outline.
-        if (glyph < 0.5) { // CIRCLE
-          return sdCircle(p, 0.95);
-        }
-        if (glyph < 1.5) { // WEDGE (rectifier-ish)
-          // Circle body, then intersect with a half-plane cut.
-          float d0 = sdCircle(p, 0.98);
-          float cutLine = (p.x + 0.55) + 0.65 * abs(p.y);
-          // Keep only where cutLine <= 0 (inside). Intersection => max().
-          return max(d0, cutLine);
-        }
-        if (glyph < 2.5) { // DIAMOND
-          return sdDiamond(p, 1.25);
-        }
-        if (glyph < 3.5) { // CHEVRON (absolute-ish)
-          // A V-like region (above the lines) with a top cap.
-          float vLine = abs(p.x) * 1.05 - (p.y + 0.65);
-          float topCap = (p.y - 0.95);
-          return max(vLine, -topCap); // inside when vLine<=0 and p.y<=0.95
-        }
-        if (glyph < 4.5) { // SQUARE
-          return sdBox(p, vec2(0.95, 0.95));
-        }
-        if (glyph < 5.5) { // SPLIT (conditional/min/max)
-          float d0 = sdCircle(p, 0.98);
-          float cutLine = (p.x + 0.25 + 0.35 * p.y);
-          return max(d0, cutLine); // circle with a chord cut
-        }
-        if (glyph < 6.5) { // CAPSULE
-          return sdCapsuleX(p, 0.55, 0.55);
-        }
-        // RING_LOBE: approximate with a wavy annulus distance.
-        float r = length(p);
-        float theta = atan(p.y, p.x);
-        float outer = 0.86 + 0.10 * sin(2.0 * theta);
-        float inner = outer - 0.38;
-        float dOuter = r - outer;
-        float dInner = inner - r;
-        return max(dOuter, dInner);
-      }
-
-      float glyphFill(vec2 p, float glyph) {
-        // Note: glyph is a small integer in float form.
-        // Keep shapes cheap: a few SDFs and a couple of trigs for ring-lobe only.
-        if (glyph < 0.5) { // CIRCLE
-          return smoothInside(sdCircle(p, 0.95), 0.04);
-        }
-        if (glyph < 1.5) { // WEDGE (rectifier-ish)
-          // Start from a circle-ish body, then cut a diagonal to form a wedge.
-          float base = smoothInside(sdCircle(p, 0.98), 0.04);
-          float cut = smoothInside((p.x + 0.55) + 0.65 * abs(p.y), 0.05);
-          // Keep only the right-ish region.
-          return base * (1.0 - cut);
-        }
-        if (glyph < 2.5) { // DIAMOND
-          return smoothInside(sdDiamond(p, 1.25), 0.06);
-        }
-        if (glyph < 3.5) { // CHEVRON (absolute-ish)
-          // A filled "V" / chevron: intersection-ish of two regions.
-          float a = smoothInside(abs(p.x) * 1.05 - (p.y + 0.65), 0.05);
-          float b = smoothInside((p.y - 0.95), 0.05);
-          // a is 1 above the V-lines; subtract a top cap to keep it compact.
-          return a * (1.0 - b);
-        }
-        if (glyph < 4.5) { // SQUARE
-          return smoothInside(sdBox(p, vec2(0.95, 0.95)), 0.04);
-        }
-        if (glyph < 5.5) { // SPLIT (conditional/min/max)
-          // Circle with a hard chord cut (a "decision slice").
-          float base = smoothInside(sdCircle(p, 0.98), 0.04);
-          float cutLine = (p.x + 0.25 + 0.35 * p.y);
-          float cut = smoothInside(cutLine, 0.03);
-          return base * (1.0 - cut);
-        }
-        if (glyph < 6.5) { // CAPSULE (smooth saturating)
-          return smoothInside(sdCapsuleX(p, 0.55, 0.55), 0.05);
-        }
-        // RING_LOBE (periodic): wavy annulus.
-        float r = length(p);
-        float theta = atan(p.y, p.x);
-        float outer = 0.86 + 0.10 * sin(2.0 * theta);
-        float inner = outer - 0.38;
-        float dOuter = r - outer;
-        float dInner = inner - r;
-        float d = max(dOuter, dInner);
-        return smoothInside(d, 0.05);
-      }
 
       void main() {
+        // Circular point sprite with a soft edge.
         vec2 uv = gl_PointCoord.xy * 2.0 - 1.0;
-        float isNeuron = step(0.5, uGlyphStyle);
-        float dGlyph = glyphDist(uv, vGlyph);
-        float dNeuron = neuronDist(uv, vInDeg, vOutDeg, vType);
-        float d = mix(dGlyph, dNeuron, isNeuron);
-
-        float fillGlyph = glyphFill(uv, vGlyph);
-        float fillNeuron = smoothInside(dNeuron, 0.05);
-        float fill = mix(fillGlyph, fillNeuron, isNeuron);
-        if (fill <= 0.001) discard;
-
         float r2 = dot(uv, uv);
-        float glow = smoothstep(1.25, 0.25, r2);
-        // In neuron mode, reduce the halo so the node reads as a "body" rather
-        // than a star.
-        glow *= mix(1.0, 0.32, isNeuron);
+        if (r2 > 1.0) discard;
+
+        float core = smoothstep(1.0, 0.0, r2);
+        float glow = smoothstep(1.0, 0.2, r2);
 
         // Risk score comes in on alpha (0..1). Turn it into glow boost.
         float risk = clamp(vCol.a, 0.0, 1.0);
@@ -1772,89 +1071,15 @@ class StarfieldRenderer {
         float depthFade = clamp(1.2 - (vDepth / 180.0), 0.15, 1.0);
 
         vec3 base = vCol.rgb;
-        // Focus gets a "you are here" tint, but in neuron mode keep it subtle so
-        // the cell doesn't become a giant blue blob.
+        // Focus gets a strong "you are here" cyan tint.
         vec3 focusTint = vec3(0.35, 0.95, 1.0);
         vec3 tint = mix(base, vec3(1.0, 0.45, 0.35), risk); // warm warning tint
-        float focusMix = mix(1.0, 0.22, isNeuron);
-        tint = mix(tint, focusTint, clamp(vFocus, 0.0, 1.0) * focusMix);
+        tint = mix(tint, focusTint, clamp(vFocus, 0.0, 1.0));
 
-        // Nucleus indicates squash/activation family (Issue #44, 1-Jan-2026).
-        // Render a nucleus circle + a squash-family mark inside it.
-        vec2 nucleusC = vec2(-0.15, 0.05);
-        float nucleusBase = smoothInside(sdCircle(uv - nucleusC, 0.30), 0.05);
-        vec2 nucleusUv = (uv - nucleusC) / 0.30;
-        float nucleusMask = smoothInside(sdCircle(nucleusUv, 0.92), 0.06);
-        float nucleusMark = glyphFill(nucleusUv, vGlyph) * nucleusMask;
-        float nucleus = max(nucleusBase * 0.85, nucleusMark);
-
-        // Mitochondria: small capsule-ish dots inside the cell for “cellness”.
-        // Keep it deterministic and cheap (3 fixed positions).
-        float mito = 0.0;
-        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(0.30, 0.18), 0.10, 0.06), 0.04));
-        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(0.24, -0.22), 0.11, 0.06), 0.04));
-        mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(-0.05, -0.28), 0.09, 0.06), 0.04));
-
-        // Type markers: small dots at consistent corners (no text).
-        // 1=input, 2=output, 3=constant.
-        float typeDot = 0.0;
-        if (vType > 0.5 && vType < 1.5) { // input
-          typeDot = smoothInside(sdCircle(uv - vec2(-0.65, 0.65), 0.16), 0.04);
-        } else if (vType > 1.5 && vType < 2.5) { // output
-          typeDot = smoothInside(sdCircle(uv - vec2(0.65, -0.65), 0.16), 0.04);
-        } else if (vType > 2.5) { // constant
-          typeDot = smoothInside(sdCircle(uv, 0.14), 0.04);
-        }
-
-        // Membrane outline: keep it subtle but present so glyphs read as bodies.
-        float edge = 0.045;
-        float outline = smoothstep(edge * 2.0, edge, abs(d));
-
-        // Error halo: show warnings/risk as a halo around the cell rather than
-        // stripes across the soma (matches the neuron mock-up intent).
-        float warn01 = clamp(max(vWarn, risk), 0.0, 1.0);
-        // d is signed distance to the body: 0 at membrane, >0 outside.
-        float outside = step(0.0, d);
-        float haloRing = smoothstep(0.06, 0.00, abs(d - 0.14)) * outside;
-        vec3 haloCol = vec3(1.0, 0.55, 0.20);
-
-        vec3 nucleusTint = vec3(0.08, 0.10, 0.12);
-        vec3 mitoTint = vec3(0.98, 0.78, 0.20);
-        vec3 finalCol = mix(tint, nucleusTint, clamp(nucleus, 0.0, 1.0));
-        finalCol = mix(finalCol, mitoTint, 0.55 * mito);
-        finalCol = mix(finalCol, vec3(1.0), 0.12 * typeDot);
-        finalCol = mix(finalCol, haloCol, 0.55 * warn01 * haloRing);
-        finalCol = mix(finalCol, vec3(0.0), 0.35 * outline); // darker membrane edge
-
-        // In neuron mode, overlay the squash-family glyph inside the soma as an
-        // embossed mark so you still get the “function family” signal.
-        if (isNeuron > 0.5) {
-          vec2 somaUv = (uv - vec2(-0.22, 0.0)) / 0.72;
-          float inner = glyphFill(somaUv, vGlyph) * smoothInside(sdCircle(somaUv, 0.98), 0.04);
-          finalCol = mix(finalCol, vec3(1.0), 0.16 * inner);
-
-          // Simple faux-3D shading for a more "3D-ish" feel on the sprite.
-          float rr = min(1.0, r2);
-          float nz = sqrt(max(0.0, 1.0 - rr));
-          vec3 nrm = normalize(vec3(uv.xy, nz + 0.001));
-          vec3 light = normalize(vec3(-0.55, 0.75, 1.0));
-          float diff = clamp(dot(nrm, light), 0.0, 1.0);
-          finalCol *= (0.70 + 0.55 * diff);
-        }
-
-        float alpha = fill * (0.75 + 0.20 * glow) * depthFade;
-        alpha += risk * 0.25 * glow;
-        alpha += 0.65 * warn01 * haloRing;
-
-        // Focus highlight: in neuron mode prefer a membrane outline rather than
-        // more glow, so the shape stays readable.
-        float focusAlpha = vFocus * mix(0.45 * glow, 0.55 * outline, isNeuron);
-        alpha += focusAlpha;
-        alpha = max(alpha, 0.65 * (nucleus + typeDot));
-        // Visibility mask: fade non-neighbourhood neurons so the view reads as a
-        // network, not a starfield (Issue #44, 1-Jan-2026).
-        alpha *= mix(0.06, 1.0, clamp(vVis, 0.0, 1.0));
-        gl_FragColor = vec4(finalCol, clamp(alpha, 0.0, 1.0));
+        float alpha = (0.25 * glow + 0.55 * core) * depthFade;
+        alpha += risk * 0.35 * glow;
+        alpha += vFocus * 0.55 * glow;
+        gl_FragColor = vec4(tint, clamp(alpha, 0.0, 1.0));
       }
     `,
     );
@@ -1863,29 +1088,14 @@ class StarfieldRenderer {
     this.aCol = gl.getAttribLocation(this.program, "aCol");
     this.aSize = gl.getAttribLocation(this.program, "aSize");
     this.aFocus = gl.getAttribLocation(this.program, "aFocus");
-    this.aGlyph = gl.getAttribLocation(this.program, "aGlyph");
-    this.aBias = gl.getAttribLocation(this.program, "aBias");
-    this.aType = gl.getAttribLocation(this.program, "aType");
-    this.aWarn = gl.getAttribLocation(this.program, "aWarn");
-    this.aInDeg = gl.getAttribLocation(this.program, "aInDeg");
-    this.aOutDeg = gl.getAttribLocation(this.program, "aOutDeg");
-    this.aVis = gl.getAttribLocation(this.program, "aVis");
     this.uProj = gl.getUniformLocation(this.program, "uProj");
     this.uView = gl.getUniformLocation(this.program, "uView");
     this.uPixelRatio = gl.getUniformLocation(this.program, "uPixelRatio");
-    this.uGlyphStyle = gl.getUniformLocation(this.program, "uGlyphStyle");
 
     this.bufPos = gl.createBuffer();
     this.bufCol = gl.createBuffer();
     this.bufSize = gl.createBuffer();
     this.bufFocus = gl.createBuffer();
-    this.bufGlyph = gl.createBuffer();
-    this.bufBias = gl.createBuffer();
-    this.bufType = gl.createBuffer();
-    this.bufWarn = gl.createBuffer();
-    this.bufInDeg = gl.createBuffer();
-    this.bufOutDeg = gl.createBuffer();
-    this.bufVis = gl.createBuffer();
 
     // Lines (synapses) program
     this.lineProgram = createProgram(
@@ -1917,71 +1127,6 @@ class StarfieldRenderer {
     this.bufLineCol = gl.createBuffer();
     this.lineCount = 0;
 
-    // Synapse ribbon program (v2):
-    // Render synapses as proper thick ribbons (triangles) so width is reliable
-    // in WebGL1 (gl.LINES lineWidth is not portable).
-    //
-    // We expand each line segment in clip space in the vertex shader using the
-    // segment direction projected into view space. This keeps thickness stable
-    // in screen pixels (Issue #44, 1-Jan-2026).
-    this.synProgram = createProgram(
-      gl,
-      `
-      attribute vec3 aPos;
-      attribute vec3 aDir;
-      attribute float aSide;
-      attribute float aWidthPx;
-      attribute vec4 aCol;
-      uniform mat4 uProj;
-      uniform mat4 uView;
-      uniform vec2 uViewport;
-      varying vec4 vCol;
-      void main() {
-        vec4 viewPos = uView * vec4(aPos, 1.0);
-        vec3 viewDir3 = (uView * vec4(aPos + aDir, 1.0)).xyz - viewPos.xyz;
-        // NaN guard:
-        // When a synapse segment is nearly parallel to the camera view direction,
-        // viewDir3.xy can be ~zero length. normalize(vec2(0)) yields NaNs in
-        // GLSL, which then corrupts clip-space expansion and can cause flicker
-        // or missing ribbon segments (Issue #44, 1-Jan-2026).
-        vec2 viewDir2 = viewDir3.xy;
-        float viewLen2 = dot(viewDir2, viewDir2);
-        vec2 d = viewDir2 * inversesqrt(max(viewLen2, 1e-8));
-        // Perpendicular in screen plane (view space XY).
-        vec2 p = vec2(-d.y, d.x);
-
-        vec4 clip = uProj * viewPos;
-        // Convert px -> NDC offset, then to clip via *w.
-        vec2 pxToNdc = vec2(2.0 / max(1.0, uViewport.x), 2.0 / max(1.0, uViewport.y));
-        vec2 ndcOffset = p * (aSide * aWidthPx) * pxToNdc;
-        clip.xy += ndcOffset * clip.w;
-        gl_Position = clip;
-        vCol = aCol;
-      }
-    `,
-      `
-      precision mediump float;
-      varying vec4 vCol;
-      void main() {
-        gl_FragColor = vCol;
-      }
-    `,
-    );
-    this.synAPos = gl.getAttribLocation(this.synProgram, "aPos");
-    this.synADir = gl.getAttribLocation(this.synProgram, "aDir");
-    this.synASide = gl.getAttribLocation(this.synProgram, "aSide");
-    this.synAWidth = gl.getAttribLocation(this.synProgram, "aWidthPx");
-    this.synACol = gl.getAttribLocation(this.synProgram, "aCol");
-    this.synUProj = gl.getUniformLocation(this.synProgram, "uProj");
-    this.synUView = gl.getUniformLocation(this.synProgram, "uView");
-    this.synUViewport = gl.getUniformLocation(this.synProgram, "uViewport");
-    this.bufSynPos = gl.createBuffer();
-    this.bufSynCol = gl.createBuffer();
-    this.bufSynDir = gl.createBuffer();
-    this.bufSynSide = gl.createBuffer();
-    this.bufSynWidth = gl.createBuffer();
-    this.synVertCount = 0;
-
     this.count = 0;
     this.meta = [];
     this.positions = null;
@@ -1999,18 +1144,13 @@ class StarfieldRenderer {
 
     // Input state
     this.drag = { active: false, lastX: 0, lastY: 0 };
-    // Multi-touch state:
-    // - Pinch: distance change zooms along view direction (Issue #39, 31-Dec-2025)
-    // - Pan: midpoint drag translates the camera (Issue #41, 31-Dec-2025)
-    this.pinch = { active: false, lastDist: 0, lastMidX: 0, lastMidY: 0 };
+    this.pinch = { active: false, lastDist: 0 };
     // Touch gesture origin tracking: prevents off-canvas gestures (e.g. header
     // inputs/buttons) from accidentally enabling camera look/zoom via the
     // window-level touchend/touchmove handlers (Issue #41, 31-Dec-2025).
     this.touch = { startedOnCanvas: false };
     this.keys = new Set();
     this.focusIndex = -1;
-    // Glyph style: 0=abstract (v1), 1=neuron silhouette.
-    this.glyphStyle01 = 1;
 
     this._bindEvents();
   }
@@ -2048,51 +1188,19 @@ class StarfieldRenderer {
     const touchDistance = (t0, t1) =>
       Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 
-    // Track whether the *gesture origin* (the 0→1 touch transition) began on
-    // the canvas. This must not flip to true if a later touch begins on-canvas
-    // while the first touch began off-canvas (Issue #42, 31-Dec-2025).
-    //
-    // Use capture so this runs before the canvas touchstart handler when the
-    // gesture begins on the canvas.
-    window.addEventListener(
-      "touchstart",
-      (e) => {
-        const ts = e.touches;
-        if (!ts || ts.length === 0) return;
-
-        // Only evaluate origin at the start of a gesture (0→1 touch).
-        if (ts.length !== 1) return;
-
-        const path = typeof e.composedPath === "function"
-          ? e.composedPath()
-          : [];
-        this.touch.startedOnCanvas = e.target === c || path.includes(c);
-
-        if (!this.touch.startedOnCanvas) {
-          // Defensive: ensure off-canvas gesture origin cannot accidentally
-          // enable camera controls via other window-level touch handlers.
-          this.drag.active = false;
-          this.pinch.active = false;
-        }
-      },
-      { passive: true, capture: true },
-    );
-
     c.addEventListener("touchstart", (e) => {
       const ts = e.touches;
       if (!ts || ts.length === 0) return;
 
-      // If the gesture started off-canvas (e.g. header UI), ignore later
-      // touches that happen to begin on the canvas.
-      if (!this.touch.startedOnCanvas) return;
+      // This handler is bound to the canvas; if it fires, the touch gesture
+      // began on the canvas.
+      this.touch.startedOnCanvas = true;
 
       // Pinch zoom initialisation.
       if (ts.length >= 2) {
         this.pinch.active = true;
         this.drag.active = false;
         this.pinch.lastDist = touchDistance(ts[0], ts[1]);
-        this.pinch.lastMidX = (ts[0].clientX + ts[1].clientX) / 2;
-        this.pinch.lastMidY = (ts[0].clientY + ts[1].clientY) / 2;
         return;
       }
 
@@ -2136,8 +1244,6 @@ class StarfieldRenderer {
       this.pinch.active = true;
       this.drag.active = false;
       this.pinch.lastDist = touchDistance(ts[0], ts[1]);
-      this.pinch.lastMidX = (ts[0].clientX + ts[1].clientX) / 2;
-      this.pinch.lastMidY = (ts[0].clientY + ts[1].clientY) / 2;
     }, { passive: false });
 
     window.addEventListener("touchcancel", () => {
@@ -2169,30 +1275,6 @@ class StarfieldRenderer {
 
         // Tuned so iPhone/iPad pinch feels similar to mouse wheel.
         this.zoomBy(dd * 0.22);
-
-        // Two-finger pan: drag the midpoint to translate the camera. This is
-        // the touch equivalent of WASD/arrow movement and lets users pan back
-        // toward centre without a keyboard (Issue #41, 31-Dec-2025).
-        const mx = (ts[0].clientX + ts[1].clientX) / 2;
-        const my = (ts[0].clientY + ts[1].clientY) / 2;
-        const dx = mx - this.pinch.lastMidX;
-        const dy = my - this.pinch.lastMidY;
-        this.pinch.lastMidX = mx;
-        this.pinch.lastMidY = my;
-
-        // Right vector from yaw only (keeps strafe intuitive, same as keyboard).
-        const rx = Math.cos(this.yaw);
-        const rz = -Math.sin(this.yaw);
-
-        // Scale with distance so panning feels usable at any zoom level.
-        const dist = Math.hypot(this.pos.x, this.pos.y, this.pos.z);
-        const panScale = Math.max(0.05, dist * 0.002);
-
-        // Match “drag the world” intuition: moving fingers right moves the view
-        // right (camera moves left), moving fingers down moves view down.
-        this.pos.x -= rx * dx * panScale;
-        this.pos.z -= rz * dx * panScale;
-        this.pos.y += dy * panScale;
         return;
       }
 
@@ -2214,18 +1296,6 @@ class StarfieldRenderer {
     }, { passive: false });
 
     window.addEventListener("keydown", (e) => {
-      // Support discrete zoom steps on key press. This helps users who don't
-      // have a wheel/trackpad handy (or are using keyboard-only navigation).
-      // Note: zoomBy() is along the current view direction.
-      const t = /** @type {any} */ (e.target);
-      const tag = String(t?.tagName ?? "").toLowerCase();
-      if (tag !== "input" && tag !== "textarea") {
-        const k = String(e.key ?? "").toLowerCase();
-        // Larger step so a single key press is visible.
-        if (k === "+" || k === "=" || k === "]") this.zoomBy(-180);
-        if (k === "-" || k === "_" || k === "[") this.zoomBy(180);
-        if (k === "z") this.zoomToFocus(70);
-      }
       this.keys.add(e.key.toLowerCase());
     });
     window.addEventListener("keyup", (e) => {
@@ -2282,44 +1352,7 @@ class StarfieldRenderer {
     this.clampDistance(20, 1400);
   }
 
-  zoomToFocus(distance = 70) {
-    // Zoom the camera to the focused neuron so the cell body + nucleus are
-    // readable without manual fiddling (Issue #44, 1-Jan-2026).
-    //
-    // In focus-centric layouts, the focus is at/near the origin, but we still
-    // use the current focus position so this works for alternate layouts.
-    let fx = 0;
-    let fy = 0;
-    let fz = 0;
-    const idx = this.focusIndex ?? -1;
-    if (idx >= 0 && this.positions) {
-      fx = this.positions[idx * 3 + 0] ?? 0;
-      fy = this.positions[idx * 3 + 1] ?? 0;
-      fz = this.positions[idx * 3 + 2] ?? 0;
-    }
-
-    // Reset view direction so the user gets a stable, repeatable close-up.
-    this.yaw = 0;
-    this.pitch = 0;
-    this.pos.x = fx;
-    this.pos.y = fy;
-    this.pos.z = fz + distance;
-    this.clampDistance(20, 1400);
-  }
-
-  setData({
-    positions,
-    colours,
-    sizes,
-    glyphs,
-    bias,
-    types,
-    warn,
-    inDeg,
-    outDeg,
-    vis,
-    meta,
-  }) {
+  setData({ positions, colours, sizes, meta }) {
     const gl = this.gl;
     this.count = Math.floor(positions.length / 3);
     this.meta = meta ?? [];
@@ -2337,33 +1370,6 @@ class StarfieldRenderer {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufFocus);
     gl.bufferData(gl.ARRAY_BUFFER, this.focusFlags, gl.DYNAMIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufGlyph);
-    gl.bufferData(gl.ARRAY_BUFFER, glyphs, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufBias);
-    gl.bufferData(gl.ARRAY_BUFFER, bias, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufType);
-    gl.bufferData(gl.ARRAY_BUFFER, types, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufWarn);
-    gl.bufferData(gl.ARRAY_BUFFER, warn, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufInDeg);
-    gl.bufferData(gl.ARRAY_BUFFER, inDeg, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
-    gl.bufferData(gl.ARRAY_BUFFER, outDeg, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
-    gl.bufferData(gl.ARRAY_BUFFER, vis, gl.DYNAMIC_DRAW);
-  }
-
-  updateVisibility(vis) {
-    const gl = this.gl;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
-    gl.bufferData(gl.ARRAY_BUFFER, vis, gl.DYNAMIC_DRAW);
   }
 
   updatePositions(positions) {
@@ -2389,22 +1395,6 @@ class StarfieldRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, linePositions, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufLineCol);
     gl.bufferData(gl.ARRAY_BUFFER, lineColours, gl.DYNAMIC_DRAW);
-  }
-
-  updateSynapses({ positions, dirs, sides, widths, colours }) {
-    const gl = this.gl;
-    this.synVertCount = Math.floor(positions.length / 3);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynPos);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynDir);
-    gl.bufferData(gl.ARRAY_BUFFER, dirs, gl.DYNAMIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynSide);
-    gl.bufferData(gl.ARRAY_BUFFER, sides, gl.DYNAMIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynWidth);
-    gl.bufferData(gl.ARRAY_BUFFER, widths, gl.DYNAMIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynCol);
-    gl.bufferData(gl.ARRAY_BUFFER, colours, gl.DYNAMIC_DRAW);
   }
 
   resizeToDisplaySize() {
@@ -2504,43 +1494,11 @@ class StarfieldRenderer {
       gl.drawArrays(gl.LINES, 0, this.lineCount);
     }
 
-    // Draw synapse ribbons next.
-    if (this.synVertCount > 0) {
-      gl.useProgram(this.synProgram);
-      gl.uniformMatrix4fv(this.synUProj, false, proj);
-      gl.uniformMatrix4fv(this.synUView, false, view);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.uniform2f(this.synUViewport, this.canvas.width, this.canvas.height);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynPos);
-      gl.enableVertexAttribArray(this.synAPos);
-      gl.vertexAttribPointer(this.synAPos, 3, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynDir);
-      gl.enableVertexAttribArray(this.synADir);
-      gl.vertexAttribPointer(this.synADir, 3, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynSide);
-      gl.enableVertexAttribArray(this.synASide);
-      gl.vertexAttribPointer(this.synASide, 1, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynWidth);
-      gl.enableVertexAttribArray(this.synAWidth);
-      gl.vertexAttribPointer(this.synAWidth, 1, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufSynCol);
-      gl.enableVertexAttribArray(this.synACol);
-      gl.vertexAttribPointer(this.synACol, 4, gl.FLOAT, false, 0, 0);
-
-      gl.drawArrays(gl.TRIANGLES, 0, this.synVertCount);
-    }
-
     // Then draw neurons.
     gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uProj, false, proj);
     gl.uniformMatrix4fv(this.uView, false, view);
     gl.uniform1f(this.uPixelRatio, this.pixelRatio);
-    gl.uniform1f(this.uGlyphStyle, this.glyphStyle01);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufPos);
@@ -2558,34 +1516,6 @@ class StarfieldRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufFocus);
     gl.enableVertexAttribArray(this.aFocus);
     gl.vertexAttribPointer(this.aFocus, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufGlyph);
-    gl.enableVertexAttribArray(this.aGlyph);
-    gl.vertexAttribPointer(this.aGlyph, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufBias);
-    gl.enableVertexAttribArray(this.aBias);
-    gl.vertexAttribPointer(this.aBias, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufType);
-    gl.enableVertexAttribArray(this.aType);
-    gl.vertexAttribPointer(this.aType, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufWarn);
-    gl.enableVertexAttribArray(this.aWarn);
-    gl.vertexAttribPointer(this.aWarn, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufInDeg);
-    gl.enableVertexAttribArray(this.aInDeg);
-    gl.vertexAttribPointer(this.aInDeg, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufOutDeg);
-    gl.enableVertexAttribArray(this.aOutDeg);
-    gl.vertexAttribPointer(this.aOutDeg, 1, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufVis);
-    gl.enableVertexAttribArray(this.aVis);
-    gl.vertexAttribPointer(this.aVis, 1, gl.FLOAT, false, 0, 0);
 
     gl.drawArrays(gl.POINTS, 0, this.count);
   }
@@ -2784,220 +1714,6 @@ function appendTrailLines({ linePos, lineCol, p, c, positions, alpha = 0.55 }) {
     }
   }
   return { p, c };
-}
-
-// ============================================================================
-// Synapse ribbons (v2)
-// ============================================================================
-
-// Use a small fixed segment count so cables read as curved without blowing up
-// the GL line budget (inbound edges are already capped).
-const CURVE_SEGMENTS = 8;
-
-function appendCurvedEdge({
-  linePos,
-  lineCol,
-  p,
-  c,
-  ax,
-  ay,
-  az,
-  bx,
-  by,
-  bz,
-  col, // [r,g,b,a]
-  bend01, // 0..1
-  bendSign, // -1 or +1
-}) {
-  // Control point: bend sideways in XY, plus a little Z lift so it reads in 3D.
-  const mx = (ax + bx) * 0.5;
-  const my = (ay + by) * 0.5;
-  const mz = (az + bz) * 0.5;
-
-  const dx = bx - ax;
-  const dy = by - ay;
-  const dz = bz - az;
-
-  // Perp in XY (stable even if dz dominates).
-  const lenXY = Math.hypot(dx, dy);
-  const px = lenXY > 1e-6 ? (-dy / lenXY) : 1;
-  const py = lenXY > 1e-6 ? (dx / lenXY) : 0;
-
-  const chord = Math.hypot(dx, dy, dz);
-  const bend = chord * (0.08 + 0.22 * bend01) * bendSign;
-
-  const cx = mx + px * bend;
-  const cy = my + py * bend;
-  const cz = mz + 0.10 * chord * bend01;
-
-  let lastX = ax;
-  let lastY = ay;
-  let lastZ = az;
-
-  for (let s = 1; s <= CURVE_SEGMENTS; s++) {
-    const t = s / CURVE_SEGMENTS;
-    const it = 1 - t;
-    // Quadratic Bezier: (1-t)^2 A + 2(1-t)t C + t^2 B
-    const x = it * it * ax + 2 * it * t * cx + t * t * bx;
-    const y = it * it * ay + 2 * it * t * cy + t * t * by;
-    const z = it * it * az + 2 * it * t * cz + t * t * bz;
-
-    linePos[p++] = lastX;
-    linePos[p++] = lastY;
-    linePos[p++] = lastZ;
-    linePos[p++] = x;
-    linePos[p++] = y;
-    linePos[p++] = z;
-
-    for (let k = 0; k < 2; k++) {
-      lineCol[c++] = col[0];
-      lineCol[c++] = col[1];
-      lineCol[c++] = col[2];
-      lineCol[c++] = col[3];
-    }
-
-    lastX = x;
-    lastY = y;
-    lastZ = z;
-  }
-
-  return { p, c };
-}
-
-function appendSynapseRibbonSegment({
-  pos,
-  dir,
-  side,
-  width,
-  col,
-  p,
-  d,
-  s,
-  w,
-  c,
-  ax,
-  ay,
-  az,
-  bx,
-  by,
-  bz,
-  widthPx,
-  rgba,
-}) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const dz = bz - az;
-
-  // Two triangles for the segment, expanded in shader using aSide (+/-1).
-  // Triangle 1: A-, A+, B-
-  // Triangle 2: B-, A+, B+
-  const push = (x, y, z, sx) => {
-    pos[p++] = x;
-    pos[p++] = y;
-    pos[p++] = z;
-    dir[d++] = dx;
-    dir[d++] = dy;
-    dir[d++] = dz;
-    side[s++] = sx;
-    width[w++] = widthPx;
-    col[c++] = rgba[0];
-    col[c++] = rgba[1];
-    col[c++] = rgba[2];
-    col[c++] = rgba[3];
-    return { p, d, s, w, c };
-  };
-
-  ({ p, d, s, w, c } = push(ax, ay, az, -1.0));
-  ({ p, d, s, w, c } = push(ax, ay, az, +1.0));
-  ({ p, d, s, w, c } = push(bx, by, bz, -1.0));
-
-  ({ p, d, s, w, c } = push(bx, by, bz, -1.0));
-  ({ p, d, s, w, c } = push(ax, ay, az, +1.0));
-  ({ p, d, s, w, c } = push(bx, by, bz, +1.0));
-
-  return { p, d, s, w, c };
-}
-
-function appendSynapseRibbon({
-  pos,
-  dir,
-  side,
-  width,
-  col,
-  p,
-  d,
-  s,
-  w,
-  c,
-  ax,
-  ay,
-  az,
-  bx,
-  by,
-  bz,
-  rgba, // [r,g,b,a]
-  bend01, // 0..1
-  bendSign, // -1 or +1
-  widthPx,
-}) {
-  // Quadratic bezier control point (same curve as appendCurvedEdge).
-  const mx = (ax + bx) * 0.5;
-  const my = (ay + by) * 0.5;
-  const mz = (az + bz) * 0.5;
-
-  const dx = bx - ax;
-  const dy = by - ay;
-  const dz = bz - az;
-
-  const lenXY = Math.hypot(dx, dy);
-  const px = lenXY > 1e-6 ? (-dy / lenXY) : 1;
-  const py = lenXY > 1e-6 ? (dx / lenXY) : 0;
-
-  const chord = Math.hypot(dx, dy, dz);
-  const bend = chord * (0.08 + 0.22 * bend01) * bendSign;
-
-  const cx = mx + px * bend;
-  const cy = my + py * bend;
-  const cz = mz + 0.10 * chord * bend01;
-
-  let lastX = ax;
-  let lastY = ay;
-  let lastZ = az;
-
-  for (let seg = 1; seg <= CURVE_SEGMENTS; seg++) {
-    const t = seg / CURVE_SEGMENTS;
-    const it = 1 - t;
-    const x = it * it * ax + 2 * it * t * cx + t * t * bx;
-    const y = it * it * ay + 2 * it * t * cy + t * t * by;
-    const z = it * it * az + 2 * it * t * cz + t * t * bz;
-
-    ({ p, d, s, w, c } = appendSynapseRibbonSegment({
-      pos,
-      dir,
-      side,
-      width,
-      col,
-      p,
-      d,
-      s,
-      w,
-      c,
-      ax: lastX,
-      ay: lastY,
-      az: lastZ,
-      bx: x,
-      by: y,
-      bz: z,
-      widthPx,
-      rgba,
-    }));
-
-    lastX = x;
-    lastY = y;
-    lastZ = z;
-  }
-
-  return { p, d, s, w, c };
 }
 
 function appendOutputPathLines({
@@ -3275,11 +1991,7 @@ function updateLabelsForFocus(focusUuid, opts) {
   if (!force && now - lastLabelUpdateMs < minIntervalMs) return;
   lastLabelUpdateMs = now;
 
-  // Label a small, high-signal subset of nearby neurons only.
-  //
-  // The current focus already appears in the top-centre focus badge, so
-  // rendering a second "focus label" over the star is visual duplication and
-  // makes the view feel noisy (Issue #44, 31-Dec-2025).
+  // Label the focus and a small, high-signal subset of nearby neurons only.
   //
   // Important for iPhone/iPad: creating/updating 100-150 DOM nodes per frame can
   // tank performance. Keep the label set small and stable.
@@ -3293,7 +2005,7 @@ function updateLabelsForFocus(focusUuid, opts) {
   // Always include the (local tail of the) output->focus path so users can see
   // context without being drowned in hundreds of lines.
   const pathTail = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
-  const want = Array.from(new Set([...pathTail, ...neigh]));
+  const want = Array.from(new Set([focusUuid, ...pathTail, ...neigh]));
 
   /** @type {{ uuid: string, text: string, x: number, y: number, isFocus: boolean, title: string, uuidSuffix: string|null }[]} */
   const out = [];
@@ -3315,14 +2027,14 @@ function updateLabelsForFocus(focusUuid, opts) {
     const x = p.sx / dpr;
     const y = p.sy / dpr;
 
-    const isFocus = false;
+    const isFocus = u === focusUuid;
     const text = labelText(u);
     const title = getDescription(u) ? `${u} — ${getDescription(u)}` : u;
     // Depth-aware label styling: far neurons get smaller + fainter labels.
     // `p.depth` is NDC z in [-1, 1], where smaller tends to be closer.
     const depth01 = Math.min(1, Math.max(0, (p.depth + 1) / 2));
-    const opacity = 0.15 + (1 - depth01) * 0.75;
-    const scale = 0.72 + (1 - depth01) * 0.45;
+    const opacity = isFocus ? 1 : (0.15 + (1 - depth01) * 0.75);
+    const scale = isFocus ? 1.05 : (0.72 + (1 - depth01) * 0.45);
     out.push({
       uuid: u,
       text,
@@ -3354,19 +2066,6 @@ function buildHudForIndex(idx) {
   const mae = stats?.meanAbsoluteError ?? stats?.mean_absolute_error ?? null;
   const directNeighbours = adjacency?.get?.(m.uuid)?.size ?? 0;
   const desc = getDescription(m.uuid);
-  const synCounts = (() => {
-    // Derived counts from the raw synapse list so we can debug "why does this
-    // neuron show an axon / why so many rays?" in a snapshot-agnostic way.
-    const syn = graph?.synapses ?? [];
-    let inN = 0;
-    let outN = 0;
-    for (const s of syn) {
-      if (!s) continue;
-      if (s.toUuid === m.uuid) inN += 1;
-      if (s.fromUuid === m.uuid) outN += 1;
-    }
-    return { inN, outN };
-  })();
   const ignoredInputs = (() => {
     if (!graph?.creature) return [];
     const inputCount = graph.creature.input ?? 0;
@@ -3397,8 +2096,6 @@ function buildHudForIndex(idx) {
   if (mae != null) lines.push(`MAE:   ${fmtSig(mae, 6)}`);
   lines.push(`Risk:  ${fmtSig(m.risk?.score ?? 0, 3)}`);
   lines.push(`Links: ${directNeighbours}`);
-  lines.push(`Synapses: in=${synCounts.inN}  out=${synCounts.outN}`);
-  lines.push(`Glyph: ${glyphStyle}`);
   if (ignoredInputs.length) {
     lines.push(`Ignored observations: ${ignoredInputs.length}`);
     const top = ignoredInputs.slice(0, 8).map((u) => labelText(u)).join(", ");
@@ -3543,13 +2240,6 @@ async function loadSnapshot(source, label) {
       positions,
       colours: points.colours,
       sizes: points.sizes,
-      glyphs: points.glyphs,
-      bias: points.bias,
-      types: points.types,
-      warn: points.warn,
-      inDeg: points.inDeg,
-      outDeg: points.outDeg,
-      vis: points.vis,
       meta: points.meta,
     });
     renderer.resetCamera();
@@ -3580,21 +2270,6 @@ async function loadSnapshot(source, label) {
     const details = document.getElementById("snapshotDetails");
     if (details instanceof HTMLDetailsElement) details.open = true;
   }
-}
-
-function applyGlyphStyleUi() {
-  const isNeuron = glyphStyle === "neuron";
-
-  if (el.glyphToggle instanceof HTMLButtonElement) {
-    el.glyphToggle.textContent = isNeuron ? "Glyph: Neuron" : "Glyph: Abstract";
-    el.glyphToggle.title = `Glyph: ${
-      isNeuron ? "Neuron" : "Abstract"
-    } (tap to toggle)`;
-    el.glyphToggle.setAttribute("aria-label", el.glyphToggle.title);
-  }
-
-  if (renderer) renderer.glyphStyle01 = isNeuron ? 1 : 0;
-  renderGlyphGallery();
 }
 
 function initStarfield() {
@@ -3643,27 +2318,12 @@ function initStarfield() {
     });
   }
 
-  // Glyph toggle (Neuron-ish vs Abstract).
-  if (el.glyphToggle instanceof HTMLButtonElement) {
-    applyGlyphStyleUi();
-    el.glyphToggle.addEventListener("click", () => {
-      glyphStyle = glyphStyle === "neuron" ? "abstract" : "neuron";
-      applyGlyphStyleUi();
-    });
-  }
-
   // Back (focus trail).
   if (el.backBtn instanceof HTMLButtonElement) {
     el.backBtn.addEventListener("click", () => {
       navigateBack();
     });
     updateBackButtonState();
-  }
-  // Zoom to focus.
-  if (el.zoomBtn instanceof HTMLButtonElement) {
-    el.zoomBtn.addEventListener("click", () => {
-      renderer?.zoomToFocus?.(70);
-    });
   }
   window.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace") return;
@@ -3680,7 +2340,6 @@ function initStarfield() {
     throw new Error("Missing #glCanvas");
   }
   renderer = new StarfieldRenderer(el.canvas);
-  applyGlyphStyleUi();
   exposeDebugApi();
   initPanels();
   renderer.onFocusChanged = (idx, m, _prevIdx, prevMeta) => {
@@ -3689,9 +2348,9 @@ function initStarfield() {
     normaliseFocusTrailForCurrentFocus(focusUuid);
     updateBackButtonState();
     if (points && adjacency && focusUuid) {
-      // Recompute the output->focus path before any downstream consumers read it.
-      // This avoids stale visibility highlighting when changing focus quickly
-      // (Issue #44, 1-Jan-2026).
+      const backUuid = (focusTrail.length >= 2)
+        ? (focusTrail[focusTrail.length - 2] ?? null)
+        : (prevMeta?.uuid ?? null);
       outputPathToFocus = (graph?.neuronsByUuid && inboundAdjacency)
         ? computeOutputPathToFocus({
           neuronsByUuid: graph.neuronsByUuid,
@@ -3702,30 +2361,6 @@ function initStarfield() {
       // Keep only the local tail of the output->focus path (avoid clutter).
       // This keeps the path readable even when the focus is far upstream.
       outputPathToFocus = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
-
-      // Visibility mask: keep the focus neighbourhood readable by fading the
-      // rest of the network (Issue #44, 1-Jan-2026).
-      if (points.vis && renderer?.updateVisibility) {
-        points.vis.fill(0.08);
-        const allocForVis = computeInboundAllocationForFocus(focusUuid);
-        const inboundForVis = selectInboundEdgesForRender(
-          allocForVis.rows,
-          focusUuid,
-        );
-        const pathTail = outputPathToFocus;
-        const trail = focusTrail.slice(-Math.min(8, focusTrail.length));
-        const want = new Set([focusUuid, ...pathTail, ...trail]);
-        for (const r of inboundForVis) want.add(r.fromUuid);
-        for (const u of want) {
-          const i = points.indexByUuid.get(String(u));
-          if (i != null) points.vis[i] = 1.0;
-        }
-        renderer.updateVisibility(points.vis);
-      }
-
-      const backUuid = (focusTrail.length >= 2)
-        ? (focusTrail[focusTrail.length - 2] ?? null)
-        : (prevMeta?.uuid ?? null);
       // Paths mode needs both the upstream positions (for rendering) and the BFS
       // distances (for selecting which upstream edges to render). Computing the
       // upstream layout is relatively expensive, so do it once and reuse.
@@ -3759,32 +2394,18 @@ function initStarfield() {
         if (upstreamLayout) {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
-          const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
+          const inbound = selectInboundEdgesForRender(alloc.rows);
           inboundRenderedCount = inbound.length;
 
-          // Synapse ribbons (v2): render inbound synapses as thick lines
-          // (triangles) so width is reliable in WebGL1.
-          const synVertsPerEdge = CURVE_SEGMENTS * 6;
-          const synVertCount = inbound.length * synVertsPerEdge;
-          const synPos = new Float32Array(synVertCount * 3);
-          const synDir = new Float32Array(synVertCount * 3);
-          const synSide = new Float32Array(synVertCount);
-          const synWidth = new Float32Array(synVertCount);
-          const synCol = new Float32Array(synVertCount * 4);
-          let sp = 0;
-          let sd = 0;
-          let ss = 0;
-          let sw = 0;
-          let sc = 0;
-
-          // Reserve space for the output->focus path + trail (thin guide lines).
+          // Reserve space for inbound + path (and no longer render the full
+          // upstream subgraph, which can be extremely dense).
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
           const trailEdges = Math.max(0, getTrailIndexPairs().length);
           const linePos = new Float32Array(
-            (pathEdges + trailEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (pathEdges + trailEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -3802,47 +2423,23 @@ function initStarfield() {
             const ty = upstreamLayout.positions[iTo * 3 + 1];
             const tz = upstreamLayout.positions[iTo * 3 + 2];
 
+            linePos[p++] = fx;
+            linePos[p++] = fy;
+            linePos[p++] = fz;
+            linePos[p++] = tx;
+            linePos[p++] = ty;
+            linePos[p++] = tz;
+
             const positive = (r.weight ?? 0) >= 0;
             const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
             const s01 = clamp(Math.sqrt(Math.max(0, r.share ?? 0)) * 2.2, 0, 1);
             const a = 0.12 + 0.75 * s01;
-            const h = hash32(`${r.fromUuid}→${r.toUuid}::bend`);
-            const u = u32ToU01(h);
-            const bendSign = (h & 1) === 0 ? -1 : 1;
-
-            // Width mapping:
-            // - Primary: |weight| * impact (signal strength)
-            // - Kept bounded so a high fan-in output neuron remains readable.
-            const fromImpact = impactsByUuid?.[r.fromUuid] ?? 0;
-            const widthSignal = Math.abs(r.weight ?? 0) *
-              Math.abs(fromImpact ?? 0);
-            const widthPx = clamp(
-              1.2 + 6.0 * Math.sqrt(widthSignal + 1e-12),
-              1.2,
-              7.0,
-            );
-            ({ p: sp, d: sd, s: ss, w: sw, c: sc } = appendSynapseRibbon({
-              pos: synPos,
-              dir: synDir,
-              side: synSide,
-              width: synWidth,
-              col: synCol,
-              p: sp,
-              d: sd,
-              s: ss,
-              w: sw,
-              c: sc,
-              ax: fx,
-              ay: fy,
-              az: fz,
-              bx: tx,
-              by: ty,
-              bz: tz,
-              rgba: [base[0], base[1], base[2], a],
-              bend01: u,
-              bendSign,
-              widthPx,
-            }));
+            for (let k = 0; k < 2; k++) {
+              lineCol[c++] = base[0];
+              lineCol[c++] = base[1];
+              lineCol[c++] = base[2];
+              lineCol[c++] = a;
+            }
           }
 
           ({ p, c } = appendOutputPathLines({
@@ -3863,38 +2460,19 @@ function initStarfield() {
             alpha: 0.55,
           }));
           renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
-          renderer.updateSynapses({
-            positions: synPos.slice(0, sp),
-            dirs: synDir.slice(0, sd),
-            sides: synSide.slice(0, ss),
-            widths: synWidth.slice(0, sw),
-            colours: synCol.slice(0, sc),
-          });
         } else {
           const alloc = computeInboundAllocationForFocus(focusUuid);
           inboundTotalCount = alloc.rows.length;
-          const inbound = selectInboundEdgesForRender(alloc.rows, focusUuid);
+          const inbound = selectInboundEdgesForRender(alloc.rows);
           inboundRenderedCount = inbound.length;
-          const synVertsPerEdge = CURVE_SEGMENTS * 6;
-          const synVertCount = inbound.length * synVertsPerEdge;
-          const synPos = new Float32Array(synVertCount * 3);
-          const synDir = new Float32Array(synVertCount * 3);
-          const synSide = new Float32Array(synVertCount);
-          const synWidth = new Float32Array(synVertCount);
-          const synCol = new Float32Array(synVertCount * 4);
-          let sp = 0;
-          let sd = 0;
-          let ss = 0;
-          let sw = 0;
-          let sc = 0;
           const pathEdges = Math.max(0, outputPathToFocus.length - 1);
           const trailEdges = Math.max(0, getTrailIndexPairs().length);
 
           const linePos = new Float32Array(
-            (pathEdges + trailEdges) * 2 * 3,
+            (inbound.length + pathEdges + trailEdges) * 2 * 3,
           );
           const lineCol = new Float32Array(
-            (pathEdges + trailEdges) * 2 * 4,
+            (inbound.length + pathEdges + trailEdges) * 2 * 4,
           );
           let p = 0;
           let c = 0;
@@ -3907,44 +2485,23 @@ function initStarfield() {
             const y = positions[j * 3 + 1];
             const z = positions[j * 3 + 2];
 
+            linePos[p++] = 0;
+            linePos[p++] = 0;
+            linePos[p++] = 0;
+            linePos[p++] = x;
+            linePos[p++] = y;
+            linePos[p++] = z;
+
             const positive = (r.weight ?? 0) >= 0;
             const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
             const s01 = clamp(Math.sqrt(Math.max(0, r.share ?? 0)) * 2.2, 0, 1);
             const a = 0.12 + 0.75 * s01;
-            const h = hash32(`${r.fromUuid}→${r.toUuid}::bend`);
-            const u = u32ToU01(h);
-            const bendSign = (h & 1) === 0 ? -1 : 1;
-
-            const fromImpact = impactsByUuid?.[r.fromUuid] ?? 0;
-            const widthSignal = Math.abs(r.weight ?? 0) *
-              Math.abs(fromImpact ?? 0);
-            const widthPx = clamp(
-              1.2 + 6.0 * Math.sqrt(widthSignal + 1e-12),
-              1.2,
-              7.0,
-            );
-            ({ p: sp, d: sd, s: ss, w: sw, c: sc } = appendSynapseRibbon({
-              pos: synPos,
-              dir: synDir,
-              side: synSide,
-              width: synWidth,
-              col: synCol,
-              p: sp,
-              d: sd,
-              s: ss,
-              w: sw,
-              c: sc,
-              ax: 0,
-              ay: 0,
-              az: 0,
-              bx: x,
-              by: y,
-              bz: z,
-              rgba: [base[0], base[1], base[2], a],
-              bend01: u,
-              bendSign,
-              widthPx,
-            }));
+            for (let k = 0; k < 2; k++) {
+              lineCol[c++] = base[0];
+              lineCol[c++] = base[1];
+              lineCol[c++] = base[2];
+              lineCol[c++] = a;
+            }
           }
 
           ({ p, c } = appendOutputPathLines({
@@ -3965,13 +2522,6 @@ function initStarfield() {
             alpha: 0.55,
           }));
           renderer.updateLines(linePos.slice(0, p), lineCol.slice(0, c));
-          renderer.updateSynapses({
-            positions: synPos.slice(0, sp),
-            dirs: synDir.slice(0, sd),
-            sides: synSide.slice(0, ss),
-            widths: synWidth.slice(0, sw),
-            colours: synCol.slice(0, sc),
-          });
         }
       }
       renderer.resetCamera();
