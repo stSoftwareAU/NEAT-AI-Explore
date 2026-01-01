@@ -3682,6 +3682,20 @@ function initStarfield() {
     normaliseFocusTrailForCurrentFocus(focusUuid);
     updateBackButtonState();
     if (points && adjacency && focusUuid) {
+      // Recompute the output->focus path before any downstream consumers read it.
+      // This avoids stale visibility highlighting when changing focus quickly
+      // (Issue #44, 1-Jan-2026).
+      outputPathToFocus = (graph?.neuronsByUuid && inboundAdjacency)
+        ? computeOutputPathToFocus({
+          neuronsByUuid: graph.neuronsByUuid,
+          inboundAdj: inboundAdjacency,
+          focusUuid,
+        })
+        : [];
+      // Keep only the local tail of the output->focus path (avoid clutter).
+      // This keeps the path readable even when the focus is far upstream.
+      outputPathToFocus = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
+
       // Visibility mask: keep the focus neighbourhood readable by fading the
       // rest of the network (Issue #44, 1-Jan-2026).
       if (points.vis && renderer?.updateVisibility) {
@@ -3691,7 +3705,7 @@ function initStarfield() {
           allocForVis.rows,
           focusUuid,
         );
-        const pathTail = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
+        const pathTail = outputPathToFocus;
         const trail = focusTrail.slice(-Math.min(8, focusTrail.length));
         const want = new Set([focusUuid, ...pathTail, ...trail]);
         for (const r of inboundForVis) want.add(r.fromUuid);
@@ -3705,16 +3719,6 @@ function initStarfield() {
       const backUuid = (focusTrail.length >= 2)
         ? (focusTrail[focusTrail.length - 2] ?? null)
         : (prevMeta?.uuid ?? null);
-      outputPathToFocus = (graph?.neuronsByUuid && inboundAdjacency)
-        ? computeOutputPathToFocus({
-          neuronsByUuid: graph.neuronsByUuid,
-          inboundAdj: inboundAdjacency,
-          focusUuid,
-        })
-        : [];
-      // Keep only the local tail of the output->focus path (avoid clutter).
-      // This keeps the path readable even when the focus is far upstream.
-      outputPathToFocus = outputPathToFocus.slice(-(FOCUS_MAX_DEPTH + 2));
       // Paths mode needs both the upstream positions (for rendering) and the BFS
       // distances (for selecting which upstream edges to render). Computing the
       // upstream layout is relatively expensive, so do it once and reuse.
