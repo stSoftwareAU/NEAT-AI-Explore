@@ -33,6 +33,9 @@ const UPSTREAM_MAX_DEPTH = 4; // hops shown in Paths mode (focused neuron -> ups
 // Keep bounded so it never grows without limit during long sessions.
 const MAX_FOCUS_TRAIL = 64;
 
+// Travel animation duration (ms) when navigating between neurons (Issue #50).
+const TRAVEL_DURATION = 400;
+
 // Line budget (reduce clutter for high-fan-in NEAT neurons).
 const MAX_INBOUND_LINES = 80;
 const MAX_INBOUND_LINES_OUTPUT = 220;
@@ -1489,6 +1492,16 @@ function clamp(x, lo, hi) {
   return Math.min(hi, Math.max(lo, x));
 }
 
+// Linear interpolation between a and b by t (0..1).
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Smooth ease-in-out for travel animation (Issue #50).
+function easing(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
 function fmtSig(n, sig = 4) {
   if (n == null || typeof n !== "number") return "N/A";
   if (!Number.isFinite(n)) return String(n);
@@ -2012,6 +2025,14 @@ class StarfieldRenderer {
     // Glyph style: 0=abstract (v1), 1=neuron silhouette.
     this.glyphStyle01 = 1;
 
+    // Animation state for traveling effect (Issue #50).
+    this.travelAnimation = null;
+
+    // Callback to check if a neuron is connected to the current focus.
+    // Set by the app to restrict clicks to connected neurons (Issue #50).
+    /** @type {((clickedIdx: number) => boolean) | null} */
+    this.isConnectedToFocus = null;
+
     this._bindEvents();
   }
 
@@ -2240,7 +2261,13 @@ class StarfieldRenderer {
     c.addEventListener("click", (e) => {
       if (!this.positions || !this.meta?.length) return;
       const idx = this.pickStarIndex(e.clientX, e.clientY);
-      if (idx >= 0) this.setFocus(idx);
+      if (idx < 0) return;
+      // Only allow clicking neurons connected to the current focus (Issue #50).
+      // Skip check if no focus set yet (initial click) or if callback not configured.
+      if (this.focusIndex >= 0 && this.isConnectedToFocus) {
+        if (!this.isConnectedToFocus(idx)) return;
+      }
+      this.setFocus(idx);
     });
   }
 
@@ -2305,6 +2332,67 @@ class StarfieldRenderer {
     this.pos.y = fy;
     this.pos.z = fz + distance;
     this.clampDistance(20, 1400);
+  }
+
+  /**
+   * Animate the camera along a synapse path to a target position (Issue #50).
+   * Creates a smooth traveling effect when navigating between neurons.
+   * @param {number} targetX - Target X position (typically 0 for focus-centric layout)
+   * @param {number} targetY - Target Y position
+   * @param {number} targetZ - Target Z position
+   * @param {number} duration - Animation duration in ms
+   */
+  animateCameraTo(targetX, targetY, targetZ, duration = TRAVEL_DURATION) {
+    // Cancel any existing animation.
+    if (this.travelAnimation) {
+      cancelAnimationFrame(this.travelAnimation.rafId);
+      this.travelAnimation = null;
+    }
+
+    const startX = this.pos.x;
+    const startY = this.pos.y;
+    const startZ = this.pos.z;
+    const startYaw = this.yaw;
+    const startPitch = this.pitch;
+    const startTime = performance.now();
+
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const e = easing(t);
+
+      // Interpolate camera position along synapse path.
+      this.pos.x = lerp(startX, targetX, e);
+      this.pos.y = lerp(startY, targetY, e);
+      this.pos.z = lerp(startZ, targetZ, e);
+
+      // Smoothly reset yaw/pitch to 0 for stable arrival.
+      this.yaw = lerp(startYaw, 0, e);
+      this.pitch = lerp(startPitch, 0, e);
+
+      if (t < 1) {
+        this.travelAnimation = {
+          rafId: requestAnimationFrame(animate),
+        };
+      } else {
+        this.travelAnimation = null;
+      }
+    };
+
+    this.travelAnimation = {
+      rafId: requestAnimationFrame(animate),
+    };
+  }
+
+  /**
+   * Travel along synapse to the new focus (Issue #50).
+   * Call this before resetting camera to create the traveling effect.
+   * @param {number} distance - Final camera distance from focus
+   */
+  travelAlongSynapse(distance = 110) {
+    // For focus-centric layouts, target is always near origin.
+    // The traveling effect animates from current camera position to the reset position.
+    this.animateCameraTo(0, 0, distance, TRAVEL_DURATION);
   }
 
   setData({
@@ -3105,6 +3193,16 @@ function exposeDebugApi() {
       getFocusTrail: () => focusTrail.slice(),
       goBack: () => navigateBack(),
       getOutputPathToFocus: () => outputPathToFocus.slice(),
+      // Check if a neuron (by uuid) can be clicked from the current focus (Issue #50).
+      canFocusNeuron: (uuid) => {
+        if (!adjacency || !renderer) return false;
+        const focusIdx = renderer.focusIndex;
+        if (focusIdx < 0) return true; // No current focus, allow any click
+        const focusUuid = renderer.meta?.[focusIdx]?.uuid;
+        if (!focusUuid || !uuid) return false;
+        const neighbours = adjacency.get(focusUuid);
+        return neighbours?.has(String(uuid)) ?? false;
+      },
     };
   } catch (_e) {
     // No-op.
@@ -3683,6 +3781,21 @@ function initStarfield() {
   applyGlyphStyleUi();
   exposeDebugApi();
   initPanels();
+
+  // Restrict clicks to neurons connected to the current focus (Issue #50).
+  // This helps users understand their navigation path and prevents confusion.
+  renderer.isConnectedToFocus = (clickedIdx) => {
+    if (!adjacency || !points) return true; // Allow click if no adjacency data
+    const focusIdx = renderer.focusIndex;
+    if (focusIdx < 0) return true; // No current focus, allow any click
+    const focusUuid = renderer.meta?.[focusIdx]?.uuid;
+    const clickedUuid = renderer.meta?.[clickedIdx]?.uuid;
+    if (!focusUuid || !clickedUuid) return true;
+    // Check if clicked neuron is in the adjacency set of the focus.
+    const neighbours = adjacency.get(focusUuid);
+    return neighbours?.has(clickedUuid) ?? false;
+  };
+
   renderer.onFocusChanged = (idx, m, _prevIdx, prevMeta) => {
     // Re-centre the whole neighbourhood around the newly focused neuron.
     const focusUuid = m?.uuid ?? null;
@@ -3974,7 +4087,8 @@ function initStarfield() {
           });
         }
       }
-      renderer.resetCamera();
+      // Animate camera traveling along synapse to new focus (Issue #50).
+      renderer.travelAlongSynapse();
     }
     setFocusBadge(focusUuid);
     updateLabelsForFocus(focusUuid, { force: true });
