@@ -777,6 +777,9 @@ async function loadSnapshot(source, label) {
     currentNeuronTab = "details";
     trace = [];
     navigateTo(startUuid);
+
+    // Issue #53: Hide URL/Fetch/Browse controls on mobile once snapshot loads.
+    document.body.classList.add("snapshotLoaded");
   } catch (e) {
     hideProgress();
     setStatus(e.message, "bad");
@@ -1167,6 +1170,8 @@ function clearTrace() {
     trace = [first];
     renderTrace();
   }
+  // Issue #53: Show URL/Fetch/Browse controls again on mobile.
+  document.body.classList.remove("snapshotLoaded");
 }
 
 // ============================================================================
