@@ -845,7 +845,6 @@ function computeInputDashboard(
 let obsFilter = {
   search: "",
   showUnusedOnly: false,
-  showDisconnectedOnly: false,
   showConstantOnly: false,
   sort: "proxyDesc", // proxyDesc | unusedFirst | uuid
 };
@@ -869,14 +868,12 @@ function renderObsModal() {
   const rows = Array.isArray(INPUT_DASH?.rows) ? INPUT_DASH.rows : [];
   const total = rows.length;
   const unused = rows.filter((r) => !r.reachable).length;
-  const disconnected = rows.filter((r) => (r.outDegree ?? 0) === 0).length;
   const constant = rows.filter((r) => !!r.constant).length;
 
   const search = String(obsFilter.search ?? "").trim().toLowerCase();
 
   const filtered = rows.filter((r) => {
     if (obsFilter.showUnusedOnly && r.reachable) return false;
-    if (obsFilter.showDisconnectedOnly && (r.outDegree ?? 0) > 0) return false;
     if (obsFilter.showConstantOnly && !r.constant) return false;
     if (!search) return true;
 
@@ -922,9 +919,6 @@ function renderObsModal() {
   }</span>
       <span class="stat" title="Inputs that cannot reach any output via synapses">unused: ${
     escapeHtml(String(unused))
-  }</span>
-      <span class="stat" title="Inputs with out-degree 0 (no outgoing synapses)">disconnected: ${
-    escapeHtml(String(disconnected))
   }</span>
       <span class="stat" title="Inputs with near-zero variance across samples">near-constant: ${
     escapeHtml(String(constant))
@@ -975,12 +969,6 @@ function renderObsModal() {
         <span>Unused only</span>
       </label>
       <label class="filterItem filterCheckbox">
-        <input id="obsDisconnectedOnly" type="checkbox"${
-    obsFilter.showDisconnectedOnly ? " checked" : ""
-  } />
-        <span>Disconnected only</span>
-      </label>
-      <label class="filterItem filterCheckbox">
         <input id="obsConstantOnly" type="checkbox"${
     obsFilter.showConstantOnly ? " checked" : ""
   } />
@@ -1014,11 +1002,6 @@ function renderObsModal() {
     if (!r.reachable) {
       chips.push(
         `<span class="stat error" title="No path from this input to any output (structurally unused)">unused</span>`,
-      );
-    }
-    if ((r.outDegree ?? 0) === 0) {
-      chips.push(
-        `<span class="stat" title="No outgoing synapses (disconnected)">disconnected</span>`,
       );
     }
     if (r.constant) {
@@ -1077,13 +1060,6 @@ function renderObsModal() {
     "change",
     (e) => {
       obsFilter.showUnusedOnly = !!e.target.checked;
-      renderObsModal();
-    },
-  );
-  el.obsModalBody.querySelector("#obsDisconnectedOnly")?.addEventListener(
-    "change",
-    (e) => {
-      obsFilter.showDisconnectedOnly = !!e.target.checked;
       renderObsModal();
     },
   );
