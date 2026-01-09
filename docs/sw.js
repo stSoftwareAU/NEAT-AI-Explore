@@ -13,6 +13,10 @@
 const VERSION = "__BUILD_ID__";
 const STATIC_CACHE = `neat-ai-explore-static-v${VERSION}`;
 const RUNTIME_CACHE = `neat-ai-explore-runtime-v${VERSION}`;
+// Snapshot cache is unversioned so it survives SW updates (Issue #52).
+// The app's fetchJson() caches snapshots here, and they should remain
+// available after a version update to prevent first-fetch failures.
+const SNAPSHOT_CACHE = "neat-ai-explore-snapshots";
 
 const STATIC_FILES = [
   "./index.html",
@@ -82,7 +86,14 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys.map((key) => {
-            if (key !== STATIC_CACHE && key !== RUNTIME_CACHE) {
+            // Preserve current versioned caches and the unversioned snapshot
+            // cache. The snapshot cache survives version updates so users
+            // don't lose cached snapshots on first load (Issue #52).
+            if (
+              key !== STATIC_CACHE &&
+              key !== RUNTIME_CACHE &&
+              key !== SNAPSHOT_CACHE
+            ) {
               return caches.delete(key);
             }
           }),
@@ -131,7 +142,9 @@ async function cacheFirst(request) {
 }
 
 async function networkFirst(request) {
-  const cache = await caches.open(RUNTIME_CACHE);
+  // Use the unversioned SNAPSHOT_CACHE for JSON snapshots so cached data
+  // survives SW version updates (Issue #52).
+  const cache = await caches.open(SNAPSHOT_CACHE);
   try {
     // Use revalidation semantics so fresh snapshots are used when possible, but
     // cached snapshots remain available offline.
@@ -139,6 +152,7 @@ async function networkFirst(request) {
     if (res && res.ok) cache.put(request, res.clone());
     return res;
   } catch {
+    // Check both the snapshot cache and the global cache for fallback.
     const cached = await caches.match(request);
     if (cached) return cached;
     throw new Error("Offline and no cached response available");
