@@ -14,6 +14,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
+# Add common Deno installation paths to PATH if deno is not already available
+if ! command -v deno &> /dev/null; then
+  if [ -x "$HOME/.deno/bin/deno" ]; then
+    export PATH="$HOME/.deno/bin:$PATH"
+  fi
+fi
+
 echo "==> Deno version"
 deno --version
 
