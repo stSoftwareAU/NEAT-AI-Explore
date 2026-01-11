@@ -63,22 +63,24 @@
       <nav class="traceBar">
         <span class="traceLabel">Trace:</span>
         <ol id="traceBreadcrumb" class="breadcrumb"></ol>
-        <button id="traceBackBtn" class="button buttonSmall">← Back</button>
-        <button id="traceClearBtn" class="button buttonSmall buttonSecondary">
-          Clear
-        </button>
-        <button id="obsBtn" class="button buttonSmall buttonSecondary">
-          Observations
-        </button>
-        <a
-          id="graphBtn"
-          class="button buttonSmall buttonSecondary"
-          href="./graph/"
-          aria-label="Open 3D graph view"
-          title="Open 3D graph view (new tab recommended)"
-        >
-          3D Graph
-        </a>
+        <div class="traceButtons">
+          <button id="traceBackBtn" class="button buttonSmall">← Back</button>
+          <button id="traceClearBtn" class="button buttonSmall buttonSecondary">
+            Clear
+          </button>
+          <button id="obsBtn" class="button buttonSmall buttonSecondary">
+            Observations
+          </button>
+          <a
+            id="graphBtn"
+            class="button buttonSmall buttonSecondary"
+            href="./graph/"
+            aria-label="Open 3D graph view"
+            title="Open 3D graph view (new tab recommended)"
+          >
+            3D Graph
+          </a>
+        </div>
       </nav>
 
       <!-- Main exploration area: left-to-right flow -->
