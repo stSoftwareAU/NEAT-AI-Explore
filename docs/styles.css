@@ -323,6 +323,14 @@ body {
   font-weight: 600;
 }
 
+/* Trace bar button group */
+.traceButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Main explorer area */
 .explorerMain {
   display: flex;
@@ -1335,6 +1343,18 @@ body {
 
   .traceBar {
     padding: 8px 14px;
+  }
+
+  /* Issue #59: Ensure trace bar content wraps properly in portrait mode.
+     The breadcrumb takes full width, forcing buttons to wrap below. */
+  .breadcrumb {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .traceButtons {
+    flex: 1 1 100%;
+    justify-content: flex-start;
   }
 
   .synapseHeader {
