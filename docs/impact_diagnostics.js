@@ -179,7 +179,7 @@ export function summariseSeriesStats(arr, options = {}) {
  *
  * Notes:
  * - We intentionally keep this conservative and cheap (single pass).
- * - We treat non-finite values as an issue and report the first offending index.
+ * - We treat NaN/Infinity values as an issue and report the first offending index.
  *
  * @param {string} squash
  * @param {number[]} preActs
