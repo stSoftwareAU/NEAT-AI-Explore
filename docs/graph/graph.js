@@ -3,7 +3,7 @@
  *
  * A fun, intuitive 3D visualisation of a full creature graph. Each neuron is a
  * "star" whose colour/size encodes structural information, and whose glow
- * highlights "CT-scan style" problems (non-finite values, saturation, heavy
+ * highlights "CT-scan style" problems (NaN/Infinity values, saturation, heavy
  * tails, suspiciously low impacts).
  *
  * Implementation notes:

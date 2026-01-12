@@ -2107,6 +2107,25 @@ function escapeHtml(s) {
     .replaceAll("'", "&#39;");
 }
 
+/**
+ * Format an observation reference for display.
+ *
+ * Issue #62: When obsIndices contains string identifiers (e.g. "first-one"),
+ * showing "obs_index=second-one" was confusing. This helper formats the
+ * reference appropriately based on whether it's a numeric index or string ID.
+ *
+ * @param {number|string|null} obsRef - The observation index or identifier.
+ * @returns {string} - Formatted string like "obs #42" or "obs 'my-id'".
+ */
+function formatObsRef(obsRef) {
+  if (obsRef == null) return "";
+  if (typeof obsRef === "number") {
+    return `obs #${obsRef}`;
+  }
+  // String identifier - quote it to make clear it's a literal ID.
+  return `obs '${obsRef}'`;
+}
+
 // ============================================================================
 // Tooltips (mobile)
 // ============================================================================
@@ -2807,40 +2826,49 @@ function renderIssuesPanel(currentUuid, neuronType) {
     }
   }
 
-  // Non-finite activations / errors.
+  // NaN/Infinity activations / errors (issue #62: clearer terminology).
   if (nonFinite) {
     const dd = [];
     if (nonFinite.activation?.count > 0) {
+      const ref = formatObsRef(nonFinite.activation.firstObsIndex);
       dd.push(
-        `Non-finite activations: ${nonFinite.activation.count} (first obs_index=${nonFinite.activation.firstObsIndex})`,
+        `NaN/Infinity activations: ${nonFinite.activation.count}${
+          ref ? ` (first at ${ref})` : ""
+        }`,
       );
     }
     if (nonFinite.value?.count > 0) {
+      const ref = formatObsRef(nonFinite.value.firstObsIndex);
       dd.push(
-        `Non-finite values: ${nonFinite.value.count} (first obs_index=${nonFinite.value.firstObsIndex})`,
+        `NaN/Infinity values: ${nonFinite.value.count}${
+          ref ? ` (first at ${ref})` : ""
+        }`,
       );
     }
     if (nonFinite.errors?.count > 0) {
+      const ref = formatObsRef(nonFinite.errors.firstObsIndex);
       dd.push(
-        `Non-finite errors: ${nonFinite.errors.count} (first obs_index=${nonFinite.errors.firstObsIndex})`,
+        `NaN/Infinity errors: ${nonFinite.errors.count}${
+          ref ? ` (first at ${ref})` : ""
+        }`,
       );
     }
     pieces.push(`
       <div class="issueRow">
-        <div class="issueRowTitle">Exploding / non-finite</div>
+        <div class="issueRowTitle">NaN/Infinity (exploding gradients)</div>
         <div class="synapseStats">${
       dd.length
         ? dd.map((x) => `<span class="stat error">${escapeHtml(x)}</span>`)
           .join("")
-        : `<span class="stat">No non-finite values detected</span>`
+        : `<span class="stat">No NaN/Infinity values detected</span>`
     }</div>
       </div>
     `);
   } else {
     pieces.push(`
       <div class="issueRow">
-        <div class="issueRowTitle">Exploding / non-finite</div>
-        <div class="synapseStats"><span class="stat">No non-finite values detected</span></div>
+        <div class="issueRowTitle">NaN/Infinity (exploding gradients)</div>
+        <div class="synapseStats"><span class="stat">No NaN/Infinity values detected</span></div>
       </div>
     `);
   }
@@ -2913,17 +2941,15 @@ function renderIssuesPanel(currentUuid, neuronType) {
   }
 
   pieces.push(renderJumpList(
-    "Non-finite (top 10)",
+    "NaN/Infinity (top 10)",
     nonFiniteUuids,
-    (d) =>
-      `<span class="stat error">count: ${
+    (d) => {
+      const ref = formatObsRef(d.errors?.firstObsIndex);
+      return `<span class="stat error">count: ${
         escapeHtml(String(d.total ?? 0))
       }</span>` +
-      (d.errors?.firstObsIndex != null
-        ? `<span class="stat">first obs_index: ${
-          escapeHtml(String(d.errors.firstObsIndex))
-        }</span>`
-        : ""),
+        (ref ? `<span class="stat">first at ${escapeHtml(ref)}</span>` : "");
+    },
   ));
 
   pieces.push(renderJumpList(
