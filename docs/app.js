@@ -217,7 +217,6 @@ const el = {
   synapseSort: document.getElementById("synapseSort"),
   synapseMinAlloc: document.getElementById("synapseMinAlloc"),
   synapseTopK: document.getElementById("synapseTopK"),
-  synapseTraceOnly: document.getElementById("synapseTraceOnly"),
   synapseListContainer: document.getElementById("synapseListContainer"),
 };
 
@@ -240,7 +239,6 @@ function defaultInboundTopK() {
 
 let inboundMinAllocImpact = 0;
 let inboundTopK = defaultInboundTopK(); // 0 means unlimited
-let inboundTraceOnly = false;
 let inboundRenderLimit = inboundTopK || 0;
 
 function parseMaybeNumber(s) {
@@ -286,7 +284,6 @@ function syncInboundFilterControls() {
       inboundTopK = best;
     }
   }
-  if (el.synapseTraceOnly) el.synapseTraceOnly.checked = !!inboundTraceOnly;
 }
 
 function resetInboundRenderLimit() {
@@ -1937,7 +1934,6 @@ function renderSynapseList(toUuid) {
 
   // Apply filters.
   const filtered = enriched.filter((syn) => {
-    if (inboundTraceOnly && !trace.includes(syn.fromUuid)) return false;
     if (inboundMinAllocImpact > 0) {
       const ai = syn.allocImpact ?? 0;
       if (ai < inboundMinAllocImpact) return false;
@@ -3359,13 +3355,6 @@ function initInboundFilters() {
       inboundTopK = n != null
         ? Math.max(0, Math.floor(n))
         : defaultInboundTopK();
-      resetInboundRenderLimit();
-      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
-    });
-  }
-  if (el.synapseTraceOnly) {
-    el.synapseTraceOnly.addEventListener("change", () => {
-      inboundTraceOnly = !!el.synapseTraceOnly.checked;
       resetInboundRenderLimit();
       if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
     });
