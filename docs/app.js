@@ -2924,21 +2924,31 @@ function renderIssuesPanel(currentUuid, neuronType) {
   // Global lists (quickly actionable).
   pieces.push(`<div class="panelSectionTitle">Flagged neurons</div>`);
 
+  // Issue #68: Exclude constant inputs from flagged lists. A constant neuron
+  // always outputs the same value, so flagging it for "dead zone" or "clamp"
+  // is misleading—it's constant by design, not malfunctioning.
+  const constantInputUuids = new Set(
+    (DIAG_INPUTS?.constantInputs ?? []).map((x) => x.uuid).filter(Boolean),
+  );
+
   const nonFiniteUuids = Array.from(DIAG_NONFINITE.entries())
     .sort((a, b) => (b[1]?.total ?? 0) - (a[1]?.total ?? 0))
     .slice(0, 10);
 
   const clampedUuids = Array.from(DIAG_DEADZONES.entries())
     .filter(([uuid, d]) => uuid && d && d.fracClamped != null)
+    .filter(([uuid]) => !constantInputUuids.has(uuid))
     .sort((a, b) => (b[1].fracClamped ?? 0) - (a[1].fracClamped ?? 0))
     .slice(0, 10);
 
   const deadReluUuids = Array.from(DIAG_DEADZONES.entries())
     .filter(([uuid, d]) => uuid && d && d.fracAtZero != null)
+    .filter(([uuid]) => !constantInputUuids.has(uuid))
     .sort((a, b) => (b[1].fracAtZero ?? 0) - (a[1].fracAtZero ?? 0))
     .slice(0, 10);
 
   const heavyTail = Array.from(DIAG_ERROR_TAIL.entries())
+    .filter(([uuid]) => !constantInputUuids.has(uuid))
     .sort((a, b) =>
       (b[1]?.topK?.[0]?.shareOfTotal ?? 0) -
       (a[1]?.topK?.[0]?.shareOfTotal ?? 0)
