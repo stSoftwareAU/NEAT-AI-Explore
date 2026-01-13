@@ -478,6 +478,15 @@ function maybeAnnotateLoadedFromCache(obj, usedCache, cacheReason) {
   return obj;
 }
 
+// Maximum number of retry attempts for transient network failures (Issue #67).
+// The first fetch can fail during Service Worker activation or on unstable
+// connections. Automatic retries make the app more resilient.
+const FETCH_MAX_RETRIES = 2;
+
+// Initial delay (ms) before the first retry. Doubles on each subsequent retry
+// (exponential backoff) to give transient issues time to resolve.
+const FETCH_RETRY_DELAY_MS = 500;
+
 async function fetchJson(url) {
   const u = normaliseSnapshotUrl(url);
   const canUseCacheFallback = isSnapshotCacheAllowedUrl(u) &&
@@ -488,48 +497,66 @@ async function fetchJson(url) {
   let usedCache = false;
   let cacheReason = "";
 
-  // Network-first: always attempt the fresh version when possible.
-  try {
-    // `no-cache` tells the browser to revalidate when possible, while still
-    // allowing offline use of cached responses when the network is down.
-    res = await fetch(u, { cache: "no-cache" });
-  } catch (e) {
-    // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
-    // fetch() rejects with TypeError("Failed to fetch") in that case.
-    // However, same-origin URLs cannot have CORS issues - "Failed to fetch" for
-    // same-origin URLs is more likely an offline/network error (especially on Chrome).
-    // Only throw the CORS error for cross-origin URLs; same-origin should proceed
-    // to cache fallback.
-    if (e?.message === "Failed to fetch" && !canUseCacheFallback) {
-      throw new Error(
-        "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
-      );
-    }
+  // Network-first with retry: attempt the fresh version, retrying on transient
+  // network failures (Issue #67). This handles the common "first fetch fails,
+  // second works" scenario during Service Worker activation or on unstable
+  // mobile connections.
+  let lastError = null;
+  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+    try {
+      // `no-cache` tells the browser to revalidate when possible, while still
+      // allowing offline use of cached responses when the network is down.
+      res = await fetch(u, { cache: "no-cache" });
+      // Success - break out of retry loop.
+      lastError = null;
+      break;
+    } catch (e) {
+      lastError = e;
 
-    // GitHub Pages can be blocked by CORS on some networks. If the default
-    // snapshot URL fails, try the known fallbacks.
-    if (String(url) === DEFAULT_SNAPSHOT_URL) {
-      for (const fallback of SNAPSHOT_FALLBACK_URLS) {
-        if (!fallback || fallback === url) continue;
-        try {
-          return await fetchJson(fallback);
-        } catch (_e2) {
-          // Keep trying.
+      // Browser blocks cross-origin fetches without CORS headers (common with S3 presigned URLs).
+      // fetch() rejects with TypeError("Failed to fetch") in that case.
+      // However, same-origin URLs cannot have CORS issues - "Failed to fetch" for
+      // same-origin URLs is more likely an offline/network error (especially on Chrome).
+      // Only throw the CORS error for cross-origin URLs; same-origin should proceed
+      // to cache fallback.
+      if (e?.message === "Failed to fetch" && !canUseCacheFallback) {
+        throw new Error(
+          "Failed to fetch (likely CORS). If this is an S3 presigned URL, add a bucket CORS rule allowing origin https://stsoftwareau.github.io (GET/HEAD).",
+        );
+      }
+
+      // If this wasn't our last attempt, wait before retrying (exponential backoff).
+      if (attempt < FETCH_MAX_RETRIES) {
+        const delay = FETCH_RETRY_DELAY_MS * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // All retries exhausted - try fallback URLs for the default snapshot.
+      // GitHub Pages can be blocked by CORS on some networks.
+      if (String(url) === DEFAULT_SNAPSHOT_URL) {
+        for (const fallback of SNAPSHOT_FALLBACK_URLS) {
+          if (!fallback || fallback === url) continue;
+          try {
+            return await fetchJson(fallback);
+          } catch (_e2) {
+            // Keep trying.
+          }
         }
       }
-    }
 
-    // Offline/unstable network: fall back to Cache Storage when available.
-    if (canUseCacheFallback) {
-      const cached = await caches.match(u);
-      if (cached) {
-        res = cached;
-        usedCache = true;
-        cacheReason = "offline";
+      // Offline/unstable network: fall back to Cache Storage when available.
+      if (canUseCacheFallback) {
+        const cached = await caches.match(u);
+        if (cached) {
+          res = cached;
+          usedCache = true;
+          cacheReason = "offline";
+        }
       }
-    }
 
-    if (!res) throw e;
+      if (!res) throw e;
+    }
   }
 
   // If the network returned an error (e.g., 503), try cache fallback (same-origin only).
