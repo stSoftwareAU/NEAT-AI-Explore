@@ -13,16 +13,16 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
-Deno.test("starfield supports a neuron-style glyph mode + gallery (Issue #44, 31-Dec-2025)", async () => {
+Deno.test("starfield renders neuron-style glyphs by default (Issue #44, updated Issue #70, 14-Jan-2026)", async () => {
   const jsPath = repoPath("docs", "graph", "graph.js");
-  const htmlPath = repoPath("docs", "graph", "index.html");
   const js = await Deno.readTextFile(jsPath);
-  const html = await Deno.readTextFile(htmlPath);
 
-  // Shader-driven glyph style toggle (abstract ↔ neuron-ish).
+  // Shader still supports glyph rendering via the uGlyphStyle uniform.
+  // The uniform is now hardcoded to neuron-style (1.0) since the toggle was
+  // removed in Issue #70.
   assert(
     js.includes("uGlyphStyle"),
-    "Expected graph.js shader to expose a uGlyphStyle uniform so glyph style can be toggled",
+    "Expected graph.js shader to expose a uGlyphStyle uniform for glyph rendering",
   );
 
   // Neuron-ish silhouette needs degree inputs so glyphs can encode dendrites/axon hints.
@@ -31,13 +31,9 @@ Deno.test("starfield supports a neuron-style glyph mode + gallery (Issue #44, 31
     "Expected graph.js shader attributes aInDeg/aOutDeg so glyphs can encode in/out degree",
   );
 
-  // UI wiring: a button for switching glyph style + a gallery container.
+  // Glyph style is now hardcoded to neuron-style (1.0), set directly on the renderer.
   assert(
-    html.includes('id="glyphToggle"'),
-    'Expected graph/index.html to include a glyph style toggle button with id="glyphToggle"',
-  );
-  assert(
-    html.includes('id="glyphGallery"'),
-    'Expected graph/index.html to include a glyph gallery container with id="glyphGallery"',
+    js.includes("renderer.glyphStyle01 = 1"),
+    "Expected graph.js to set glyphStyle01 to 1 (neuron-style) by default",
   );
 });
