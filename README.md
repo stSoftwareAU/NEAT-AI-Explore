@@ -183,12 +183,9 @@ NEAT networks.
   - Mouse wheel to zoom
   - WASD / arrow keys to fly
   - Click a neuron to focus it (HUD shows key properties + flags)
-  - Glyph toggle: switch between a **neuron-style** silhouette (more
-    recognisable) and the **abstract** v1 squash-family glyphs
 - **Layout**: focus-centric neighbourhood view (directly linked neurons are
   closest; moving focus recomputes the local neighbourhood layout)
-- **Legend**: includes a small glyph gallery + mapping notes
-  (size/colour/bias/degree)
+- **Legend**: includes mapping notes (size/colour/bias/degree)
 
 ### Graph explorer (desktop)
 
