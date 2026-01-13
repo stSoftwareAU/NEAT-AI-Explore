@@ -10,7 +10,7 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
-Deno.test("trace view uses star emoji for 3D graph button (Issue #65)", async () => {
+Deno.test("trace view uses brain emoji for 3D graph button (Issue #65, #73)", async () => {
   const htmlPath = repoPath("docs", "index.html");
   const html = await Deno.readTextFile(htmlPath);
 
@@ -19,11 +19,11 @@ Deno.test("trace view uses star emoji for 3D graph button (Issue #65)", async ()
     "Expected docs/index.html to have a graph button with id graphBtn",
   );
 
-  // The button should use a star emoji (🌟 or ⭐) instead of text "3D Graph"
+  // Issue #73: button should use brain emoji (🧠) instead of star emoji
   // to save space on mobile devices
   assert(
-    html.includes("🌟") || html.includes("⭐"),
-    "Expected graphBtn to use a star emoji (🌟 or ⭐) instead of text to save space (Issue #65)",
+    html.includes("🧠"),
+    "Expected graphBtn to use a brain emoji (🧠) instead of text to save space (Issue #73)",
   );
 
   // Ensure the old "3D Graph" text is no longer used in the button

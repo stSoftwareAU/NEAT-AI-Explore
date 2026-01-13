@@ -17,9 +17,9 @@ Deno.test("trace view exposes a 3D graph link (Issue #44, 31-Dec-2025)", async (
     html.includes('id="graphBtn"'),
     "Expected docs/index.html to expose a 3D graph button (graphBtn)",
   );
-  // Issue #65: button now uses star emoji instead of "3D Graph" text to save space
+  // Issue #73: button now uses brain emoji instead of star emoji to save space
   assert(
-    html.includes("🌟") || html.includes("⭐"),
-    "Expected graphBtn to use a star emoji (Issue #65)",
+    html.includes("🧠"),
+    "Expected graphBtn to use a brain emoji (Issue #73)",
   );
 });
