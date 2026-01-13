@@ -14,7 +14,12 @@ Deno.test("trace view exposes a 3D graph link (Issue #44, 31-Dec-2025)", async (
   const htmlPath = repoPath("docs", "index.html");
   const html = await Deno.readTextFile(htmlPath);
   assert(
-    html.includes('id="graphBtn"') && html.includes("3D Graph"),
+    html.includes('id="graphBtn"'),
     "Expected docs/index.html to expose a 3D graph button (graphBtn)",
+  );
+  // Issue #65: button now uses star emoji instead of "3D Graph" text to save space
+  assert(
+    html.includes("🌟") || html.includes("⭐"),
+    "Expected graphBtn to use a star emoji (Issue #65)",
   );
 });
