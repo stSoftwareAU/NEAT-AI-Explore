@@ -94,12 +94,22 @@ export async function gunzipToText(gzBytes) {
  * @property {boolean} indeterminate
  */
 
+// Maximum number of retry attempts for transient network failures (Issue #67).
+// The first fetch can fail during Service Worker activation or on unstable
+// connections. Automatic retries make the app more resilient.
+const FETCH_MAX_RETRIES = 2;
+
+// Initial delay (ms) before the first retry. Doubles on each subsequent retry
+// (exponential backoff) to give transient issues time to resolve.
+const FETCH_RETRY_DELAY_MS = 500;
+
 /**
  * Fetch and parse snapshot JSON, with optional gzip decode and progress reporting.
  *
  * Notes:
  * - This is a best-effort loader for a debug PWA; it prefers compatibility and
  *   clear errors over cleverness.
+ * - Network-first with retry: retries on transient network failures (Issue #67).
  *
  * @param {string} url
  * @param {{
@@ -120,7 +130,29 @@ export async function fetchSnapshotJson(url, opts = {}) {
     }
   };
 
-  const res = await fetch(u, { cache: "no-cache" });
+  // Network-first with retry: attempt the fetch, retrying on transient network
+  // failures (Issue #67). This handles the common "first fetch fails, second
+  // works" scenario during Service Worker activation or on unstable mobile
+  // connections.
+  let res;
+  let lastError = null;
+  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+    try {
+      res = await fetch(u, { cache: "no-cache" });
+      lastError = null;
+      break;
+    } catch (e) {
+      lastError = e;
+      // If this wasn't our last attempt, wait before retrying (exponential backoff).
+      if (attempt < FETCH_MAX_RETRIES) {
+        const delay = FETCH_RETRY_DELAY_MS * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
+
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const ce = (res.headers.get("content-encoding") ?? "").toLowerCase();
