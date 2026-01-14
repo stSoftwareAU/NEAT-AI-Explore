@@ -280,6 +280,14 @@ body {
   font-weight: 600;
 }
 
+.pathLabel {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -322,6 +330,13 @@ body {
 .breadcrumb li:last-child button {
   color: var(--trace);
   font-weight: 600;
+}
+
+.breadcrumbEllipsis {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 4px;
+  cursor: help;
 }
 
 /* Trace bar button group */
