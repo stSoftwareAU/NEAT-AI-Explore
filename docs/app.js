@@ -99,6 +99,11 @@ const MSE_ERROR_THRESHOLD = 0.3; // Highlight if MSE > 0.3
 // (MSE/MAE) look 'obviously wrong' because saturation/outliers dominate.
 const EXTREME_PREACTIVATION_ABS_MAX_FOR_STEP_BIPOLAR = 1e6;
 
+// Maximum path items to show before truncating in the middle.
+// When trace.length exceeds this, we show the first 2 items, an ellipsis, and
+// the last 2 items. This keeps the origin (output) and current position visible.
+const MAX_VISIBLE_PATH_ITEMS = 5;
+
 // Tooltips for property labels
 const TOOLTIPS = {
   "Type": "Neuron type: input, hidden, output, or constant",
@@ -1205,19 +1210,68 @@ function clearTrace() {
 function renderTrace() {
   el.traceBreadcrumb.innerHTML = "";
 
-  trace.forEach((uuid) => {
+  // Build the list of items to display, truncating in the middle if needed.
+  // When path is long, show: first 2 → … → last 2
+  // This preserves the origin (output neuron) and current position.
+  const itemsToShow = getPathItemsWithMiddleTruncation(trace);
+
+  itemsToShow.forEach((item) => {
     const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.textContent = truncateNeuronName(uuid);
-    const alias = getAlias(uuid);
-    const desc = getInputDescription(uuid);
-    btn.title = uuid +
-      (alias ? ` (${alias})` : "") +
-      (desc ? ` — ${desc}` : "");
-    btn.onclick = () => navigateTo(uuid);
-    li.appendChild(btn);
+
+    if (item.isEllipsis) {
+      // Render ellipsis indicator for truncated middle section
+      const span = document.createElement("span");
+      span.className = "breadcrumbEllipsis";
+      span.textContent = "…";
+      span.title = `${item.hiddenCount} item${
+        item.hiddenCount === 1 ? "" : "s"
+      } hidden`;
+      li.appendChild(span);
+    } else {
+      // Render normal breadcrumb button
+      const btn = document.createElement("button");
+      btn.textContent = truncateNeuronName(item.uuid);
+      const alias = getAlias(item.uuid);
+      const desc = getInputDescription(item.uuid);
+      btn.title = item.uuid +
+        (alias ? ` (${alias})` : "") +
+        (desc ? ` — ${desc}` : "");
+      btn.onclick = () => navigateTo(item.uuid);
+      li.appendChild(btn);
+    }
+
     el.traceBreadcrumb.appendChild(li);
   });
+}
+
+/**
+ * Given a trace array, returns items to display with middle truncation
+ * when the path exceeds MAX_VISIBLE_PATH_ITEMS.
+ *
+ * For a path like [A, B, C, D, E, F, G], returns:
+ * [A, B, {ellipsis, hiddenCount: 3}, F, G]
+ *
+ * @param {string[]} pathArray - Array of neuron UUIDs
+ * @returns {Array<{uuid: string, isEllipsis?: false} | {isEllipsis: true, hiddenCount: number}>}
+ */
+function getPathItemsWithMiddleTruncation(pathArray) {
+  if (pathArray.length <= MAX_VISIBLE_PATH_ITEMS) {
+    // No truncation needed
+    return pathArray.map((uuid) => ({ uuid, isEllipsis: false }));
+  }
+
+  // Truncate in the middle: show first 2, ellipsis, last 2
+  const headCount = 2;
+  const tailCount = 2;
+  const head = pathArray.slice(0, headCount);
+  const tail = pathArray.slice(-tailCount);
+  const hiddenCount = pathArray.length - headCount - tailCount;
+
+  return [
+    ...head.map((uuid) => ({ uuid, isEllipsis: false })),
+    { isEllipsis: true, hiddenCount },
+    ...tail.map((uuid) => ({ uuid, isEllipsis: false })),
+  ];
 }
 
 function truncateUuid(uuid) {
