@@ -283,7 +283,7 @@ Outputs:
 - `docs/screenshots/ipad-screenshot.png`
 - `docs/screenshots/ipad-inbound-modal.png`
 
-Last updated: 31-Dec-2025
+Last updated: 15-Jan-2026
 
 ## Licence
 
