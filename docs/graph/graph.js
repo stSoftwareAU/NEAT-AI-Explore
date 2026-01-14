@@ -3146,7 +3146,6 @@ function buildHudForIndex(idx) {
   lines.push(`Risk:  ${fmtSig(m.risk?.score ?? 0, 3)}`);
   lines.push(`Links: ${directNeighbours}`);
   lines.push(`Synapses: in=${synCounts.inN}  out=${synCounts.outN}`);
-  lines.push(`Glyph: ${glyphStyle}`);
   if (ignoredInputs.length) {
     lines.push(`Ignored observations: ${ignoredInputs.length}`);
     const top = ignoredInputs.slice(0, 8).map((u) => labelText(u)).join(", ");

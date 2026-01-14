@@ -13,7 +13,7 @@ function repoPath(...parts: string[]): string {
   return [root, ...parts].join("/");
 }
 
-Deno.test("graph HUD shows in/out synapse counts and glyph style (Issue #44, 31-Dec-2025)", async () => {
+Deno.test("graph HUD shows in/out synapse counts (Issue #44, 31-Dec-2025)", async () => {
   const jsPath = repoPath("docs", "graph", "graph.js");
   const js = await Deno.readTextFile(jsPath);
 
@@ -21,8 +21,6 @@ Deno.test("graph HUD shows in/out synapse counts and glyph style (Issue #44, 31-
     js.includes("Synapses: in=") && js.includes("out="),
     "Expected graph.js HUD to include synapse in/out counts for the focus neuron",
   );
-  assert(
-    js.includes("Glyph: ${glyphStyle}") || js.includes("Glyph:"),
-    "Expected graph.js HUD to include current glyph style for debugging",
-  );
+  // Note: Glyph style display was removed in Issue #70/#77 since it's no longer
+  // user-configurable and was causing a runtime error.
 });
