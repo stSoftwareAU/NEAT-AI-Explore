@@ -2,17 +2,6 @@ function assert(condition: unknown, message?: string): asserts condition {
   if (!condition) throw new Error(message ?? "Assertion failed");
 }
 
-function assertEquals<T>(actual: T, expected: T, message?: string): void {
-  if (actual !== expected) {
-    throw new Error(
-      message ??
-        `Assertion failed: expected ${JSON.stringify(expected)} but got ${
-          JSON.stringify(actual)
-        }`,
-    );
-  }
-}
-
 function repoPath(...parts: string[]): string {
   const url = new URL(import.meta.url);
   const here = url.pathname;
@@ -36,41 +25,33 @@ Deno.test("version.json exists and is SemVer X.Y.Z", async () => {
 });
 
 Deno.test("docs PWA files exist", async () => {
-  const manifestPath = repoPath("docs", "manifest.webmanifest");
-  const swPath = repoPath("docs", "sw.js");
-  const indexPath = repoPath("docs", "index.html");
-  const impactPath = repoPath("docs", "impact_attribution.js");
-  const faviconPath = repoPath("docs", "favicon.ico");
-  const graphIndexPath = repoPath("docs", "graph", "index.html");
-  const graphJsPath = repoPath("docs", "graph", "graph.js");
-  const graphCssPath = repoPath("docs", "graph", "graph.css");
-  const sharedSnapshotLoaderPath = repoPath(
-    "docs",
-    "shared",
-    "snapshot_loader.js",
-  );
-  const sharedThemePath = repoPath("docs", "shared", "theme.js");
-  const sharedColourMapsPath = repoPath("docs", "shared", "colour_maps.js");
-
-  await Deno.stat(manifestPath);
-  await Deno.stat(swPath);
-  await Deno.stat(indexPath);
-  await Deno.stat(impactPath);
-  await Deno.stat(faviconPath);
-  await Deno.stat(graphIndexPath);
-  await Deno.stat(graphJsPath);
-  await Deno.stat(graphCssPath);
-  await Deno.stat(sharedSnapshotLoaderPath);
-  await Deno.stat(sharedThemePath);
-  await Deno.stat(sharedColourMapsPath);
+  const paths = [
+    repoPath("docs", "manifest.webmanifest"),
+    repoPath("docs", "sw.js"),
+    repoPath("docs", "index.html"),
+    repoPath("docs", "impact_attribution.js"),
+    repoPath("docs", "favicon.ico"),
+    repoPath("docs", "graph", "index.html"),
+    repoPath("docs", "graph", "graph.js"),
+    repoPath("docs", "graph", "graph.css"),
+    repoPath("docs", "shared", "snapshot_loader.js"),
+    repoPath("docs", "shared", "theme.js"),
+    repoPath("docs", "shared", "colour_maps.js"),
+  ];
+  for (const p of paths) {
+    await Deno.stat(p);
+  }
 });
 
 Deno.test("manifest icons and screenshots exist on disk", async () => {
   const manifestPath = repoPath("docs", "manifest.webmanifest");
   const manifest = JSON.parse(await Deno.readTextFile(manifestPath));
 
-  assert(Array.isArray(manifest.icons));
-  assert(Array.isArray(manifest.screenshots));
+  assert(Array.isArray(manifest.icons), "manifest.icons should be an array");
+  assert(
+    Array.isArray(manifest.screenshots),
+    "manifest.screenshots should be an array",
+  );
 
   for (const icon of manifest.icons) {
     assert(typeof icon.src === "string");
@@ -81,137 +62,4 @@ Deno.test("manifest icons and screenshots exist on disk", async () => {
     assert(typeof shot.src === "string");
     await Deno.stat(repoPath("docs", shot.src));
   }
-});
-
-Deno.test("service worker caches the app shell", async () => {
-  const swPath = repoPath("docs", "sw.js");
-  const sw = await Deno.readTextFile(swPath);
-
-  // Basic sanity checks - we want the install-time cache list to include these.
-  for (
-    const mustInclude of [
-      '"./index.html"',
-      "`./styles.css?v=${VERSION}`",
-      "`./app.js?v=${VERSION}`",
-      '"./impact_attribution.js"',
-      '"./impact_diagnostics.js"',
-      '"./manifest.webmanifest"',
-      '"./favicon.ico"',
-      '"./icons/icon-192x192.png"',
-      '"./graph/index.html"',
-      "`./graph/graph.js?v=${VERSION}`",
-      "`./graph/graph.css?v=${VERSION}`",
-      '"./shared/snapshot_loader.js"',
-      '"./shared/theme.js"',
-      '"./shared/colour_maps.js"',
-    ]
-  ) {
-    assert(
-      sw.includes(mustInclude),
-      `Expected service worker to include ${mustInclude} in STATIC_FILES`,
-    );
-  }
-
-  // Ensure navigation routing serves the correct app shell for /graph/.
-  assert(
-    sw.includes('request.mode === "navigate"'),
-    "Expected service worker to handle navigation requests",
-  );
-  assert(
-    sw.includes("./graph/index.html"),
-    "Expected service worker to route /graph/ navigations to ./graph/index.html",
-  );
-});
-
-Deno.test("app loads tooltips from snapshot (not Tooltips.json)", async () => {
-  const appPath = repoPath("docs", "app.js");
-  const js = await Deno.readTextFile(appPath);
-
-  assert(
-    !js.includes("./Tooltips.json"),
-    "Expected docs/app.js to not fetch ./Tooltips.json",
-  );
-  assert(
-    js.includes("snapshot?.tooltips") ||
-      js.includes("loadInputLabelsFromSnapshot"),
-    "Expected docs/app.js to read tooltips from the snapshot payload",
-  );
-  assert(
-    !js.includes("./aliases.json"),
-    "Expected docs/app.js to not fetch ./aliases.json",
-  );
-});
-
-Deno.test("docs/index.html links manifest and registers service worker", async () => {
-  const indexPath = repoPath("docs", "index.html");
-  const html = await Deno.readTextFile(indexPath);
-
-  assert(html.includes('rel="manifest"'));
-  assert(html.includes("./manifest.webmanifest"));
-  assert(
-    html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
-    'Expected docs/index.html to include a favicon <link rel="icon" ...>',
-  );
-  assert(
-    html.includes("./favicon.ico") ||
-      html.includes('href="favicon.ico"') ||
-      html.includes('href="favicon.ico?'),
-    'Expected docs/index.html to reference "./favicon.ico"',
-  );
-  assert(html.includes("navigator.serviceWorker.register"));
-  assertEquals(html.includes("./sw.js"), true);
-  assert(
-    html.includes("app.js?v=") && html.includes("__BUILD_ID__"),
-    "Expected docs/index.html to cache-bust app.js (and include __BUILD_ID__ placeholder for deploy)",
-  );
-  assert(
-    html.includes("styles.css?v=__BUILD_ID__"),
-    "Expected docs/index.html to cache-bust styles.css with __BUILD_ID__",
-  );
-  assert(
-    html.includes("sw.js?v=__BUILD_ID__"),
-    "Expected docs/index.html to cache-bust sw.js with __BUILD_ID__",
-  );
-});
-
-Deno.test("docs/graph/index.html links manifest and registers service worker", async () => {
-  const indexPath = repoPath("docs", "graph", "index.html");
-  const html = await Deno.readTextFile(indexPath);
-
-  assert(
-    html.includes('rel="manifest"'),
-    "Expected docs/graph/index.html to include a web manifest <link>",
-  );
-  assert(
-    html.includes("../manifest.webmanifest"),
-    'Expected docs/graph/index.html to reference "../manifest.webmanifest"',
-  );
-  assert(
-    html.includes('rel="icon"') || html.includes('rel="shortcut icon"'),
-    'Expected docs/graph/index.html to include a favicon <link rel="icon" ...>',
-  );
-  assert(
-    html.includes("../favicon.ico"),
-    'Expected docs/graph/index.html to reference "../favicon.ico"',
-  );
-  assert(
-    html.includes("navigator.serviceWorker.register"),
-    "Expected docs/graph/index.html to register a service worker",
-  );
-  assert(
-    html.includes("../sw.js"),
-    'Expected docs/graph/index.html to reference "../sw.js"',
-  );
-  assert(
-    html.includes("graph.js?v=") && html.includes("__BUILD_ID__"),
-    "Expected docs/graph/index.html to cache-bust graph.js (and include __BUILD_ID__ placeholder for deploy)",
-  );
-  assert(
-    html.includes("graph.css?v=__BUILD_ID__"),
-    "Expected docs/graph/index.html to cache-bust graph.css with __BUILD_ID__",
-  );
-  assert(
-    html.includes("sw.js?v=__BUILD_ID__"),
-    "Expected docs/graph/index.html to cache-bust sw.js with __BUILD_ID__",
-  );
 });

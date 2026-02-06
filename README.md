@@ -251,6 +251,69 @@ The expected format matches the output of NEAT-AI-Discovery's
 }
 ```
 
+## Testing
+
+Tests use [Deno](https://deno.com/) and live in `tests/`. Run them with:
+
+```bash
+deno test -A
+```
+
+Or use the quality gate (format + lint + test):
+
+```bash
+./quality.sh
+```
+
+### Unit tests vs benchmarks
+
+- **Unit tests verify correctness** — import a module, call a function with
+  known inputs, assert the result. They must not measure performance.
+- **Benchmarks verify performance** — use `deno bench` or a dedicated script to
+  measure execution time. Benchmarks are expected to be slow and must not run as
+  part of the unit-test suite.
+- Unit tests run in parallel, so any timing-based assertion is unreliable by
+  design.
+
+### "What" tests vs "how" tests
+
+Write **"what" tests** — tests that exercise real behaviour:
+
+```ts
+import { myFunction } from "../module.js";
+Deno.test("myFunction doubles positive numbers", () => {
+  assertEquals(myFunction(3), 6);
+});
+```
+
+Do **not** write **"how" tests** — tests that read source files as text and grep
+for implementation patterns:
+
+```ts
+// BAD — breaks on any refactor and tests nothing useful
+const src = await Deno.readTextFile("module.js");
+assert(src.includes("Math.pow"));
+```
+
+Why: if you swap quicksort for mergesort, "what" tests still pass (correct
+results). "How" tests break even though behaviour is unchanged, or worse, they
+pass while the code is actually broken.
+
+### What can be unit-tested
+
+Only pure, DOM-free modules can be tested in Deno:
+
+| Module                           | Testable functions                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------ |
+| `impact_attribution.js`          | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`     |
+| `impact_diagnostics.js`          | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc. |
+| `docs/shared/graph_analysis.js`  | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs` |
+| `docs/shared/snapshot_loader.js` | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`        |
+| `docs/shared/colour_maps.js`     | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                       |
+
+Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
+skip it rather than faking it with grep-based assertions.
+
 ## Australian English
 
 Comments and documentation use Australian English spelling (e.g., "colour",
