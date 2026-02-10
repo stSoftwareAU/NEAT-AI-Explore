@@ -1,17 +1,4 @@
-function assert(condition: unknown, message?: string): asserts condition {
-  if (!condition) throw new Error(message ?? "Assertion failed");
-}
-
-function assertEquals<T>(actual: T, expected: T, message?: string): void {
-  if (actual !== expected) {
-    throw new Error(
-      message ??
-        `Assertion failed: expected ${JSON.stringify(expected)} but got ${
-          JSON.stringify(actual)
-        }`,
-    );
-  }
-}
+import { assert, assertEquals } from "./test_helpers.ts";
 
 import {
   buildGraphIndex,

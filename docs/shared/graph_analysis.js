@@ -129,7 +129,7 @@ export function computeTopContributingInputs(input) {
   const bestScoreByInput = new Map();
 
   /** @type {{ uuid: string, score: number, depth: number, path: string[] }[]} */
-  let queue = [{ uuid: focusUuid, score: 1, depth: 0, path: [focusUuid] }];
+  const queue = [{ uuid: focusUuid, score: 1, depth: 0, path: [focusUuid] }];
   let work = 0;
   let truncated = false;
 

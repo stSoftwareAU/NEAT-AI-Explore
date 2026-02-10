@@ -1,6 +1,4 @@
-function assert(condition: unknown, message?: string): asserts condition {
-  if (!condition) throw new Error(message ?? "Assertion failed");
-}
+import { assert } from "./test_helpers.ts";
 
 function repoPath(...parts: string[]): string {
   const url = new URL(import.meta.url);

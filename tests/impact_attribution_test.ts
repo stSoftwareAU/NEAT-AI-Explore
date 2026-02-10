@@ -1,17 +1,4 @@
-function assert(condition: unknown, message?: string): asserts condition {
-  if (!condition) throw new Error(message ?? "Assertion failed");
-}
-
-function assertEquals<T>(actual: T, expected: T, message?: string): void {
-  if (actual !== expected) {
-    throw new Error(
-      message ??
-        `Assertion failed: expected ${JSON.stringify(expected)} but got ${
-          JSON.stringify(actual)
-        }`,
-    );
-  }
-}
+import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 type Synapse = { fromUuid: string; toUuid: string; weight: number };
 
@@ -97,4 +84,86 @@ Deno.test("computeImpactBreakdownToOutputs avoids cycles", () => {
   assertEquals(res.outputs[0].outputUuid, "output-0");
   assertEquals(res.outputs[0].pathCount, 1);
   assertEquals(res.truncated, false);
+});
+
+Deno.test("computeImpactBreakdownToOutputs returns empty for null/undefined input", () => {
+  // deno-lint-ignore no-explicit-any
+  const res = computeImpactBreakdownToOutputs(null as any);
+  assertEquals(res.outputs.length, 0);
+  assertEquals(res.totalScore, 0);
+  assertEquals(res.truncated, false);
+});
+
+Deno.test("computeImpactBreakdownToOutputs handles start node that is an output", () => {
+  // When the start node IS an output, the DFS records the self-path at depth 0
+  // and returns (the path to self is complete). It does not continue exploring.
+  const synapses: Synapse[] = [
+    { fromUuid: "output-0", toUuid: "output-1", weight: 3 },
+  ];
+
+  const res = computeImpactBreakdownToOutputs({
+    startUuid: "output-0",
+    synapses,
+    outputUuids: ["output-0", "output-1"],
+    neuronImpact: 1,
+    maxDepth: 10,
+    maxPaths: 100,
+  });
+
+  // Self-path is found; no further exploration occurs.
+  assertEquals(res.outputs.length, 1);
+  assertEquals(res.outputs[0].outputUuid, "output-0");
+  assertEquals(res.outputs[0].pathCount, 1);
+  assertEquals(res.totalPathsEnumerated, 1);
+});
+
+Deno.test("computeImpactBreakdownToOutputs sets truncated when maxPaths exceeded", () => {
+  // Fan-out graph: A -> B_i (w 1) -> output-0 (w 1) for many B_i.
+  // With 10 B nodes, there are 10 paths. Set maxPaths=5 to force truncation.
+  const synapses: Synapse[] = [];
+  for (let i = 0; i < 10; i++) {
+    synapses.push({ fromUuid: "A", toUuid: `B${i}`, weight: 1 });
+    synapses.push({ fromUuid: `B${i}`, toUuid: "output-0", weight: 1 });
+  }
+
+  const res = computeImpactBreakdownToOutputs({
+    startUuid: "A",
+    synapses,
+    outputUuids: ["output-0"],
+    maxPaths: 5,
+    maxDepth: 10,
+  });
+
+  assertEquals(res.truncated, true);
+});
+
+Deno.test("computeImpactBreakdownToOutputs collectPaths stores all paths", () => {
+  const synapses: Synapse[] = [
+    { fromUuid: "A", toUuid: "output-0", weight: 1 },
+    { fromUuid: "A", toUuid: "B", weight: 2 },
+    { fromUuid: "B", toUuid: "output-0", weight: 1 },
+  ];
+
+  const res = computeImpactBreakdownToOutputs({
+    startUuid: "A",
+    synapses,
+    outputUuids: ["output-0"],
+    collectPaths: true,
+    maxDepth: 10,
+    maxPaths: 100,
+  });
+
+  const out0 = res.outputs[0];
+  assert(out0, "Expected output-0 breakdown");
+  assertEquals(out0.pathCount, 2);
+  // When collectPaths is true, the paths array should be present.
+  assert(
+    Array.isArray(out0.paths),
+    "Expected paths array when collectPaths=true",
+  );
+  assertEquals(out0.paths!.length, 2);
+
+  // Direct path score = 1, via-B path score = 2
+  // Total = 3, so share = 1.0
+  approx(out0.share, 1.0);
 });

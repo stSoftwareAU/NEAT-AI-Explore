@@ -4,7 +4,14 @@
     "@std/path": "jsr:@std/path@^1.0.0"
   },
   "lint": {
-    "exclude": ["docs/**", "app.js"]
+    "exclude": [
+      "docs/app.js",
+      "docs/graph/graph.js",
+      "docs/starfield/starfield.js",
+      "docs/sw.js",
+      "docs/shared/theme.js",
+      "docs/vendor/**"
+    ]
   },
   "fmt": {
     "exclude": ["docs/vendor/**"]
