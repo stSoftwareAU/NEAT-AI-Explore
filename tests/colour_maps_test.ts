@@ -1,23 +1,4 @@
-function assert(condition: unknown, message?: string): asserts condition {
-  if (!condition) throw new Error(message ?? "Assertion failed");
-}
-
-function assertEquals<T>(actual: T, expected: T, message?: string): void {
-  if (actual !== expected) {
-    throw new Error(
-      message ??
-        `Expected ${JSON.stringify(expected)} but got ${
-          JSON.stringify(actual)
-        }`,
-    );
-  }
-}
-
-function approx(actual: number, expected: number, tol = 1e-6): void {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(`Expected ~${expected} but got ${actual} (tol=${tol})`);
-  }
-}
+import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 import {
   hash32,

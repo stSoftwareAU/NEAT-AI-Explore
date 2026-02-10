@@ -19,6 +19,32 @@
  *   recorded activations as a fixed point; this is still only a heuristic.
  */
 
+// --- Named constants (extracted from inline magic numbers) ---
+
+/** Threshold below which a derivative is considered "near zero" (saturated). */
+const NEAR_ZERO_THRESHOLD = 1e-6;
+
+/** Standard SELU scale factor (lambda). */
+const SELU_LAMBDA = 1.0507009873554805;
+
+/** Standard SELU alpha parameter. */
+const SELU_ALPHA = 1.6732632423543772;
+
+/** GELU tanh-approximation coefficient. */
+const GELU_APPROX_COEFF = 0.044715;
+
+/** LeakyReLU negative-slope coefficient. */
+const LEAKY_RELU_SLOPE = 0.01;
+
+/** Default ELU alpha parameter. */
+const ELU_ALPHA = 1;
+
+/** Clamp range for exp() to avoid Infinity in diagnostics. */
+const EXP_CLAMP_MAX = 50;
+
+/** Clamp range for Gaussian exp(-x^2) to avoid underflow. */
+const GAUSSIAN_CLAMP_MAX = 100;
+
 /**
  * @typedef {{ fromUuid: string, toUuid: string, weight: number }} Synapse
  */
@@ -43,7 +69,7 @@ function summariseDerivative(arr) {
   for (const v of arr) {
     const a = Math.abs(v);
     sumAbs += a;
-    if (a < 1e-6) near0 += 1;
+    if (a < NEAR_ZERO_THRESHOLD) near0 += 1;
   }
   return {
     meanAbs: sumAbs / arr.length,
@@ -331,26 +357,27 @@ export function squashDerivative(squash, x) {
     case "RELU":
       return { d: x > 0 ? 1 : 0, nonSmooth: true, note: "kink at 0" };
     case "LEAKYRELU":
-      return { d: x > 0 ? 1 : 0.01, nonSmooth: true, note: "kink at 0" };
+      return {
+        d: x > 0 ? 1 : LEAKY_RELU_SLOPE,
+        nonSmooth: true,
+        note: "kink at 0",
+      };
     case "RELU6": {
       // f(x)=clamp(x, 0, 6). Discontinuous derivative at 0 and 6.
       if (x <= 0 || x >= 6) return { d: 0, nonSmooth: true, note: "clamped" };
       return { d: 1, nonSmooth: true, note: "piecewise" };
     }
     case "ELU": {
-      const a = 1;
       return {
-        d: x >= 0 ? 1 : a * Math.exp(x),
+        d: x >= 0 ? 1 : ELU_ALPHA * Math.exp(x),
         nonSmooth: true,
         note: "kink at 0",
       };
     }
     case "SELU": {
       // Standard SELU: scale * (x if x>0 else alpha*(exp(x)-1))
-      const lambda = 1.0507009873554805;
-      const alpha = 1.6732632423543772;
       return {
-        d: x >= 0 ? lambda : lambda * alpha * Math.exp(x),
+        d: x >= 0 ? SELU_LAMBDA : SELU_LAMBDA * SELU_ALPHA * Math.exp(x),
         nonSmooth: true,
         note: "kink at 0",
       };
@@ -409,7 +436,7 @@ export function squashDerivative(squash, x) {
     case "EXP": {
       // exp(x)
       // Cap extreme x to avoid Infinity in diagnostics.
-      const xx = Math.max(-50, Math.min(50, x));
+      const xx = Math.max(-EXP_CLAMP_MAX, Math.min(EXP_CLAMP_MAX, x));
       return { d: Math.exp(xx), nonSmooth: false };
     }
     case "LOGSIGMOID": {
@@ -433,7 +460,7 @@ export function squashDerivative(squash, x) {
       return { d: 2 * x, nonSmooth: false };
     case "GAUSSIAN": {
       // f(x)=exp(-x^2) ; f'(x)=-2x*exp(-x^2)
-      const xx = Math.max(-100, Math.min(100, x));
+      const xx = Math.max(-GAUSSIAN_CLAMP_MAX, Math.min(GAUSSIAN_CLAMP_MAX, x));
       return { d: -2 * xx * Math.exp(-xx * xx), nonSmooth: false };
     }
     case "ISRU": {
@@ -448,14 +475,15 @@ export function squashDerivative(squash, x) {
     }
     case "GELU": {
       // Approx GELU derivative, matching NEAT-AI's implementation:
-      // f(x) = 0.5*x*(1+tanh(√(2/π) * (x + 0.044715*x^3)))
+      // f(x) = 0.5*x*(1+tanh(√(2/π) * (x + GELU_APPROX_COEFF*x^3)))
       // f'(x) = cdf + pdf (see NEAT-AI GELU.derivative)
-      const inner = Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3));
+      const inner = Math.sqrt(2 / Math.PI) *
+        (x + GELU_APPROX_COEFF * Math.pow(x, 3));
       const tanhInner = Math.tanh(inner);
       const cdf = 0.5 * (1 + tanhInner);
       const pdf = (0.5 * x * (1 - tanhInner * tanhInner)) *
         Math.sqrt(2 / Math.PI) *
-        (1 + 3 * 0.044715 * x * x);
+        (1 + 3 * GELU_APPROX_COEFF * x * x);
       const d = cdf + pdf;
       return { d: Number.isFinite(d) ? d : 0, nonSmooth: false };
     }

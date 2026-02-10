@@ -135,14 +135,14 @@ export async function fetchSnapshotJson(url, opts = {}) {
   // works" scenario during Service Worker activation or on unstable mobile
   // connections.
   let res;
-  let lastError = null;
+  let _lastError = null;
   for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
     try {
       res = await fetch(u, { cache: "no-cache" });
-      lastError = null;
+      _lastError = null;
       break;
     } catch (e) {
-      lastError = e;
+      _lastError = e;
       // If this wasn't our last attempt, wait before retrying (exponential backoff).
       if (attempt < FETCH_MAX_RETRIES) {
         const delay = FETCH_RETRY_DELAY_MS * Math.pow(2, attempt);

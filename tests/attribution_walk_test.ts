@@ -1,20 +1,4 @@
-function assert(condition: unknown, message?: string): asserts condition {
-  if (!condition) throw new Error(message ?? "Assertion failed");
-}
-
-function assertClose(
-  actual: number,
-  expected: number,
-  tol: number,
-  message?: string,
-) {
-  if (Math.abs(actual - expected) > tol) {
-    throw new Error(
-      message ??
-        `Assertion failed: expected ${expected} ± ${tol} but got ${actual}`,
-    );
-  }
-}
+import { approx, assert } from "./test_helpers.ts";
 
 import { computeTopContributingInputs } from "../docs/shared/graph_analysis.js";
 
@@ -90,9 +74,9 @@ Deno.test("attribution walk: top contributing inputs are derived from inbound sh
   // B inbound: input-2 1
   // => each input should be ~1/3 after normalisation.
   const tol = 1e-9;
-  assertClose(a.score, 1 / 3, tol, "input-0 share");
-  assertClose(b.score, 1 / 3, tol, "input-1 share");
-  assertClose(c.score, 1 / 3, tol, "input-2 share");
+  approx(a.score, 1 / 3, tol, "input-0 share");
+  approx(b.score, 1 / 3, tol, "input-1 share");
+  approx(c.score, 1 / 3, tol, "input-2 share");
 
   assert(
     Array.isArray(c.path) && c.path[c.path.length - 1] === "output-0",
