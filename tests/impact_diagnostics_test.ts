@@ -6,7 +6,7 @@ import {
   computePreActivations,
   computeSquashDerivativeStats,
   squashDerivative,
-} from "../impact_diagnostics.js";
+} from "../docs/impact_diagnostics.js";
 
 Deno.test("squashDerivative TANH is 1 - tanh^2", () => {
   const x = 0.7;
@@ -154,7 +154,9 @@ Deno.test("gradient proxy matches a simple 1-edge network", () => {
 Deno.test("summariseSeriesStats computes basic stats", async () => {
   // Use a dynamic import here because some editor linters can lag behind JS
   // named export discovery, even though Deno's runtime/type-checker is fine.
-  const mod = await import("../impact_diagnostics.js") as unknown as Record<
+  const mod = await import(
+    "../docs/impact_diagnostics.js"
+  ) as unknown as Record<
     string,
     unknown
   >;
@@ -196,10 +198,11 @@ Deno.test("summariseDeadZoneStats detects clamp and dead ReLU rates", async () =
   // Use dynamic import here because some editor linters can lag behind JS
   // named export discovery, even though Deno's runtime/type-checker is fine.
   // (Keeps `deno lint` happy in this repo.)
-  const mod = (await import("../impact_diagnostics.js")) as unknown as Record<
-    string,
-    unknown
-  >;
+  const mod =
+    (await import("../docs/impact_diagnostics.js")) as unknown as Record<
+      string,
+      unknown
+    >;
   const summariseDeadZoneStats = mod.summariseDeadZoneStats as
     | ((squash: string, preActs: number[]) => {
       n: number;
@@ -237,10 +240,11 @@ Deno.test("summariseDeadZoneStats detects clamp and dead ReLU rates", async () =
 
 Deno.test("summariseErrorConcentration flags heavy-tail distributions", async () => {
   // Use dynamic import here for the same reason as summariseSeriesStats above.
-  const mod = (await import("../impact_diagnostics.js")) as unknown as Record<
-    string,
-    unknown
-  >;
+  const mod =
+    (await import("../docs/impact_diagnostics.js")) as unknown as Record<
+      string,
+      unknown
+    >;
   const summariseErrorConcentration = mod.summariseErrorConcentration as
     | ((contrib: number[], options?: { topK?: number }) => {
       n: number;
@@ -378,7 +382,7 @@ Deno.test("squashDerivative COSINE is -sin(x)", () => {
 
 Deno.test("summariseSeriesStats handles empty and non-finite values", async () => {
   const { summariseSeriesStats } = (await import(
-    "../impact_diagnostics.js"
+    "../docs/impact_diagnostics.js"
   )) as unknown as {
     summariseSeriesStats: (
       arr: number[],
@@ -403,11 +407,12 @@ Deno.test("summariseSeriesStats handles empty and non-finite values", async () =
 });
 
 Deno.test("summariseDeadZoneStats detects RELU6 clamped regions", async () => {
-  const mod = (await import("../impact_diagnostics.js")) as unknown as Record<
-    string,
-    // deno-lint-ignore no-explicit-any
-    any
-  >;
+  const mod =
+    (await import("../docs/impact_diagnostics.js")) as unknown as Record<
+      string,
+      // deno-lint-ignore no-explicit-any
+      any
+    >;
   const summariseDeadZoneStats = mod.summariseDeadZoneStats as (
     squash: string,
     preActs: number[],

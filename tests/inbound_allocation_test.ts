@@ -1,6 +1,6 @@
 import { approx, assert } from "./test_helpers.ts";
 
-import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
+import { computeInboundSynapseImpactAllocation } from "../docs/impact_attribution.js";
 
 Deno.test("computeInboundSynapseImpactAllocation allocates neuron impact across inbound synapses", () => {
   const res = computeInboundSynapseImpactAllocation({
