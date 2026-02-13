@@ -22,28 +22,28 @@
 // --- Named constants (extracted from inline magic numbers) ---
 
 /** Threshold below which a derivative is considered "near zero" (saturated). */
-const NEAR_ZERO_THRESHOLD = 1e-6;
+export const NEAR_ZERO_THRESHOLD = 1e-6;
 
 /** Standard SELU scale factor (lambda). */
-const SELU_LAMBDA = 1.0507009873554805;
+export const SELU_LAMBDA = 1.0507009873554805;
 
 /** Standard SELU alpha parameter. */
-const SELU_ALPHA = 1.6732632423543772;
+export const SELU_ALPHA = 1.6732632423543772;
 
 /** GELU tanh-approximation coefficient. */
-const GELU_APPROX_COEFF = 0.044715;
+export const GELU_APPROX_COEFF = 0.044715;
 
 /** LeakyReLU negative-slope coefficient. */
-const LEAKY_RELU_SLOPE = 0.01;
+export const LEAKY_RELU_SLOPE = 0.01;
 
 /** Default ELU alpha parameter. */
-const ELU_ALPHA = 1;
+export const ELU_ALPHA = 1;
 
 /** Clamp range for exp() to avoid Infinity in diagnostics. */
-const EXP_CLAMP_MAX = 50;
+export const EXP_CLAMP_MAX = 50;
 
 /** Clamp range for Gaussian exp(-x^2) to avoid underflow. */
-const GAUSSIAN_CLAMP_MAX = 100;
+export const GAUSSIAN_CLAMP_MAX = 100;
 
 /**
  * @typedef {{ fromUuid: string, toUuid: string, weight: number }} Synapse
