@@ -24,6 +24,6 @@ and the full quality gate (`./quality.sh`) completes cleanly.
 - Added `tests/test_helpers_test.ts` with 12 tests covering `assert`,
   `assertEquals`, and `approx` (pass/fail paths, default/custom messages,
   default/custom tolerances)
-- Updated `tests/impact_attribution_test.ts` to use `approx()` instead of
-  manual `Math.abs` comparisons (no behaviour change, same tolerance)
+- Updated `tests/impact_attribution_test.ts` to use `approx()` instead of manual
+  `Math.abs` comparisons (no behaviour change, same tolerance)
 - Full suite: 77 tests pass, 0 failures
