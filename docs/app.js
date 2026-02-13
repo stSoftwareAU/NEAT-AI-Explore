@@ -28,6 +28,13 @@ import {
   summariseErrorConcentration,
   summariseSeriesStats,
 } from "./impact_diagnostics.js";
+import {
+  decodeBase64UrlToUtf8,
+  gunzipToText,
+  isDangerousUrlScheme,
+  normaliseSnapshotUrl,
+  readSnapshotFile,
+} from "./shared/snapshot_loader.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -382,47 +389,6 @@ function updateProgress(percent) {
 function hideProgress() {
   if (!el.progressContainer) return;
   el.progressContainer.style.display = "none";
-}
-
-async function gunzipToText(gzBytes) {
-  // Prefer the native streaming API when available (modern Chromium/Firefox).
-  // Some Safari/iOS builds still lack DecompressionStream, so fall back to a
-  // small JS implementation (vendored in ./vendor/fflate.browser.js).
-  if (typeof DecompressionStream !== "undefined") {
-    try {
-      const stream = new Blob([gzBytes]).stream().pipeThrough(
-        new DecompressionStream("gzip"),
-      );
-      return await new Response(stream).text();
-    } catch (_e) {
-      // Fall through to JS gunzip.
-    }
-  }
-
-  try {
-    const { gunzipSync } = await import("./vendor/fflate.browser.js");
-    const out = gunzipSync(gzBytes);
-    return new TextDecoder().decode(out);
-  } catch (_e) {
-    throw new Error(
-      "This snapshot is gzipped (.gz) but this browser can't decompress it. Export/upload an uncompressed .json, or use a browser with gzip support.",
-    );
-  }
-}
-
-function normaliseSnapshotUrl(inputUrl) {
-  const raw = String(inputUrl ?? "").trim();
-  if (!raw) return raw;
-
-  // Don't touch absolute URLs (including blob: for file picker flows).
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return raw;
-
-  // Normalise dot-segments for relative paths. Some hosts/CDNs treat "/./x" as
-  // a different resource path rather than normalising it.
-  let u = raw;
-  while (u.startsWith("./")) u = u.slice(2);
-  u = u.replaceAll("/./", "/");
-  return u;
 }
 
 // ============================================================================
@@ -3399,15 +3365,7 @@ el.fileInput.onchange = async () => {
   try {
     setStatus(`Reading ${file.name}...`);
     showProgress(true); // Indeterminate for local file reading
-    let obj;
-    if (file.name.toLowerCase().endsWith(".gz")) {
-      const buf = new Uint8Array(await file.arrayBuffer());
-      const text = await gunzipToText(buf);
-      obj = JSON.parse(text);
-    } else {
-      const text = await file.text();
-      obj = JSON.parse(text);
-    }
+    const obj = await readSnapshotFile(file);
     hideProgress();
     await loadSnapshot(obj, file.name);
   } catch (e) {
@@ -3473,26 +3431,6 @@ initInboundFilters();
 // params (e.g. snapshotUrl / snapshotUrlB64) across.
 if (el.graphBtn instanceof HTMLAnchorElement) {
   el.graphBtn.href = `./graph/${window.location.search ?? ""}`;
-}
-
-function decodeBase64UrlToUtf8(base64Url) {
-  // Base64url decode for query params (avoids needing to percent-encode presigned URLs).
-  // See RFC 4648 §5.
-  try {
-    const base64 = base64Url.replaceAll("-", "+").replaceAll("_", "/");
-    const pad = "=".repeat((4 - (base64.length % 4)) % 4);
-    const bin = atob(base64 + pad);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  } catch (_e) {
-    return null;
-  }
-}
-
-function isDangerousUrlScheme(s) {
-  const v = String(s ?? "").trim().toLowerCase();
-  return v.startsWith("javascript:") || v.startsWith("data:");
 }
 
 let initialUrl = null;
