@@ -21,7 +21,8 @@ Closes #93.
 
 ## Evidence
 
-This is a non-UI refactoring change (no visual changes). All quality checks pass:
+This is a non-UI refactoring change (no visual changes). All quality checks
+pass:
 
 - Format: 47 files checked
 - Lint: 22 files checked
