@@ -35,6 +35,10 @@ import {
   normaliseSnapshotUrl,
   readSnapshotFile,
 } from "./shared/snapshot_loader.js";
+import {
+  DEFAULT_SNAPSHOT_URL,
+  SNAPSHOT_FALLBACK_URLS,
+} from "./shared/config.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -73,29 +77,6 @@ let INPUT_DASH = {
   inputCount: 0,
   rows: [], // { uuid, alias, description, reachable, outDegree, proxy, constant, candidates }
 };
-
-// Default snapshot used when the app is opened without a URL parameter.
-//
-// We now host the snapshot in a dedicated repo (`NEAT-AI-Snapshot`) published via
-// GitHub Pages. This keeps the Explore repo program-only and avoids churn from
-// committing large binary snapshot artefacts.
-//
-// Offline behaviour:
-// - When online, we try to fetch the latest snapshot and cache it.
-// - When offline, we fall back to cached snapshots (Cache Storage).
-//
-// Note: avoid a leading "./" because some static hosts treat "/./file" as a
-// distinct path (and may 404) rather than normalising it.
-const DEFAULT_SNAPSHOT_URL =
-  "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz";
-
-// Fallbacks used when GitHub Pages is blocked by CORS on some networks.
-// `raw.githubusercontent.com` typically ships permissive CORS headers.
-const SNAPSHOT_FALLBACK_URLS = [
-  "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/Develop/docs/snapshot.json.gz",
-  "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/main/docs/snapshot.json.gz",
-  "snapshot.json.gz", // last resort: same-origin (if present)
-];
 
 // Thresholds for highlighting
 const IMPACT_HIGHLIGHT_THRESHOLD = 0.1; // Highlight if impact > 0.1

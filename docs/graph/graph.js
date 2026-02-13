@@ -19,9 +19,10 @@ import {
 } from "../shared/snapshot_loader.js";
 import { hash32, neuronColourRgb01, u32ToU01 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
-
-const DEFAULT_SNAPSHOT_URL =
-  "https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz";
+import {
+  DEFAULT_SNAPSHOT_URL,
+  SNAPSHOT_FALLBACK_URLS,
+} from "../shared/config.js";
 
 // Starfield layout settings (tune for intuition > mathematical correctness).
 const FOCUS_MAX_DEPTH = 5;
@@ -3233,18 +3234,40 @@ function buildHudForIndex(idx) {
 async function loadSnapshotFromUrl(url) {
   setStatus(`Loading ${url}...`);
   showProgress(true);
-  const obj = await fetchSnapshotJson(url, {
-    onProgress: (p) => {
-      if (!p.totalBytes) {
-        showProgress(true);
-        return;
+
+  /** @type {(p: {totalBytes: number|null, receivedBytes: number}) => void} */
+  const onProgress = (p) => {
+    if (!p.totalBytes) {
+      showProgress(true);
+      return;
+    }
+    showProgress(false);
+    updateProgress((p.receivedBytes / p.totalBytes) * 100);
+  };
+
+  try {
+    const obj = await fetchSnapshotJson(url, { onProgress });
+    hideProgress();
+    return obj;
+  } catch (e) {
+    // Try fallback URLs when loading the default snapshot fails (Issue #93).
+    // GitHub Pages can be blocked by CORS on some networks.
+    if (String(url) === DEFAULT_SNAPSHOT_URL) {
+      for (const fallback of SNAPSHOT_FALLBACK_URLS) {
+        if (!fallback || fallback === url) continue;
+        try {
+          setStatus(`Trying fallback ${fallback}...`);
+          const obj = await fetchSnapshotJson(fallback, { onProgress });
+          hideProgress();
+          return obj;
+        } catch (_e2) {
+          // Keep trying next fallback.
+        }
       }
-      showProgress(false);
-      updateProgress((p.receivedBytes / p.totalBytes) * 100);
-    },
-  });
-  hideProgress();
-  return obj;
+    }
+    hideProgress();
+    throw e;
+  }
 }
 
 async function loadSnapshot(source, label) {
