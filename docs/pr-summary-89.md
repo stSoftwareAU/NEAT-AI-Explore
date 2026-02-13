@@ -7,13 +7,13 @@ automatically apply to all consumers. Closes #89.
 
 ### Functions replaced with imports
 
-| Function | Lines removed | Notes |
-| --- | --- | --- |
-| `gunzipToText()` | 25 | Identical to shared version |
-| `normaliseSnapshotUrl()` | 14 | Identical to shared version |
-| `decodeBase64UrlToUtf8()` | 14 | Functionally identical to shared version |
-| `isDangerousUrlScheme()` | 4 | Identical to shared version |
-| Inline file-reading logic | 7 | Replaced with `readSnapshotFile()` import |
+| Function                  | Lines removed | Notes                                     |
+| ------------------------- | ------------- | ----------------------------------------- |
+| `gunzipToText()`          | 25            | Identical to shared version               |
+| `normaliseSnapshotUrl()`  | 14            | Identical to shared version               |
+| `decodeBase64UrlToUtf8()` | 14            | Functionally identical to shared version  |
+| `isDangerousUrlScheme()`  | 4             | Identical to shared version               |
+| Inline file-reading logic | 7             | Replaced with `readSnapshotFile()` import |
 
 The app-specific `fetchJson()` function (with PWA caching, CORS handling, and
 fallback URL logic) remains in `app.js` as it contains behaviour beyond the
