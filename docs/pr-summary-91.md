@@ -22,6 +22,7 @@ ok | 83 passed | 0 failed
 ```
 
 The 5 DOM-free modules are confirmed to be linted:
+
 - `docs/shared/graph_analysis.js`
 - `docs/shared/snapshot_loader.js`
 - `docs/shared/colour_maps.js`
@@ -31,6 +32,10 @@ The 5 DOM-free modules are confirmed to be linted:
 ## Test Plan
 
 Added `tests/lint_coverage_test.ts` with 6 new tests:
-- 3 tests verifying each shared module (`graph_analysis.js`, `snapshot_loader.js`, `colour_maps.js`) is checked by `deno lint`
-- 2 tests verifying `impact_attribution.js` and `impact_diagnostics.js` are checked by `deno lint`
-- 1 test verifying the `deno.json` lint configuration excludes DOM-dependent files but not shared modules
+
+- 3 tests verifying each shared module (`graph_analysis.js`,
+  `snapshot_loader.js`, `colour_maps.js`) is checked by `deno lint`
+- 2 tests verifying `impact_attribution.js` and `impact_diagnostics.js` are
+  checked by `deno lint`
+- 1 test verifying the `deno.json` lint configuration excludes DOM-dependent
+  files but not shared modules
