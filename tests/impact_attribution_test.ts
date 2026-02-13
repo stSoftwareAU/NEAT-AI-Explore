@@ -2,7 +2,7 @@ import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 type Synapse = { fromUuid: string; toUuid: string; weight: number };
 
-import { computeImpactBreakdownToOutputs } from "../impact_attribution.js";
+import { computeImpactBreakdownToOutputs } from "../docs/impact_attribution.js";
 
 Deno.test("computeImpactBreakdownToOutputs splits impact across outputs and paths", () => {
   // Graph:

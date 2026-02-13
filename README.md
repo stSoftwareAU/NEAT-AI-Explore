@@ -28,8 +28,9 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   etc.)
 - **PWA files**: `docs/manifest.webmanifest`, `docs/sw.js`, `docs/icons/*`,
   `docs/screenshots/*`
-- **Shared JS modules**: `impact_attribution.js` and `impact_diagnostics.js`
-  live at the repo root (used by tests) and are copied to `docs/` for deployment
+- **Shared JS modules**: `docs/impact_attribution.js` and
+  `docs/impact_diagnostics.js` are the single source of truth (imported by both
+  the app and tests)
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
 ## Versioning (SemVer)
@@ -305,8 +306,8 @@ Only pure, DOM-free modules can be tested in Deno:
 
 | Module                           | Testable functions                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------ |
-| `impact_attribution.js`          | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`     |
-| `impact_diagnostics.js`          | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc. |
+| `docs/impact_attribution.js`     | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`     |
+| `docs/impact_diagnostics.js`     | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc. |
 | `docs/shared/graph_analysis.js`  | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs` |
 | `docs/shared/snapshot_loader.js` | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`        |
 | `docs/shared/colour_maps.js`     | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                       |
