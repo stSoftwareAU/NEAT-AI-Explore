@@ -44,17 +44,21 @@ Deno.test("computeImpactBreakdownToOutputs splits impact across outputs and path
 
   // Shares may have tiny floating error; check within tolerance.
   const tol = 1e-12;
-  assert(
-    Math.abs(out0.share - 0.5) < tol,
+  approx(
+    out0.share,
+    0.5,
+    tol,
     `Expected output-0 share ~0.5, got ${out0.share}`,
   );
-  assert(
-    Math.abs(out1.share - 0.5) < tol,
+  approx(
+    out1.share,
+    0.5,
+    tol,
     `Expected output-1 share ~0.5, got ${out1.share}`,
   );
 
-  assert(Math.abs((out0.allocatedImpact ?? 0) - 0.1) < tol);
-  assert(Math.abs((out1.allocatedImpact ?? 0) - 0.1) < tol);
+  approx(out0.allocatedImpact ?? 0, 0.1, tol);
+  approx(out1.allocatedImpact ?? 0, 0.1, tol);
 
   // Ensure both distinct output-0 paths are present.
   const out0Paths = new Set(out0.topPaths.map((p) => p.nodes.join("→")));
