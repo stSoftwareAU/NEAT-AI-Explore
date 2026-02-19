@@ -11,12 +11,12 @@ Closes #107.
 ## Changes
 
 - **New module `docs/shared/sparkline.js`** — Pure, DOM-free computation
-  functions for sparkline point normalisation, error histogram bucketing,
-  squash badge classification, and error flattening. Fully unit-testable.
+  functions for sparkline point normalisation, error histogram bucketing, squash
+  badge classification, and error flattening. Fully unit-testable.
 - **Card layout in `docs/app.js`** — `renderCurrentNeuron()` now groups
-  properties into themed cards with section headings, colour-coded squash
-  badges (blue=SIGMOID, purple=TANH, green=RELU, orange=STEP), inline SVG
-  sparklines for activation data, and mini bar charts for error distribution.
+  properties into themed cards with section headings, colour-coded squash badges
+  (blue=SIGMOID, purple=TANH, green=RELU, orange=STEP), inline SVG sparklines
+  for activation data, and mini bar charts for error distribution.
 - **Responsive CSS in `docs/styles.css`** — 2-column grid on desktop,
   single-column stack on mobile (≤600px). Card entrance animation (slide up +
   fade in) respects `prefers-reduced-motion`.
@@ -43,8 +43,8 @@ Closes #107.
 - Added `tests/sparkline_test.ts` with 24 tests covering:
   - `computeSparklinePoints`: empty input, normalisation, constant values,
     single value, NaN/Infinity handling, negative values
-  - `computeErrorHistogram`: empty input, correct bucketing, ratio
-    calculation, single value, non-finite filtering
+  - `computeErrorHistogram`: empty input, correct bucketing, ratio calculation,
+    single value, non-finite filtering
   - `squashBadge`: all colour categories (blue, purple, green, orange, grey),
     case insensitivity, null handling
   - `flattenErrors`: 2D and 1D arrays, absolute value conversion, null input,
