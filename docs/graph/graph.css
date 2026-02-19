@@ -524,3 +524,56 @@ body {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Issue #104: Smooth animated transitions for graph explorer
+   ========================================================================== */
+
+:root {
+  --transition-focus-pulse: 280ms;
+}
+
+/* Focus pulse: briefly highlight the focused node's label. */
+.starLabel.focusPulse {
+  animation: focusPulse var(--transition-focus-pulse) ease;
+}
+
+@keyframes focusPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(80, 240, 255, 0);
+    transform: translate(-50%, -120%) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(80, 240, 255, 0.45);
+    transform: translate(-50%, -120%) scale(1.12);
+  }
+  100% {
+    box-shadow: 0 0 18px rgba(80, 240, 255, 0.18);
+    transform: translate(-50%, -120%) scale(1);
+  }
+}
+
+/* Fade adjacent node labels in/out as neighbourhood changes. */
+.starLabel {
+  transition: opacity 200ms ease;
+}
+
+/* Focus badge transition. */
+.focusBadge {
+  transition: opacity 200ms ease;
+}
+
+/* Skip all graph transitions when reduced motion is preferred. */
+@media (prefers-reduced-motion: reduce) {
+  .starLabel.focusPulse {
+    animation: none;
+  }
+
+  .starLabel {
+    transition: none;
+  }
+
+  .focusBadge {
+    transition: none;
+  }
+}

@@ -46,6 +46,11 @@ import {
   computeNeuronBreakdown,
   computeSynapseStats,
 } from "./shared/creature_overview.js";
+import {
+  PANEL_CROSSFADE_MS,
+  prefersReducedMotion,
+  synapseStaggerDelay,
+} from "./shared/transitions.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -1131,6 +1136,7 @@ function navigateTo(uuid) {
     return;
   }
 
+  const isGoingBack = trace.indexOf(uuid) >= 0;
   const existingIndex = trace.indexOf(uuid);
   if (existingIndex >= 0) {
     trace = trace.slice(0, existingIndex + 1);
@@ -1138,21 +1144,70 @@ function navigateTo(uuid) {
     trace.push(uuid);
   }
 
-  renderTrace();
-  renderCurrentNeuron(uuid);
-  resetInboundRenderLimit();
-  renderSynapseList(uuid);
+  renderWithTransition(uuid, isGoingBack ? "back" : "deeper");
 }
 
 function goBack() {
   if (trace.length > 1) {
     trace.pop();
     const uuid = trace[trace.length - 1];
+    renderWithTransition(uuid, "back");
+  }
+}
+
+/**
+ * Render the neuron panel, breadcrumb, and synapse list with animated
+ * transitions. When `prefers-reduced-motion: reduce` is active, or when
+ * the panel element is missing, falls back to an instant swap.
+ *
+ * @param {string} uuid - Neuron UUID to display.
+ * @param {"deeper"|"back"} direction - Navigation direction for breadcrumb slide.
+ */
+function renderWithTransition(uuid, direction) {
+  const panel = document.querySelector(".currentNeuron");
+  const reduced = prefersReducedMotion();
+
+  if (!panel || reduced) {
+    // Instant swap (no animation).
     renderTrace();
     renderCurrentNeuron(uuid);
     resetInboundRenderLimit();
-    renderSynapseList(uuid);
+    renderSynapseList(uuid, { animate: false });
+    return;
   }
+
+  // Cross-fade: fade out → update → fade in.
+  panel.classList.add("transitionOut");
+
+  // Breadcrumb directional slide.
+  el.traceBreadcrumb.classList.remove("slideDeeper", "slideBack");
+
+  setTimeout(() => {
+    renderTrace();
+    renderCurrentNeuron(uuid);
+    resetInboundRenderLimit();
+    renderSynapseList(uuid, { animate: true });
+
+    // Apply breadcrumb slide direction.
+    const slideClass = direction === "back" ? "slideBack" : "slideDeeper";
+    el.traceBreadcrumb.classList.add(slideClass);
+
+    panel.classList.remove("transitionOut");
+    panel.classList.add("transitionIn");
+
+    // Allow one frame for the browser to apply the transitionIn class,
+    // then remove it to trigger the CSS transition back to full opacity.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel.classList.remove("transitionIn");
+      });
+    });
+
+    // Clean up breadcrumb slide class after the animation completes.
+    setTimeout(() => {
+      el.traceBreadcrumb.classList.remove("slideDeeper", "slideBack");
+    }, 200);
+  }, PANEL_CROSSFADE_MS);
 }
 
 function clearTrace() {
@@ -1900,7 +1955,7 @@ function getInboundSynapses(toUuid) {
   return inboundByTo.get(toUuid) ?? [];
 }
 
-function renderSynapseList(toUuid) {
+function renderSynapseList(toUuid, { animate = false } = {}) {
   const inbound = getInboundSynapses(toUuid);
   el.synapseCount.textContent = inbound.length;
 
@@ -2001,9 +2056,16 @@ function renderSynapseList(toUuid) {
 
   el.synapseListContainer.innerHTML = "";
 
-  visible.forEach((syn) => {
+  visible.forEach((syn, rowIndex) => {
     const row = document.createElement("div");
     row.className = "synapseRow";
+
+    // Staggered fade-in animation (#104).
+    if (animate && !prefersReducedMotion()) {
+      row.classList.add("fadeIn");
+      const delay = synapseStaggerDelay(rowIndex, visible.length);
+      if (delay > 0) row.style.animationDelay = `${delay}ms`;
+    }
     const selected = (DISCOVERY_CANDIDATES ?? []).find((c) =>
       c?.key === selectedCandidateKey
     );
@@ -2112,7 +2174,7 @@ function renderSynapseList(toUuid) {
     btn.onclick = () => {
       const step = inboundTopK && inboundTopK > 0 ? inboundTopK : 200;
       inboundRenderLimit = (inboundRenderLimit || showCount) + step;
-      renderSynapseList(toUuid);
+      renderSynapseList(toUuid, { animate: true });
     };
     wrap.appendChild(btn);
     el.synapseListContainer.appendChild(wrap);
