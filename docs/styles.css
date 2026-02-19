@@ -1445,6 +1445,8 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
+  min-width: 0;
+  overflow: hidden;
   animation: overviewFadeIn 0.4s ease both;
 }
 
@@ -1484,7 +1486,7 @@ body {
 /* Metrics list */
 .overviewMetricsList {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 12px;
   align-items: baseline;
 }
@@ -1500,6 +1502,9 @@ body {
   font-weight: 600;
   color: var(--text);
   text-align: right;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 /* Activation distribution */
@@ -1615,6 +1620,10 @@ body {
 
   .overviewCardTitle {
     font-size: 12px;
+  }
+
+  .overviewMetricsList {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .overviewMetricsList dd {
