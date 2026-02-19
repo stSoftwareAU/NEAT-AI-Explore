@@ -317,6 +317,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`                                                         |
 | `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                                                                        |
 | `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology` |
+| `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                               |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.

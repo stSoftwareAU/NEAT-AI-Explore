@@ -23,6 +23,11 @@ import {
   DEFAULT_SNAPSHOT_URL,
   SNAPSHOT_FALLBACK_URLS,
 } from "../shared/config.js";
+import {
+  CAMERA_FLY_MS,
+  FOCUS_PULSE_MS,
+  prefersReducedMotion,
+} from "../shared/transitions.js";
 
 // Starfield layout settings (tune for intuition > mathematical correctness).
 const FOCUS_MAX_DEPTH = 5;
@@ -34,8 +39,8 @@ const UPSTREAM_MAX_DEPTH = 4; // hops shown in Paths mode (focused neuron -> ups
 // Keep bounded so it never grows without limit during long sessions.
 const MAX_FOCUS_TRAIL = 64;
 
-// Travel animation duration (ms) when navigating between neurons (Issue #50).
-const TRAVEL_DURATION = 400;
+// Travel animation duration (ms) — uses shared config (#104).
+const TRAVEL_DURATION = CAMERA_FLY_MS;
 
 // Line budget (reduce clutter for high-fan-in NEAT neurons).
 const MAX_INBOUND_LINES = 80;
@@ -2970,6 +2975,25 @@ function setFocusBadge(uuid) {
   }
 }
 
+/**
+ * Briefly pulse the label of the newly focused neuron (#104).
+ * Adds the CSS `focusPulse` class to the matching `.starLabel.isFocus` element,
+ * then removes it after the animation completes. Skipped when reduced motion is
+ * preferred.
+ */
+function triggerFocusPulse(_uuid) {
+  if (prefersReducedMotion()) return;
+  const root = el.labelOverlay;
+  if (!root) return;
+  const focusLabel = root.querySelector(".starLabel.isFocus");
+  if (!focusLabel) return;
+  focusLabel.classList.remove("focusPulse");
+  // Force a reflow so the animation restarts if the class was already present.
+  void focusLabel.offsetWidth;
+  focusLabel.classList.add("focusPulse");
+  setTimeout(() => focusLabel.classList.remove("focusPulse"), FOCUS_PULSE_MS);
+}
+
 function clearLabelOverlay() {
   const root = el.labelOverlay;
   if (!root) return;
@@ -3737,9 +3761,20 @@ function initStarfield() {
         }
       }
       // Animate camera traveling along synapse to new focus (Issue #50).
-      renderer.travelAlongSynapse();
+      // Skip animation when the user prefers reduced motion (#104).
+      if (!prefersReducedMotion()) {
+        renderer.travelAlongSynapse();
+      } else {
+        // Instant snap: position the camera at the target directly.
+        renderer.pos.x = 0;
+        renderer.pos.y = 0;
+        renderer.pos.z = 110;
+        renderer.yaw = 0;
+        renderer.pitch = 0;
+      }
     }
     setFocusBadge(focusUuid);
+    triggerFocusPulse(focusUuid);
     updateLabelsForFocus(focusUuid, { force: true });
     buildHudForIndex(idx);
   };

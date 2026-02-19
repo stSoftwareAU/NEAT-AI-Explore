@@ -1644,3 +1644,105 @@ body {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Issue #104: Smooth animated transitions when navigating between neurons
+   ========================================================================== */
+
+/* CSS custom properties for transition durations (configurable). */
+:root {
+  --transition-crossfade: 180ms;
+  --transition-breadcrumb: 200ms;
+  --transition-synapse-fade: 180ms;
+  --transition-synapse-stagger: 25ms;
+}
+
+/* Neuron panel cross-fade: opacity + slight vertical slide. */
+.currentNeuron {
+  transition: opacity var(--transition-crossfade) ease;
+}
+
+.currentNeuron.transitionOut {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.currentNeuron.transitionIn {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Breadcrumb directional slide. */
+.breadcrumb li {
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity var(--transition-breadcrumb) ease,
+    transform var(--transition-breadcrumb) ease;
+}
+
+.breadcrumb.slideDeeper li {
+  animation: breadcrumbSlideDeeper var(--transition-breadcrumb) ease both;
+}
+
+.breadcrumb.slideBack li {
+  animation: breadcrumbSlideBack var(--transition-breadcrumb) ease both;
+}
+
+@keyframes breadcrumbSlideDeeper {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes breadcrumbSlideBack {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Synapse row staggered fade-in. */
+.synapseRow.fadeIn {
+  animation: synapseFadeIn var(--transition-synapse-fade) ease both;
+}
+
+@keyframes synapseFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skip all navigation transitions when reduced motion is preferred. */
+@media (prefers-reduced-motion: reduce) {
+  .currentNeuron,
+  .currentNeuron.transitionOut,
+  .currentNeuron.transitionIn {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .breadcrumb.slideDeeper li,
+  .breadcrumb.slideBack li {
+    animation: none;
+  }
+
+  .synapseRow.fadeIn {
+    animation: none;
+  }
+}
