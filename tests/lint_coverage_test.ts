@@ -38,6 +38,7 @@ const SHARED_MODULES = [
   "docs/shared/snapshot_loader.js",
   "docs/shared/colour_maps.js",
   "docs/shared/transitions.js",
+  "docs/shared/touch_gestures.js",
 ];
 
 for (const mod of SHARED_MODULES) {

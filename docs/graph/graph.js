@@ -33,6 +33,16 @@ import {
   FOCUS_PULSE_MS,
   prefersReducedMotion,
 } from "../shared/transitions.js";
+import {
+  clampMomentum,
+  classifyTouch,
+  detectSwipeDirection,
+  momentumStep,
+  pinchZoomToward,
+  RIPPLE_DURATION_MS,
+  TAP_THRESHOLD_PX,
+  TOUCH_SCALE_FACTOR,
+} from "../shared/touch_gestures.js";
 
 // Starfield layout settings (tune for intuition > mathematical correctness).
 const FOCUS_MAX_DEPTH = 5;
@@ -205,7 +215,7 @@ function glyphKindForNeuron(type, squash) {
   const s = String(squash ?? "IDENTITY");
   const u = s.toUpperCase();
 
-  // Explicitly cover the current published snapshot’s common squashes so v1 is
+  // Explicitly cover the current published snapshot's common squashes so v1 is
   // immediately useful (Issue #43, 31-Dec-2025).
   if (u === "BENT_IDENTITY" || u === "IDENTITY") return GLYPH.CIRCLE;
   if (u === "SQUARE" || u === "CUBE") return GLYPH.DIAMOND;
@@ -952,7 +962,7 @@ function buildStarPoints({ snapshot, neuronsByUuid, synapses }) {
   const outDeg = new Float32Array(n);
   const vis = new Float32Array(n);
 
-  // Degree counts (encode local “dendrite/axon-ness” hints in glyphs).
+  // Degree counts (encode local "dendrite/axon-ness" hints in glyphs).
   /** @type {Map<string, number>} */
   const inCounts = new Map();
   /** @type {Map<string, number>} */
@@ -1462,7 +1472,7 @@ class StarfieldRenderer {
         float nucleusMark = glyphFill(nucleusUv, vGlyph) * nucleusMask;
         float nucleus = max(nucleusBase * 0.85, nucleusMark);
 
-        // Mitochondria: small capsule-ish dots inside the cell for “cellness”.
+        // Mitochondria: small capsule-ish dots inside the cell for "cellness".
         // Keep it deterministic and cheap (3 fixed positions).
         float mito = 0.0;
         mito = max(mito, smoothInside(sdCapsuleX(uv - vec2(0.30, 0.18), 0.10, 0.06), 0.04));
@@ -1501,7 +1511,7 @@ class StarfieldRenderer {
         finalCol = mix(finalCol, vec3(0.0), 0.35 * outline); // darker membrane edge
 
         // In neuron mode, overlay the squash-family glyph inside the soma as an
-        // embossed mark so you still get the “function family” signal.
+        // embossed mark so you still get the "function family" signal.
         if (isNeuron > 0.5) {
           vec2 somaUv = (uv - vec2(-0.22, 0.0)) / 0.72;
           float inner = glyphFill(somaUv, vGlyph) * smoothInside(sdCircle(somaUv, 0.98), 0.04);
@@ -1680,7 +1690,16 @@ class StarfieldRenderer {
     // Touch gesture origin tracking: prevents off-canvas gestures (e.g. header
     // inputs/buttons) from accidentally enabling camera look/zoom via the
     // window-level touchend/touchmove handlers (Issue #41, 31-Dec-2025).
-    this.touch = { startedOnCanvas: false };
+    this.touch = {
+      startedOnCanvas: false,
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      longPressTimer: null,
+      longPressFired: false,
+    };
+    // Momentum state for two-finger pan inertia (#106).
+    this.momentum = { vx: 0, vy: 0, active: false, rafId: null };
     this.keys = new Set();
     this.focusIndex = -1;
     // Glyph style: 0=abstract (v1), 1=neuron silhouette.
@@ -1724,11 +1743,92 @@ class StarfieldRenderer {
       this.pitch = clamp(this.pitch, -1.35, 1.35);
     });
 
-    // Touch controls:
-    // - 1 finger: look (yaw/pitch)
-    // - 2 fingers: pinch zoom (Issue #39, 31-Dec-2025)
+    // Touch controls (#106 — improved mobile touch interactions):
+    // - 1 finger tap: focus neuron with ripple feedback
+    // - 1 finger long press: show tooltip
+    // - 1 finger drag: look (yaw/pitch)
+    // - 2 fingers: pinch zoom toward midpoint + pan with momentum
+    // - Horizontal swipe: cycle neurons in trace path
     const touchDistance = (t0, t1) =>
       Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+
+    // Clear any long-press timer.
+    const clearLongPress = () => {
+      if (this.touch.longPressTimer !== null) {
+        clearTimeout(this.touch.longPressTimer);
+        this.touch.longPressTimer = null;
+      }
+    };
+
+    // Stop momentum animation.
+    const stopMomentum = () => {
+      this.momentum.active = false;
+      if (this.momentum.rafId !== null) {
+        cancelAnimationFrame(this.momentum.rafId);
+        this.momentum.rafId = null;
+      }
+    };
+
+    // Run momentum deceleration loop for two-finger pan inertia (#106).
+    const startMomentum = (rawVx, rawVy) => {
+      stopMomentum();
+      const clamped = clampMomentum(rawVx, rawVy);
+      this.momentum.vx = clamped.vx;
+      this.momentum.vy = clamped.vy;
+      if (Math.hypot(clamped.vx, clamped.vy) < 0.15) return;
+      this.momentum.active = true;
+
+      const rx = Math.cos(this.yaw);
+      const rz = -Math.sin(this.yaw);
+
+      const tick = () => {
+        if (!this.momentum.active) return;
+        const step = momentumStep(this.momentum.vx, this.momentum.vy);
+        this.momentum.vx = step.vx;
+        this.momentum.vy = step.vy;
+        this.momentum.active = step.active;
+
+        if (step.active) {
+          const dist = Math.hypot(this.pos.x, this.pos.y, this.pos.z);
+          const panScale = Math.max(0.05, dist * 0.002);
+          this.pos.x -= rx * step.vx * panScale;
+          this.pos.z -= rz * step.vx * panScale;
+          this.pos.y += step.vy * panScale;
+          this.momentum.rafId = requestAnimationFrame(tick);
+        } else {
+          this.momentum.rafId = null;
+        }
+      };
+      this.momentum.rafId = requestAnimationFrame(tick);
+    };
+
+    // Show ripple feedback at a screen position (#106).
+    const showRipple = (clientX, clientY) => {
+      const rect = c.getBoundingClientRect();
+      const ripple = document.createElement("div");
+      ripple.className = "touchRipple";
+      ripple.style.left = (clientX - rect.left) + "px";
+      ripple.style.top = (clientY - rect.top) + "px";
+      const overlay = c.parentElement;
+      if (overlay) overlay.appendChild(ripple);
+      setTimeout(() => ripple.remove(), RIPPLE_DURATION_MS);
+    };
+
+    // Scale a node label on touch-start for visual feedback (#106).
+    const scaleLabelAtIndex = (idx, scale) => {
+      const overlay = document.getElementById("labelOverlay");
+      if (!overlay) return;
+      const labels = overlay.children;
+      if (idx < 0 || idx >= labels.length) return;
+      const label = /** @type {HTMLElement} */ (labels[idx]);
+      if (scale !== 1) {
+        label.style.transition = "transform 0.12s ease-out";
+        label.style.transform = `translate(-50%, -120%) scale(${scale})`;
+      } else {
+        label.style.transition = "transform 0.15s ease-in";
+        label.style.transform = "translate(-50%, -120%)";
+      }
+    };
 
     // Track whether the *gesture origin* (the 0→1 touch transition) began on
     // the canvas. This must not flip to true if a later touch begins on-canvas
@@ -1768,8 +1868,12 @@ class StarfieldRenderer {
       // touches that happen to begin on the canvas.
       if (!this.touch.startedOnCanvas) return;
 
+      // Stop any ongoing momentum when a new touch begins.
+      stopMomentum();
+
       // Pinch zoom initialisation.
       if (ts.length >= 2) {
+        clearLongPress();
         this.pinch.active = true;
         this.drag.active = false;
         this.pinch.lastDist = touchDistance(ts[0], ts[1]);
@@ -1779,15 +1883,87 @@ class StarfieldRenderer {
       }
 
       const t = ts[0];
+      this.touch.startX = t.clientX;
+      this.touch.startY = t.clientY;
+      this.touch.startTime = performance.now();
+      this.touch.longPressFired = false;
       this.drag.active = true;
       this.pinch.active = false;
       this.drag.lastX = t.clientX;
       this.drag.lastY = t.clientY;
+
+      // Touch feedback: scale up nearest neuron on touch-start (#106).
+      if (this.positions && this.meta?.length) {
+        const idx = this.pickStarIndex(t.clientX, t.clientY);
+        if (idx >= 0) scaleLabelAtIndex(idx, TOUCH_SCALE_FACTOR);
+      }
+
+      // Start long-press timer (#106).
+      clearLongPress();
+      this.touch.longPressTimer = setTimeout(() => {
+        this.touch.longPressFired = true;
+        // Long-press triggers tooltip via the existing onFocusChanged callback.
+        if (!this.positions || !this.meta?.length) return;
+        const idx = this.pickStarIndex(t.clientX, t.clientY);
+        if (idx >= 0) {
+          this.onLongPress?.(idx, this.meta[idx] ?? null, t.clientX, t.clientY);
+        }
+      }, 500);
     }, { passive: false });
 
     window.addEventListener("touchend", (e) => {
+      clearLongPress();
       const ts = e.touches;
+      const ct = e.changedTouches;
+
       if (!ts || ts.length === 0) {
+        // All fingers lifted — classify the single-finger gesture.
+        if (this.touch.startedOnCanvas && ct && ct.length > 0) {
+          const t = ct[0];
+          const dx = t.clientX - this.touch.startX;
+          const dy = t.clientY - this.touch.startY;
+          const elapsed = performance.now() - this.touch.startTime;
+
+          // Reset label scale for any previously scaled neuron.
+          if (this.positions && this.meta?.length) {
+            const startIdx = this.pickStarIndex(
+              this.touch.startX,
+              this.touch.startY,
+            );
+            if (startIdx >= 0) scaleLabelAtIndex(startIdx, 1);
+          }
+
+          if (!this.touch.longPressFired) {
+            const gesture = classifyTouch(dx, dy, elapsed);
+            if (gesture === "tap") {
+              // Tap-to-focus with ripple (#106).
+              if (this.positions && this.meta?.length) {
+                const idx = this.pickStarIndex(t.clientX, t.clientY);
+                if (idx >= 0) {
+                  // Only allow tapping neurons connected to focus (Issue #50).
+                  let allowed = true;
+                  if (this.focusIndex >= 0 && this.isConnectedToFocus) {
+                    allowed = this.isConnectedToFocus(idx);
+                  }
+                  if (allowed) {
+                    showRipple(t.clientX, t.clientY);
+                    this.setFocus(idx);
+                  }
+                }
+              }
+            } else if (gesture === "drag") {
+              // Check for horizontal swipe to cycle neurons (#106).
+              const swipe = detectSwipeDirection(dx, dy, elapsed);
+              if (swipe) this.onSwipe?.(swipe);
+            }
+          }
+
+          // Start momentum for two-finger pan if we were pinching.
+          if (this.pinch.active && this.pinch.lastVx !== undefined) {
+            startMomentum(this.pinch.lastVx, this.pinch.lastVy);
+          }
+        }
+
         this.drag.active = false;
         this.pinch.active = false;
         this.touch.startedOnCanvas = false;
@@ -1823,6 +1999,8 @@ class StarfieldRenderer {
     }, { passive: false });
 
     window.addEventListener("touchcancel", () => {
+      clearLongPress();
+      stopMomentum();
       this.drag.active = false;
       this.pinch.active = false;
       this.touch.startedOnCanvas = false;
@@ -1833,6 +2011,16 @@ class StarfieldRenderer {
       const ts = e.touches;
       if (!ts || ts.length === 0) return;
 
+      // Any significant movement cancels the long-press timer.
+      if (ts.length === 1) {
+        const t = ts[0];
+        const moveDist = Math.hypot(
+          t.clientX - this.touch.startX,
+          t.clientY - this.touch.startY,
+        );
+        if (moveDist > TAP_THRESHOLD_PX) clearLongPress();
+      }
+
       if (ts.length >= 2) {
         // If the gesture didn't start on the canvas, don't treat it as a pinch.
         // Without this guard, a 2-finger gesture that begins on non-canvas UI
@@ -1840,27 +2028,51 @@ class StarfieldRenderer {
         // was never initialised (Issue #40, 31-Dec-2025).
         if (!this.pinch.active) return;
 
+        clearLongPress();
+
         // Prevent the browser from treating gestures as scroll/back/zoom when
         // the user is manipulating the canvas.
         e.preventDefault();
 
-        // Pinch zoom.
+        // Pinch zoom toward the midpoint between fingers (#106).
         const d = touchDistance(ts[0], ts[1]);
         const dd = this.pinch.lastDist - d;
         this.pinch.lastDist = d;
 
-        // Tuned so iPhone/iPad pinch feels similar to mouse wheel.
-        this.zoomBy(dd * 0.22);
+        const mx = (ts[0].clientX + ts[1].clientX) / 2;
+        const my = (ts[0].clientY + ts[1].clientY) / 2;
+
+        // Zoom toward the pinch midpoint rather than canvas centre (#106).
+        const rect = c.getBoundingClientRect();
+        const localMx = mx - rect.left;
+        const localMy = my - rect.top;
+        const pz = pinchZoomToward(
+          localMx,
+          localMy,
+          rect.width,
+          rect.height,
+          dd * 0.22,
+        );
+        this.zoomBy(pz.zoom);
+
+        // Apply the focal-point pan correction.
+        const focalRx = Math.cos(this.yaw);
+        const focalRz = -Math.sin(this.yaw);
+        this.pos.x += focalRx * pz.panX;
+        this.pos.z += focalRz * pz.panX;
+        this.pos.y -= pz.panY;
 
         // Two-finger pan: drag the midpoint to translate the camera. This is
         // the touch equivalent of WASD/arrow movement and lets users pan back
         // toward centre without a keyboard (Issue #41, 31-Dec-2025).
-        const mx = (ts[0].clientX + ts[1].clientX) / 2;
-        const my = (ts[0].clientY + ts[1].clientY) / 2;
         const dx = mx - this.pinch.lastMidX;
         const dy = my - this.pinch.lastMidY;
         this.pinch.lastMidX = mx;
         this.pinch.lastMidY = my;
+
+        // Track velocity for momentum (#106).
+        this.pinch.lastVx = dx;
+        this.pinch.lastVy = dy;
 
         // Right vector from yaw only (keeps strafe intuitive, same as keyboard).
         const rx = Math.cos(this.yaw);
@@ -1870,7 +2082,7 @@ class StarfieldRenderer {
         const dist = Math.hypot(this.pos.x, this.pos.y, this.pos.z);
         const panScale = Math.max(0.05, dist * 0.002);
 
-        // Match “drag the world” intuition: moving fingers right moves the view
+        // Match "drag the world" intuition: moving fingers right moves the view
         // right (camera moves left), moving fingers down moves view down.
         this.pos.x -= rx * dx * panScale;
         this.pos.z -= rz * dx * panScale;
@@ -1919,7 +2131,12 @@ class StarfieldRenderer {
       this.zoomBy(e.deltaY * 0.09);
     }, { passive: false });
 
+    // Desktop click handler — touch devices use tap classification above (#106).
     c.addEventListener("click", (e) => {
+      // Skip synthetic click events from touch (handled by touchend tap logic).
+      if (this._lastTouchEnd && performance.now() - this._lastTouchEnd < 400) {
+        return;
+      }
       if (!this.positions || !this.meta?.length) return;
       const idx = this.pickStarIndex(e.clientX, e.clientY);
       if (idx < 0) return;
@@ -1930,6 +2147,11 @@ class StarfieldRenderer {
       }
       this.setFocus(idx);
     });
+
+    // Track last touch end time to suppress synthesised click events (#106).
+    window.addEventListener("touchend", () => {
+      this._lastTouchEnd = performance.now();
+    }, { passive: true });
   }
 
   getForwardVector() {
@@ -1959,7 +2181,7 @@ class StarfieldRenderer {
 
   zoomBy(delta) {
     // Zoom along the current view direction, not world Z. This makes zoom feel
-    // correct after yaw/pitch and helps users “open up” the neighbourhood view
+    // correct after yaw/pitch and helps users "open up" the neighbourhood view
     // to see linked neurons (Issue #39, 31-Dec-2025).
     const f = this.getForwardVector();
     this.pos.x += f.x * delta;
@@ -3789,6 +4011,31 @@ function initStarfield() {
     buildHudForIndex(idx);
   };
   buildHudForIndex(-1);
+
+  // Long-press shows the HUD tooltip for a neuron without focusing (#106).
+  renderer.onLongPress = (idx, _m, _cx, _cy) => {
+    buildHudForIndex(idx);
+  };
+
+  // Swipe left/right cycles through neurons in the focus trail (#106).
+  renderer.onSwipe = (direction) => {
+    if (!points || !renderer) return;
+    if (direction === "left") {
+      // Swipe left: advance forward in the trail (next neighbour).
+      const focusUuid = renderer.meta?.[renderer.focusIndex]?.uuid ?? null;
+      if (!focusUuid || !adjacency) return;
+      const neighbours = Array.from(adjacency.get(String(focusUuid)) ?? []);
+      // Pick the first non-trail neighbour as a "next" candidate.
+      const trailSet = new Set(focusTrail);
+      const next = neighbours.find((u) => !trailSet.has(u));
+      if (!next) return;
+      const idx = points.indexByUuid.get(String(next));
+      if (idx != null) renderer.setFocus(idx);
+    } else if (direction === "right") {
+      // Swipe right: go back in the trail.
+      navigateBack();
+    }
+  };
 
   // Wire loader controls.
   el.fetchBtn?.addEventListener("click", () => {
