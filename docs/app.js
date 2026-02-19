@@ -39,6 +39,13 @@ import {
   DEFAULT_SNAPSHOT_URL,
   SNAPSHOT_FALLBACK_URLS,
 } from "./shared/config.js";
+import {
+  computeActivationDistribution,
+  computeLayerTopology,
+  computeNetworkDepth,
+  computeNeuronBreakdown,
+  computeSynapseStats,
+} from "./shared/creature_overview.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -211,6 +218,12 @@ const el = {
   synapseMinAlloc: document.getElementById("synapseMinAlloc"),
   synapseTopK: document.getElementById("synapseTopK"),
   synapseListContainer: document.getElementById("synapseListContainer"),
+  overviewDashboard: document.getElementById("overviewDashboard"),
+  overviewMetrics: document.getElementById("overviewMetrics"),
+  overviewActivation: document.getElementById("overviewActivation"),
+  overviewTopology: document.getElementById("overviewTopology"),
+  overviewExploreBtn: document.getElementById("overviewExploreBtn"),
+  explorerMain: document.querySelector(".explorer"),
 };
 
 // ============================================================================
@@ -752,7 +765,9 @@ async function loadSnapshot(source, label) {
     selectedCandidateKey = null;
     currentNeuronTab = "details";
     trace = [];
-    navigateTo(startUuid);
+
+    // Show overview dashboard first (#103), then let user drill in.
+    renderOverviewDashboard();
 
     // Issue #53: Hide URL/Fetch/Browse controls on mobile once snapshot loads.
     document.body.classList.add("snapshotLoaded");
@@ -1141,10 +1156,10 @@ function goBack() {
 }
 
 function clearTrace() {
-  if (trace.length > 0) {
-    const first = trace[0];
-    trace = [first];
-    renderTrace();
+  if (SNAPSHOT) {
+    // Return to the overview dashboard (#103).
+    trace = [];
+    showOverviewDashboard();
   }
   // Issue #53: Show URL/Fetch/Browse controls again on mobile.
   document.body.classList.remove("snapshotLoaded");
@@ -3329,8 +3344,134 @@ function renderCandidateDiagramSvg(c) {
 }
 
 // ============================================================================
+// Creature overview dashboard (#103)
+// ============================================================================
+
+function showOverviewDashboard() {
+  if (el.overviewDashboard) el.overviewDashboard.style.display = "";
+  if (el.explorerMain) el.explorerMain.style.display = "none";
+}
+
+function showExplorer() {
+  if (el.overviewDashboard) el.overviewDashboard.style.display = "none";
+  if (el.explorerMain) el.explorerMain.style.display = "";
+}
+
+function renderOverviewDashboard() {
+  const allNeurons = Array.from(neuronsByUuid.values());
+  const breakdown = computeNeuronBreakdown(allNeurons);
+  const synStats = computeSynapseStats(synapses, breakdown.total);
+
+  const inputUuids = allNeurons.filter((n) => n.type === "input").map((n) =>
+    n.uuid
+  );
+  const outputUuids = allNeurons.filter((n) => n.type === "output").map((n) =>
+    n.uuid
+  );
+  const depth = computeNetworkDepth(synapses, inputUuids, outputUuids);
+  const activationDist = computeActivationDistribution(allNeurons);
+  const topology = computeLayerTopology(allNeurons, synapses);
+
+  // Metrics card
+  if (el.overviewMetrics) {
+    el.overviewMetrics.innerHTML = `
+      <dt>Neurons</dt>
+      <dd>${breakdown.total.toLocaleString()}</dd>
+      <dt>Breakdown</dt>
+      <dd>${breakdown.input} input · ${breakdown.hidden} hidden · ${breakdown.output} output${
+      breakdown.constant > 0 ? ` · ${breakdown.constant} constant` : ""
+    }</dd>
+      <dt>Synapses</dt>
+      <dd>${synStats.total.toLocaleString()}</dd>
+      <dt>Avg connectivity</dt>
+      <dd>${synStats.avgPerNeuron.toFixed(1)} synapses / neuron</dd>
+      <dt>Network depth</dt>
+      <dd>${depth} layer${depth !== 1 ? "s" : ""}</dd>
+    `;
+  }
+
+  // Activation distribution card
+  if (el.overviewActivation) {
+    const sorted = Array.from(activationDist.entries()).sort((a, b) =>
+      b[1] - a[1]
+    );
+    el.overviewActivation.innerHTML = sorted.map(([name, count]) =>
+      `<span class="overviewActivationChip"><span class="chipCount">${count}</span> ${
+        escapeHtml(name)
+      }</span>`
+    ).join("");
+  }
+
+  // Topology diagram card
+  if (el.overviewTopology) {
+    renderTopologyDiagram(topology, outputUuids);
+  }
+
+  showOverviewDashboard();
+}
+
+function renderTopologyDiagram(topology, outputUuids) {
+  if (!el.overviewTopology || !topology?.layers?.length) {
+    if (el.overviewTopology) {
+      el.overviewTopology.innerHTML =
+        '<span style="color:var(--muted)">No topology data</span>';
+    }
+    return;
+  }
+
+  const parts = [];
+  for (let i = 0; i < topology.layers.length; i++) {
+    const layer = topology.layers[i];
+    if (i > 0) {
+      parts.push('<span class="topoArrow">→</span>');
+    }
+    const typeClass = layer.type;
+    const label = layer.type === "hidden" ? `hidden ${i}` : layer.type;
+    parts.push(
+      `<div class="topoLayer" data-layer-index="${i}" data-layer-type="${
+        escapeHtml(layer.type)
+      }" title="${layer.count} ${escapeHtml(layer.type)} neuron${
+        layer.count !== 1 ? "s" : ""
+      }">
+        <div class="topoLayerCircle ${
+        escapeHtml(typeClass)
+      }">${layer.count}</div>
+        <span class="topoLayerLabel">${escapeHtml(label)}</span>
+      </div>`,
+    );
+  }
+  el.overviewTopology.innerHTML = parts.join("");
+
+  // Click to navigate into the explorer at the first neuron in that layer.
+  el.overviewTopology.querySelectorAll(".topoLayer").forEach((layerEl) => {
+    layerEl.addEventListener("click", () => {
+      const idx = parseInt(layerEl.dataset.layerIndex, 10);
+      const layer = topology.layers[idx];
+      if (!layer?.uuids?.length) return;
+      const uuid = layer.type === "output" ? layer.uuids[0] : layer.uuids[0];
+      enterExplorer(uuid);
+    });
+  });
+}
+
+function enterExplorer(uuid) {
+  showExplorer();
+  trace = [];
+  navigateTo(uuid ?? "output-0");
+}
+
+// ============================================================================
 // Event Listeners
 // ============================================================================
+
+if (el.overviewExploreBtn) {
+  el.overviewExploreBtn.onclick = () => {
+    const outputs = Array.from(neuronsByUuid.values()).filter((n) =>
+      n.type === "output"
+    );
+    enterExplorer(outputs[0]?.uuid ?? "output-0");
+  };
+}
 
 el.fetchBtn.onclick = () => {
   const raw = el.fetchUrl.value.trim() || DEFAULT_SNAPSHOT_URL;

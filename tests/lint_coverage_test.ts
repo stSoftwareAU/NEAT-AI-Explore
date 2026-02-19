@@ -33,6 +33,7 @@ async function lintFile(
 
 const SHARED_MODULES = [
   "docs/shared/config.js",
+  "docs/shared/creature_overview.js",
   "docs/shared/graph_analysis.js",
   "docs/shared/snapshot_loader.js",
   "docs/shared/colour_maps.js",
