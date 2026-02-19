@@ -121,3 +121,69 @@ export function neuronColourRgb01(type, squash) {
   lit = Math.min(1, Math.max(0, lit));
   return hslToRgb01(hue, sat, lit);
 }
+
+/**
+ * Normalise a synapse weight to a strength value in [0, 1].
+ *
+ * Uses sqrt compression so weak connections are still visible while
+ * strong ones saturate smoothly.
+ *
+ * @param {number} weight    — the raw synapse weight
+ * @param {number} [maxAbsWeight=5] — reference maximum absolute weight
+ * @returns {number} in [0, 1]
+ */
+export function synapseWeightStrength01(weight, maxAbsWeight = 5) {
+  if (!maxAbsWeight || !Number.isFinite(maxAbsWeight) || maxAbsWeight <= 0) {
+    return 0;
+  }
+  const ratio = Math.abs(weight) / maxAbsWeight;
+  return Math.min(1, Math.sqrt(Math.min(1, ratio)));
+}
+
+/**
+ * Map a synapse weight to an RGB colour (0..1).
+ *
+ * - Positive weights → green (light→deep as strength increases)
+ * - Negative weights → red   (light→deep as strength increases)
+ * - Near-zero weights → grey/muted
+ *
+ * Designed for WCAG AA contrast in both light and dark themes.
+ *
+ * @param {number} weight
+ * @param {number} [maxAbsWeight=5]
+ * @returns {[number, number, number]} [r, g, b] each in [0, 1]
+ */
+export function synapseWeightColourRgb01(weight, maxAbsWeight = 5) {
+  const s = synapseWeightStrength01(weight, maxAbsWeight);
+
+  // Near-zero → neutral grey
+  if (s < 0.02) {
+    return hslToRgb01(0, 0, 0.55);
+  }
+
+  const positive = weight >= 0;
+  // Hue: green (140) for positive, red (0) for negative
+  const hue = positive ? 140 : 0;
+  // Saturation ramps from 0.08 (very weak) to 0.85 (strong)
+  const sat = 0.08 + 0.77 * s;
+  // Lightness: moderate range for readability (0.42 at strong → 0.58 at weak)
+  const lit = 0.58 - 0.16 * s;
+
+  return hslToRgb01(hue, sat, lit);
+}
+
+/**
+ * Map a synapse weight to a CSS `rgb(…)` colour string.
+ *
+ * Convenience wrapper around {@link synapseWeightColourRgb01}.
+ *
+ * @param {number} weight
+ * @param {number} [maxAbsWeight=5]
+ * @returns {string} e.g. `"rgb(34, 197, 94)"`
+ */
+export function synapseWeightColourCss(weight, maxAbsWeight = 5) {
+  const [r, g, b] = synapseWeightColourRgb01(weight, maxAbsWeight);
+  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${
+    Math.round(b * 255)
+  })`;
+}

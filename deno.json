@@ -10,7 +10,8 @@
       "docs/starfield/starfield.js",
       "docs/sw.js",
       "docs/shared/theme.js",
-      "docs/vendor/**"
+      "docs/vendor/**",
+      "docs/evidence/**"
     ]
   },
   "fmt": {

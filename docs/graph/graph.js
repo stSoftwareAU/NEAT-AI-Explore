@@ -17,7 +17,12 @@ import {
   fetchSnapshotJson,
   readSnapshotFile,
 } from "../shared/snapshot_loader.js";
-import { hash32, neuronColourRgb01, u32ToU01 } from "../shared/colour_maps.js";
+import {
+  hash32,
+  neuronColourRgb01,
+  synapseWeightColourRgb01,
+  u32ToU01,
+} from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 import {
   DEFAULT_SNAPSHOT_URL,
@@ -3685,6 +3690,12 @@ function initStarfield() {
           let p = 0;
           let c = 0;
 
+          // Max absolute weight for colour normalisation (#105).
+          const maxAbsW = inbound.reduce(
+            (mx, e) => Math.max(mx, Math.abs(e.weight ?? 0)),
+            1,
+          );
+
           // Inbound synapses: focus origin -> upstream node.
           for (const r of inbound) {
             const j = points.indexByUuid.get(r.fromUuid);
@@ -3693,8 +3704,7 @@ function initStarfield() {
             const y = positions[j * 3 + 1];
             const z = positions[j * 3 + 2];
 
-            const positive = (r.weight ?? 0) >= 0;
-            const base = positive ? [0.25, 0.95, 0.55] : [1.0, 0.35, 0.35];
+            const base = synapseWeightColourRgb01(r.weight ?? 0, maxAbsW);
             const s01 = clamp(Math.sqrt(Math.max(0, r.share ?? 0)) * 2.2, 0, 1);
             const a = 0.12 + 0.75 * s01;
             const h = hash32(`${r.fromUuid}→${r.toUuid}::bend`);
