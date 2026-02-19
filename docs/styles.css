@@ -21,6 +21,12 @@
   --highlight: #b45309;
   --trace: #b45309;
   --warning: #b45309;
+
+  /* Transition durations (#104) — configurable via CSS custom properties. */
+  --transition-fade: 180ms;
+  --transition-breadcrumb: 200ms;
+  --transition-synapse-stagger: 25ms;
+  --transition-focus-pulse: 280ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1642,5 +1648,108 @@ body {
   body.snapshotLoaded #fetchBtn,
   body.snapshotLoaded .browseGroup {
     display: none;
+  }
+}
+
+/* ==========================================================================
+   Smooth navigation transitions (#104)
+   Only GPU-composited properties (transform, opacity) are animated.
+   ========================================================================== */
+
+/* --- Neuron panel cross-fade --- */
+.currentNeuron.transitionOut {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity calc(var(--transition-fade) / 2) ease-out,
+    transform calc(var(--transition-fade) / 2) ease-out;
+}
+
+.currentNeuron.transitionIn {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--transition-fade) ease-out,
+    transform var(--transition-fade) ease-out;
+}
+
+/* --- Breadcrumb directional slide --- */
+.breadcrumb li {
+  opacity: 0;
+  transform: translateX(0);
+}
+
+.breadcrumb li.slideInLeft {
+  animation: breadcrumbSlideLeft var(--transition-breadcrumb) ease-out forwards;
+}
+
+.breadcrumb li.slideInRight {
+  animation: breadcrumbSlideRight var(--transition-breadcrumb) ease-out
+    forwards;
+}
+
+@keyframes breadcrumbSlideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes breadcrumbSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --- Synapse row staggered fade-in --- */
+.synapseRow.staggerIn {
+  animation: synapseFadeIn var(--transition-fade) ease-out both;
+}
+
+@keyframes synapseFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Skip all animations when reduced motion is preferred --- */
+@media (prefers-reduced-motion: reduce) {
+  .currentNeuron.transitionOut,
+  .currentNeuron.transitionIn {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .breadcrumb li,
+  .breadcrumb li.slideInLeft,
+  .breadcrumb li.slideInRight {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .synapseRow.staggerIn {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .overviewCard {
+    animation: none;
   }
 }

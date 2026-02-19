@@ -2968,6 +2968,12 @@ function setFocusBadge(uuid) {
   } else {
     el.focusBadge.textContent = uuid;
   }
+
+  // Pulse animation on focus change (#104).
+  el.focusBadge.classList.remove("pulseIn");
+  // Force reflow so re-adding the class restarts the animation.
+  void el.focusBadge.offsetWidth;
+  el.focusBadge.classList.add("pulseIn");
 }
 
 function clearLabelOverlay() {

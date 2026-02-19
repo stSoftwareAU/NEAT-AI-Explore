@@ -445,6 +445,29 @@ body {
   font-weight: 700;
 }
 
+/* Focus badge pulse on neuron change (#104).
+ * Uses only opacity (GPU-composited). Scale is avoided because the
+ * base transform differs between desktop (translateX(-50%)) and mobile
+ * (none), making a cross-breakpoint scale animation fragile. */
+.focusBadge.pulseIn {
+  animation: focusPulse 280ms ease-out;
+}
+
+@keyframes focusPulse {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focusBadge.pulseIn {
+    animation: none;
+  }
+}
+
 .help {
   position: absolute;
   bottom: 12px;

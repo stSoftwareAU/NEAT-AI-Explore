@@ -46,11 +46,17 @@ import {
   computeNeuronBreakdown,
   computeSynapseStats,
 } from "./shared/creature_overview.js";
+import {
+  prefersReducedMotion,
+  synapseStaggerDelay,
+  TRANSITION_FADE_MS,
+} from "./shared/transitions.js";
 
 let SNAPSHOT = null;
 let synapses = [];
 let neuronsByUuid = new Map();
 let trace = []; // Array of neuron UUIDs
+let prevTraceLength = 0; // For breadcrumb animation direction (#104)
 let uuidToLabel = {}; // "input-N" -> "human-name"
 let uuidToDescription = {}; // "input-N" -> "Tooltip description"
 let uuidToGroup = {}; // "input-N" -> "group label"
@@ -1122,6 +1128,41 @@ function getReconstructionCheck(uuid) {
 }
 
 // ============================================================================
+// Navigation transitions (#104)
+// ============================================================================
+
+/**
+ * Cross-fade the neuron panel content: fade out, swap content, fade in.
+ * When reduced motion is active the callback fires immediately with no delay.
+ * @param {() => void} swapContent - Callback that replaces the panel content.
+ */
+function transitionNeuronPanel(swapContent) {
+  const panel = document.querySelector(".currentNeuron");
+  if (!panel || prefersReducedMotion()) {
+    swapContent();
+    return;
+  }
+
+  // Phase 1: fade out.
+  panel.classList.remove("transitionIn");
+  panel.classList.add("transitionOut");
+
+  const halfDuration = TRANSITION_FADE_MS / 2;
+  setTimeout(() => {
+    // Phase 2: swap content then fade in.
+    swapContent();
+    panel.classList.remove("transitionOut");
+    panel.classList.add("transitionIn");
+
+    // Clean up the class after the fade-in completes.
+    setTimeout(
+      () => panel.classList.remove("transitionIn"),
+      TRANSITION_FADE_MS,
+    );
+  }, halfDuration);
+}
+
+// ============================================================================
 // Navigation
 // ============================================================================
 
@@ -1131,6 +1172,7 @@ function navigateTo(uuid) {
     return;
   }
 
+  prevTraceLength = trace.length;
   const existingIndex = trace.indexOf(uuid);
   if (existingIndex >= 0) {
     trace = trace.slice(0, existingIndex + 1);
@@ -1138,20 +1180,25 @@ function navigateTo(uuid) {
     trace.push(uuid);
   }
 
-  renderTrace();
-  renderCurrentNeuron(uuid);
-  resetInboundRenderLimit();
-  renderSynapseList(uuid);
-}
-
-function goBack() {
-  if (trace.length > 1) {
-    trace.pop();
-    const uuid = trace[trace.length - 1];
+  transitionNeuronPanel(() => {
     renderTrace();
     renderCurrentNeuron(uuid);
     resetInboundRenderLimit();
     renderSynapseList(uuid);
+  });
+}
+
+function goBack() {
+  if (trace.length > 1) {
+    prevTraceLength = trace.length;
+    trace.pop();
+    const uuid = trace[trace.length - 1];
+    transitionNeuronPanel(() => {
+      renderTrace();
+      renderCurrentNeuron(uuid);
+      resetInboundRenderLimit();
+      renderSynapseList(uuid);
+    });
   }
 }
 
@@ -1177,8 +1224,16 @@ function renderTrace() {
   // This preserves the origin (output neuron) and current position.
   const itemsToShow = getPathItemsWithMiddleTruncation(trace);
 
+  // Determine breadcrumb animation direction (#104).
+  // Navigating deeper (trace grew) → slide from left; going back → slide from right.
+  const skipAnimation = prefersReducedMotion();
+  const slideClass = trace.length > prevTraceLength
+    ? "slideInLeft"
+    : "slideInRight";
+
   itemsToShow.forEach((item) => {
     const li = document.createElement("li");
+    if (!skipAnimation) li.classList.add(slideClass);
 
     if (item.isEllipsis) {
       // Render ellipsis indicator for truncated middle section
@@ -2000,10 +2055,17 @@ function renderSynapseList(toUuid) {
   }
 
   el.synapseListContainer.innerHTML = "";
+  const animateSynapses = !prefersReducedMotion();
 
-  visible.forEach((syn) => {
+  visible.forEach((syn, synIdx) => {
     const row = document.createElement("div");
     row.className = "synapseRow";
+    if (animateSynapses) {
+      row.classList.add("staggerIn");
+      row.style.animationDelay = `${
+        synapseStaggerDelay(synIdx, visible.length)
+      }ms`;
+    }
     const selected = (DISCOVERY_CANDIDATES ?? []).find((c) =>
       c?.key === selectedCandidateKey
     );
