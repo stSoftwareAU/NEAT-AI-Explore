@@ -40,6 +40,7 @@ const SHARED_MODULES = [
   "docs/shared/transitions.js",
   "docs/shared/touch_gestures.js",
   "docs/shared/sparkline.js",
+  "docs/shared/responsive.js",
 ];
 
 for (const mod of SHARED_MODULES) {

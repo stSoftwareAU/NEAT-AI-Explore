@@ -32,21 +32,26 @@
     <header class="appHeader">
       <h1>NEAT-AI Explore</h1>
       <div class="headerControls">
-        <input
-          id="fetchUrl"
-          class="input"
-          placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
-        />
-        <button id="fetchBtn" class="button">Fetch</button>
-        <input
-          id="fileInput"
-          type="file"
-          accept="application/json,.json,.gz,application/gzip,application/x-gzip"
-          style="display: none"
-        />
-        <div class="browseGroup">
-          <button id="fileBtn" class="button">Browse…</button>
-        </div>
+        <details class="headerUrlDetails" open>
+          <summary>Load snapshot…</summary>
+          <div class="headerUrlInner">
+            <input
+              id="fetchUrl"
+              class="input"
+              placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+            />
+            <button id="fetchBtn" class="button">Fetch</button>
+            <input
+              id="fileInput"
+              type="file"
+              accept="application/json,.json,.gz,application/gzip,application/x-gzip"
+              style="display: none"
+            />
+            <div class="browseGroup">
+              <button id="fileBtn" class="button">Browse…</button>
+            </div>
+          </div>
+        </details>
         <div
           id="progressContainer"
           class="progressContainer"
@@ -105,6 +110,14 @@
             aria-label="Open 3D neural network view"
             title="Open 3D neural network view"
           >🧠</a>
+          <button
+            id="synapsePanelToggle"
+            class="button buttonSmall buttonSecondary synapsePanelToggle"
+            aria-label="Toggle synapse panel"
+            title="Toggle synapse panel"
+          >
+            Synapses ⇄
+          </button>
         </div>
       </nav>
 
@@ -232,6 +245,34 @@
           <div id="synapseListContainer" class="synapseListScroll"></div>
         </section>
       </div>
+
+      <!-- Mobile bottom tab bar (#108) -->
+      <nav class="mobileTabBar" aria-label="Mobile navigation">
+        <button
+          class="mobileTabBtn isActive"
+          data-tab="neuronTabPanelDetails"
+          type="button"
+        >
+          <span class="mobileTabIcon">📋</span>
+          Details
+        </button>
+        <button
+          class="mobileTabBtn"
+          data-tab="neuronTabPanelIssues"
+          type="button"
+        >
+          <span class="mobileTabIcon">⚠️</span>
+          Issues
+        </button>
+        <button
+          class="mobileTabBtn"
+          data-tab="neuronTabPanelCandidates"
+          type="button"
+        >
+          <span class="mobileTabIcon">🔬</span>
+          Candidates
+        </button>
+      </nav>
     </main>
 
     <script type="module">

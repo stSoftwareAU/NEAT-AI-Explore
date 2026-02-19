@@ -201,6 +201,7 @@ const el = {
   neuronProps: document.getElementById("neuronProps"),
   impactBreakdown: document.getElementById("impactBreakdown"),
   impactDiagnosticsPanel: document.getElementById("impactDiagnosticsPanel"),
+  synapsePanelToggle: document.getElementById("synapsePanelToggle"),
   neuronTabDetails: document.getElementById("neuronTabDetails"),
   neuronTabIssues: document.getElementById("neuronTabIssues"),
   neuronTabCandidates: document.getElementById("neuronTabCandidates"),
@@ -2664,6 +2665,19 @@ function applyNeuronTabState() {
       panel.classList.toggle("isActive", name === tab);
     }
   }
+
+  // Sync mobile bottom tab bar (#108).
+  const panelMap = {
+    details: "neuronTabPanelDetails",
+    issues: "neuronTabPanelIssues",
+    candidates: "neuronTabPanelCandidates",
+  };
+  document.querySelectorAll(".mobileTabBtn").forEach((btn) => {
+    btn.classList.toggle(
+      "isActive",
+      btn.getAttribute("data-tab") === panelMap[tab],
+    );
+  });
 }
 
 function setNeuronTab(tab) {
@@ -2681,6 +2695,40 @@ if (el.neuronTabIssues) {
 }
 if (el.neuronTabCandidates) {
   el.neuronTabCandidates.onclick = () => setNeuronTab("candidates");
+}
+
+// ============================================================================
+// Tablet: synapse panel toggle (#108)
+// ============================================================================
+
+if (el.synapsePanelToggle) {
+  el.synapsePanelToggle.addEventListener("click", () => {
+    const list = document.querySelector(".synapseList");
+    if (list) list.classList.toggle("isPanelOpen");
+  });
+}
+
+// ============================================================================
+// Mobile: bottom tab bar (#108)
+// ============================================================================
+
+{
+  const tabMap = {
+    neuronTabPanelDetails: "details",
+    neuronTabPanelIssues: "issues",
+    neuronTabPanelCandidates: "candidates",
+  };
+  document.querySelectorAll(".mobileTabBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tabKey = btn.getAttribute("data-tab");
+      const tabName = tabMap[tabKey];
+      if (tabName) setNeuronTab(tabName);
+      // Update mobile tab active states.
+      document.querySelectorAll(".mobileTabBtn").forEach((b) => {
+        b.classList.toggle("isActive", b === btn);
+      });
+    });
+  });
 }
 
 // ============================================================================
