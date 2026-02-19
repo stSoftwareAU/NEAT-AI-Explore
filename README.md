@@ -191,6 +191,9 @@ NEAT networks.
   - Mouse wheel to zoom
   - WASD / arrow keys to fly
   - Click a neuron to focus it (HUD shows key properties + flags)
+  - **Touch**: single tap to focus (with ripple), long press for tooltip, pinch
+    to zoom toward midpoint, two-finger pan with momentum, swipe left/right to
+    cycle neurons in the trace path
 - **Layout**: focus-centric neighbourhood view (directly linked neurons are
   closest; moving focus recomputes the local neighbourhood layout)
 - **Legend**: includes mapping notes (size/colour/bias/degree)
@@ -321,6 +324,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
 | `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
 | `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
+| `docs/shared/touch_gestures.js`    | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.

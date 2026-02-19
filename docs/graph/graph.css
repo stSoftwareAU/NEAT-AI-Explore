@@ -563,6 +563,46 @@ body {
   transition: opacity 200ms ease;
 }
 
+/* ── Touch feedback (#106) ──────────────────────────────────────────────── */
+
+/* Ripple effect shown on tap-to-focus (#106). */
+.touchRipple {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  margin-top: -18px;
+  border-radius: 50%;
+  background: rgba(80, 240, 255, 0.35);
+  pointer-events: none;
+  animation: rippleExpand 350ms ease-out forwards;
+}
+
+@keyframes rippleExpand {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* Haptic-style visual pulse for buttons on tap (#106). */
+.headerControls button:active,
+.headerControls .btn:active {
+  transform: scale(0.93);
+  transition: transform 0.08s ease-out;
+}
+
+/* Prevent text selection on long-press (Issue #21 + #106). */
+.stage {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* Skip all graph transitions when reduced motion is preferred. */
 @media (prefers-reduced-motion: reduce) {
   .starLabel.focusPulse {
@@ -575,5 +615,14 @@ body {
 
   .focusBadge {
     transition: none;
+  }
+
+  .touchRipple {
+    animation: none;
+  }
+
+  .headerControls button:active,
+  .headerControls .btn:active {
+    transform: none;
   }
 }
