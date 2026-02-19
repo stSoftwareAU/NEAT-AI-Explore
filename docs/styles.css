@@ -413,6 +413,157 @@ body {
   font-weight: 600;
 }
 
+/* Neuron detail cards (#107) */
+.neuronCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 600px) {
+  .neuronCards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.neuronCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  animation: cardSlideUp 180ms ease-out both;
+}
+
+.neuronCard.noMotion {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neuronCard {
+    animation: none;
+  }
+}
+
+@keyframes cardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.neuronCardTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* Squash badge colour variants */
+.propList dd.squashBadge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.propList dd.squashBadge--blue {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.propList dd.squashBadge--purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.propList dd.squashBadge--green {
+  background: rgba(5, 150, 105, 0.12);
+  color: #059669;
+}
+
+.propList dd.squashBadge--orange {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.propList dd.squashBadge--grey {
+  background: var(--surfaceSoft);
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .propList dd.squashBadge--blue {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+  }
+  .propList dd.squashBadge--purple {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+  }
+  .propList dd.squashBadge--green {
+    background: rgba(52, 211, 153, 0.15);
+    color: #6ee7b7;
+  }
+  .propList dd.squashBadge--orange {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+  }
+}
+
+:root[data-theme="dark"] .propList dd.squashBadge--blue {
+  background: rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
+}
+:root[data-theme="dark"] .propList dd.squashBadge--purple {
+  background: rgba(167, 139, 250, 0.15);
+  color: #c4b5fd;
+}
+:root[data-theme="dark"] .propList dd.squashBadge--green {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+:root[data-theme="dark"] .propList dd.squashBadge--orange {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+/* Sparkline & histogram inline SVGs */
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin-top: 8px;
+}
+
+.sparklineLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparklineDot {
+  fill: var(--accent);
+}
+
+.errorHistogram {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: 8px;
+}
+
 /* Tabs (Details / Issues / Candidates) */
 .tabRow {
   display: flex;

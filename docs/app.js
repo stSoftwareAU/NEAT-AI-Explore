@@ -52,6 +52,12 @@ import {
   synapseStaggerDelay,
 } from "./shared/transitions.js";
 import { synapseWeightColourCss } from "./shared/colour_maps.js";
+import {
+  computeErrorHistogram,
+  computeSparklinePoints,
+  flattenErrors,
+  squashBadge,
+} from "./shared/sparkline.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -1312,6 +1318,104 @@ function getImpactClass(impact) {
   return "";
 }
 
+// ── Sparkline & histogram SVG renderers (#107) ─────────────────────────
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Render a sparkline as an inline SVG element.
+ *
+ * @param {{ points: Array<{x: number, y: number}>, min: number, max: number }} data
+ * @param {{ currentIndex: number|null, totalObs: number }} opts
+ * @returns {SVGSVGElement}
+ */
+function renderSparklineSVG(data, opts = {}) {
+  const W = 200;
+  const H = 40;
+  const PAD = 2;
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "sparkline");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Activation sparkline");
+
+  if (data.points.length === 0) return svg;
+
+  // Build polyline path
+  const pts = data.points.map((p) => {
+    const x = PAD + p.x * (W - 2 * PAD);
+    const y = H - PAD - p.y * (H - 2 * PAD);
+    return `${x},${y}`;
+  });
+
+  const polyline = document.createElementNS(SVG_NS, "polyline");
+  polyline.setAttribute("points", pts.join(" "));
+  polyline.setAttribute("class", "sparklineLine");
+  svg.appendChild(polyline);
+
+  // Current observation marker
+  if (
+    opts.currentIndex != null && opts.totalObs > 0 &&
+    opts.currentIndex >= 0 && opts.currentIndex < data.points.length
+  ) {
+    const cp = data.points[opts.currentIndex];
+    const cx = PAD + cp.x * (W - 2 * PAD);
+    const cy = H - PAD - cp.y * (H - 2 * PAD);
+    const dot = document.createElementNS(SVG_NS, "circle");
+    dot.setAttribute("cx", String(cx));
+    dot.setAttribute("cy", String(cy));
+    dot.setAttribute("r", "3");
+    dot.setAttribute("class", "sparklineDot");
+    svg.appendChild(dot);
+  }
+
+  return svg;
+}
+
+/**
+ * Render an error histogram as a mini SVG bar chart.
+ *
+ * @param {{ buckets: Array<{ratio: number}>, min: number, max: number }} histo
+ * @returns {SVGSVGElement}
+ */
+function renderErrorHistogramSVG(histo) {
+  const W = 200;
+  const H = 32;
+  const n = histo.buckets.length;
+  const barW = W / n;
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "errorHistogram");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Error distribution histogram");
+
+  for (let i = 0; i < n; i++) {
+    const b = histo.buckets[i];
+    const barH = Math.max(1, b.ratio * (H - 2));
+    const x = i * barW;
+    const y = H - barH;
+
+    // Colour: green (low error) → red (high error) based on bucket position
+    const t = n === 1 ? 0 : i / (n - 1);
+    const r = Math.round(34 + t * 214);
+    const g = Math.round(197 - t * 150);
+    const bl = Math.round(99 - t * 60);
+
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x + 0.5));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(Math.max(1, barW - 1)));
+    rect.setAttribute("height", String(barH));
+    rect.setAttribute("fill", `rgb(${r},${g},${bl})`);
+    rect.setAttribute("rx", "1");
+    svg.appendChild(rect);
+  }
+
+  return svg;
+}
+
 function renderCurrentNeuron(uuid) {
   const n = neuronsByUuid.get(uuid) ??
     { uuid, type: "input", squash: "IDENTITY", bias: 0 };
@@ -1354,45 +1458,153 @@ function renderCurrentNeuron(uuid) {
   const impact = getNeuronImpact(uuid);
   const check = getReconstructionCheck(uuid);
 
-  const props = [];
-  props.push(["Type", n.type ?? "unknown"]);
-
-  // Only show squash/bias for non-input neurons (inputs don't have these)
+  // Populate diagPreStats for use in diagnostics and error cards.
   if (!isInput) {
-    props.push(["Squash", n.squash ?? "IDENTITY"]);
-    props.push(["Bias", formatNumber(n.bias)]);
+    diagPreStats = DIAG_PRE_STATS.get(uuid) ?? null;
   }
 
+  el.neuronProps.innerHTML = "";
+
+  // ── Helper: create a card with a title and a <dl> of props ────────────
+  const reduceMotion = prefersReducedMotion();
+
+  function makeCard(title, rows, index) {
+    const card = document.createElement("div");
+    card.className = "neuronCard";
+    if (!reduceMotion) {
+      card.style.animationDelay = `${index * 40}ms`;
+    } else {
+      card.classList.add("noMotion");
+    }
+
+    const heading = document.createElement("h3");
+    heading.className = "neuronCardTitle";
+    heading.textContent = title;
+    card.appendChild(heading);
+
+    const dl = document.createElement("dl");
+    dl.className = "propList";
+    for (const row of rows) {
+      const [label, value, cls, valueTitle, meta] = row;
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      if (TOOLTIPS[label]) {
+        dt.title = TOOLTIPS[label];
+        dt.classList.add("hasTooltip");
+      }
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      if (cls) dd.className = cls;
+      if (valueTitle) dd.title = valueTitle;
+      if (meta?.issuesTabLink && el.neuronTabIssues) {
+        const open = document.createTextNode(" (");
+        const link = document.createElement("a");
+        link.href = "#";
+        link.className = "inlineLink";
+        link.textContent = "Issues tab";
+        link.onclick = (ev) => {
+          ev.preventDefault();
+          setNeuronTab("issues");
+          applyNeuronTabState();
+        };
+        const close = document.createTextNode(")");
+        dd.appendChild(open);
+        dd.appendChild(link);
+        dd.appendChild(close);
+      }
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+    card.appendChild(dl);
+    return card;
+  }
+
+  // ── Group props into themed cards ─────────────────────────────────────
+  let cardIndex = 0;
+
+  // Identity card (type, squash badge, bias, impact)
+  const identityRows = [["Type", n.type ?? "unknown"]];
+  if (!isInput) {
+    const badge = squashBadge(n.squash);
+    identityRows.push([
+      "Squash",
+      badge.label,
+      "squashBadge squashBadge--" + badge.colour,
+    ]);
+    identityRows.push(["Bias", formatNumber(n.bias)]);
+  }
   if (impact != null) {
     const impactClass = getImpactClass(impact);
     const impactNote = impact < IMPACT_SUSPICIOUS_THRESHOLD ? " ⚠️" : "";
-    props.push(["Impact", formatSig(impact, 3) + impactNote, impactClass]);
+    identityRows.push([
+      "Impact",
+      formatSig(impact, 3) + impactNote,
+      impactClass,
+    ]);
   }
+  el.neuronProps.appendChild(makeCard("Identity", identityRows, cardIndex++));
 
-  // Impact diagnostics: show-your-working-style evidence for squash issues.
-  if (!isInput) {
-    const preStats = DIAG_PRE_STATS.get(uuid);
-    diagPreStats = preStats;
-    if (preStats && preStats.n > 0) {
-      props.push(["Pre-activation mean", formatSig(preStats.mean, 4)]);
-      props.push([
-        "Pre-activation range",
-        `${formatSig(preStats.min, 4)} → ${formatSig(preStats.max, 4)}`,
-      ]);
-      props.push(["Pre-activation p99", formatSig(preStats.p99, 4)]);
-      props.push(["Pre-activation |x| max", formatSig(preStats.maxAbs, 4)]);
+  // Activation card (stats + sparkline)
+  if (stats) {
+    const actRows = [];
+    actRows.push(["Mean Activation", formatNumber(stats.meanActivation)]);
+    actRows.push([
+      "Activation Range",
+      `${formatNumber(stats.activationMin)} → ${
+        formatNumber(stats.activationMax)
+      }`,
+    ]);
+    actRows.push(["Samples", stats.recordCount ?? "N/A"]);
+    const actCard = makeCard("Activation", actRows, cardIndex++);
+
+    // Sparkline: show activation values across observations
+    const rec = SNAPSHOT?.recording?.neurons?.[uuid];
+    const actSeries = rec?.activation ?? rec?.value ?? null;
+    if (Array.isArray(actSeries) && actSeries.length > 1) {
+      const sparkResult = computeSparklinePoints(actSeries);
+      if (sparkResult.points.length > 1) {
+        const sparkEl = renderSparklineSVG(sparkResult, {
+          currentIndex: null,
+          totalObs: actSeries.length,
+        });
+        actCard.appendChild(sparkEl);
+      }
     }
 
+    el.neuronProps.appendChild(actCard);
+  }
+
+  // Pre-activation / diagnostics card (non-input only)
+  if (!isInput) {
+    const diagRows = [];
+    if (diagPreStats && diagPreStats.n > 0) {
+      diagRows.push(["Pre-activation mean", formatSig(diagPreStats.mean, 4)]);
+      diagRows.push([
+        "Pre-activation range",
+        `${formatSig(diagPreStats.min, 4)} → ${formatSig(diagPreStats.max, 4)}`,
+      ]);
+      diagRows.push([
+        "Pre-activation p99",
+        formatSig(diagPreStats.p99, 4),
+      ]);
+      diagRows.push([
+        "Pre-activation |x| max",
+        formatSig(diagPreStats.maxAbs, 4),
+      ]);
+    }
     const proxy = DIAG_PROXY.get(uuid);
     if (typeof proxy === "number" && isFinite(proxy)) {
-      props.push(["Impact (proxy, grad)", formatSig(proxy, 3)]);
+      diagRows.push(["Impact (proxy, grad)", formatSig(proxy, 3)]);
     }
     const s = DIAG_SQUASH.get(uuid);
     if (s) {
-      props.push(["Squash |d| mean", formatSig(s.meanAbsD, 3)]);
-      props.push(["Squash d≈0 %", formatSig(s.fracNearZero * 100, 3) + "%"]);
+      diagRows.push(["Squash |d| mean", formatSig(s.meanAbsD, 3)]);
+      diagRows.push([
+        "Squash d≈0 %",
+        formatSig(s.fracNearZero * 100, 3) + "%",
+      ]);
       if (s.nonSmooth) {
-        props.push([
+        diagRows.push([
           "Squash warning",
           s.note ?? "non-smooth / branching",
           "error",
@@ -1400,86 +1612,70 @@ function renderCurrentNeuron(uuid) {
         ]);
       }
     }
-  }
-
-  if (stats) {
-    props.push(["Mean Activation", formatNumber(stats.meanActivation)]);
-    props.push([
-      "Activation Range",
-      `${formatNumber(stats.activationMin)} → ${
-        formatNumber(stats.activationMax)
-      }`,
-    ]);
-
-    // Only show error for non-input neurons
-    if (!isInput) {
-      const mse = stats.meanSquaredError ?? stats.mean_squared_error;
-      const mae = stats.meanAbsoluteError ?? stats.mean_absolute_error;
-      if (mse != null) {
-        const errorClass = mse > MSE_ERROR_THRESHOLD ? "error" : "";
-        props.push(["MSE", formatSig(mse, 3), errorClass]);
-      }
-      if (mae != null) {
-        props.push(["MAE", formatSig(mae, 3)]);
-      }
-      const extremePreActivation = diagPreStats &&
-        typeof diagPreStats.maxAbs === "number" &&
-        isFinite(diagPreStats.maxAbs) &&
-        diagPreStats.maxAbs >= EXTREME_PREACTIVATION_ABS_MAX_FOR_STEP_BIPOLAR;
-      if (
-        (mse != null || mae != null) && isStepOrBipolarSquash(n.squash) &&
-        extremePreActivation
-      ) {
-        props.push([
-          "MSE/MAE warning",
-          "Value-domain error metrics can be dominated by saturation/outliers when STEP/BIPOLAR pre-activation is extreme.",
-          "error",
-          "If MSE/MAE look obviously wrong, inspect the Issues tab for error tails/outliers.",
-          { issuesTabLink: true },
-        ]);
-      }
+    if (diagRows.length > 0) {
+      el.neuronProps.appendChild(
+        makeCard("Diagnostics", diagRows, cardIndex++),
+      );
     }
-    props.push(["Samples", stats.recordCount ?? "N/A"]);
   }
 
+  // Error metrics card (non-input only)
+  if (!isInput && stats) {
+    const errorRows = [];
+    const mse = stats.meanSquaredError ?? stats.mean_squared_error;
+    const mae = stats.meanAbsoluteError ?? stats.mean_absolute_error;
+    if (mse != null) {
+      const errorClass = mse > MSE_ERROR_THRESHOLD ? "error" : "";
+      errorRows.push(["MSE", formatSig(mse, 3), errorClass]);
+    }
+    if (mae != null) {
+      errorRows.push(["MAE", formatSig(mae, 3)]);
+    }
+    const extremePreActivation = diagPreStats &&
+      typeof diagPreStats.maxAbs === "number" &&
+      isFinite(diagPreStats.maxAbs) &&
+      diagPreStats.maxAbs >= EXTREME_PREACTIVATION_ABS_MAX_FOR_STEP_BIPOLAR;
+    if (
+      (mse != null || mae != null) && isStepOrBipolarSquash(n.squash) &&
+      extremePreActivation
+    ) {
+      errorRows.push([
+        "MSE/MAE warning",
+        "Value-domain error metrics can be dominated by saturation/outliers when STEP/BIPOLAR pre-activation is extreme.",
+        "error",
+        "If MSE/MAE look obviously wrong, inspect the Issues tab for error tails/outliers.",
+        { issuesTabLink: true },
+      ]);
+    }
+    if (errorRows.length > 0) {
+      const errCard = makeCard("Error Metrics", errorRows, cardIndex++);
+
+      // Error distribution mini-chart
+      const rec = SNAPSHOT?.recording?.neurons?.[uuid];
+      if (rec?.errors) {
+        const flat = flattenErrors(rec.errors);
+        if (flat.length > 0) {
+          const histo = computeErrorHistogram(flat, 12);
+          if (histo.buckets.length > 0) {
+            const histoEl = renderErrorHistogramSVG(histo);
+            errCard.appendChild(histoEl);
+          }
+        }
+      }
+
+      el.neuronProps.appendChild(errCard);
+    }
+  }
+
+  // Reconstruction check card
   if (!isInput && check) {
     const maxDelta = check.maxActivationDelta ?? check.max_activation_delta;
     const deltaClass = maxDelta > 0.01 ? "error" : "";
-    props.push(["Max Recon Δ", formatSig(maxDelta, 3), deltaClass]);
+    const reconRows = [["Max Recon Δ", formatSig(maxDelta, 3), deltaClass]];
+    el.neuronProps.appendChild(
+      makeCard("Reconstruction", reconRows, cardIndex++),
+    );
   }
-
-  el.neuronProps.innerHTML = "";
-  props.forEach((row) => {
-    const [label, value, cls, valueTitle, meta] = row;
-    const dt = document.createElement("dt");
-    dt.textContent = label;
-    if (TOOLTIPS[label]) {
-      dt.title = TOOLTIPS[label];
-      dt.classList.add("hasTooltip");
-    }
-    const dd = document.createElement("dd");
-    dd.textContent = value;
-    if (cls) dd.className = cls;
-    if (valueTitle) dd.title = valueTitle;
-    if (meta?.issuesTabLink && el.neuronTabIssues) {
-      const open = document.createTextNode(" (");
-      const link = document.createElement("a");
-      link.href = "#";
-      link.className = "inlineLink";
-      link.textContent = "Issues tab";
-      link.onclick = (ev) => {
-        ev.preventDefault();
-        setNeuronTab("issues");
-        applyNeuronTabState();
-      };
-      const close = document.createTextNode(")");
-      dd.appendChild(open);
-      dd.appendChild(link);
-      dd.appendChild(close);
-    }
-    el.neuronProps.appendChild(dt);
-    el.neuronProps.appendChild(dd);
-  });
 
   renderImpactBreakdown(uuid, impact);
   renderImpactDiagnosticsPanel(uuid, n.type);
