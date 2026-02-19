@@ -1,7 +1,7 @@
 ## Summary
 
-Improve mobile touch interactions in the graph explorer so it feels
-natural and responsive on iPhone, iPad, and other touch devices. Closes #106.
+Improve mobile touch interactions in the graph explorer so it feels natural and
+responsive on iPhone, iPad, and other touch devices. Closes #106.
 
 ### What changed
 
@@ -15,9 +15,9 @@ natural and responsive on iPhone, iPad, and other touch devices. Closes #106.
    cleanly below a minimum threshold.
 
 3. **Tap-to-focus with ripple** — Single taps are properly distinguished from
-   drags using movement distance and duration thresholds. Tapping a neuron
-   shows a brief expanding ripple animation and triggers the existing
-   focus/zoom behaviour.
+   drags using movement distance and duration thresholds. Tapping a neuron shows
+   a brief expanding ripple animation and triggers the existing focus/zoom
+   behaviour.
 
 4. **Long-press for tooltip** — Holding a finger for 500 ms on a neuron shows
    the HUD detail panel without triggering text selection (CSS
@@ -28,8 +28,8 @@ natural and responsive on iPhone, iPad, and other touch devices. Closes #106.
    the focus trail.
 
 6. **Touch feedback** — Neuron labels scale up slightly on touch-start and
-   return to normal on release. Buttons have a haptic-style press animation
-   (CSS `transform: scale(0.93)` on `:active`).
+   return to normal on release. Buttons have a haptic-style press animation (CSS
+   `transform: scale(0.93)` on `:active`).
 
 7. **Desktop graceful degradation** — All mouse interactions (click, drag,
    wheel) continue to work unchanged. Synthetic click events from touch are
@@ -38,6 +38,7 @@ natural and responsive on iPhone, iPad, and other touch devices. Closes #106.
 ### Architecture
 
 Extracted pure, DOM-free gesture logic into `docs/shared/touch_gestures.js`:
+
 - `classifyTouch()` — tap vs drag vs long-press classification
 - `detectSwipeDirection()` — horizontal swipe detection with thresholds
 - `momentumStep()` / `clampMomentum()` — friction-based deceleration
@@ -50,8 +51,8 @@ All constants (thresholds, friction, durations) are exported and tested.
 
 This is a UI change affecting touch interactions. The graph explorer renders
 with WebGL which requires GPU context; the screenshot below shows the mobile
-viewport layout. Touch interactions are validated through the pure gesture
-logic unit tests (DOM/touch events cannot be simulated in Deno).
+viewport layout. Touch interactions are validated through the pure gesture logic
+unit tests (DOM/touch events cannot be simulated in Deno).
 
 ![Mobile graph explorer](docs/evidence/touch-interactions-mobile.png)
 
