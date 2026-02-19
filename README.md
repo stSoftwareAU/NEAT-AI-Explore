@@ -125,8 +125,9 @@ Also note:
 - **Synapse Colour Coding**: Synapse edges and rows are colour-coded by weight
   strength — green for excitatory (positive), red for inhibitory (negative),
   grey for weak/near-zero. A collapsible colour legend explains the scale.
-- **Neuron Details**: Shows type, squash, bias, impact score, and recorded
-  stats.
+- **Neuron Detail Cards**: Shows type, squash (colour-coded badge), bias, impact
+  score, and recorded stats in themed card components with inline sparkline
+  charts for activation history and error distribution histograms.
 - **Reconstruction Checks**: If enabled in export, shows max value/activation
   deltas to identify recording or squash function mismatches.
 - **Graph explorer**: A 3D neighbourhood view of the NEAT network to build
@@ -325,6 +326,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
 | `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
 | `docs/shared/touch_gestures.js`    | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
+| `docs/shared/sparkline.js`         | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
