@@ -7,16 +7,16 @@ trace explorer and graph view. Closes #104.
 
 - **Cross-fade**: neuron panel content fades out (90 ms) then the new content
   fades in (180 ms) when clicking a synapse or breadcrumb.
-- **Breadcrumb directional slide**: items slide in from the left when
-  navigating deeper and from the right when going back.
+- **Breadcrumb directional slide**: items slide in from the left when navigating
+  deeper and from the right when going back.
 - **Staggered synapse list**: synapse rows fade in with a per-item stagger
   delay, capped at 250 ms total so large lists stay snappy.
 
 ### Graph explorer transitions
 
 - **Focus badge pulse**: the focus badge fades in on neuron change.
-- **Smooth camera fly-to**: already existed (`travelAlongSynapse` from
-  Issue #50); no changes needed.
+- **Smooth camera fly-to**: already existed (`travelAlongSynapse` from Issue
+  #50); no changes needed.
 
 ### Performance guardrails
 
@@ -46,7 +46,7 @@ by:
 - Added 12 new tests in `tests/transitions_test.ts`:
   - All transition constants are under 300 ms
   - `prefersReducedMotion()` returns `false` in Deno (no `matchMedia`)
-  - `synapseStaggerDelay()` returns correct values for edge cases (0 items,
-    1 item, first item, small lists, large lists with budget capping)
+  - `synapseStaggerDelay()` returns correct values for edge cases (0 items, 1
+    item, first item, small lists, large lists with budget capping)
 - Added `transitions.js` to lint coverage in `tests/lint_coverage_test.ts`
 - All 139 existing + new tests pass (`./quality.sh` clean)
