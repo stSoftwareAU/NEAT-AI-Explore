@@ -51,6 +51,7 @@ import {
   prefersReducedMotion,
   synapseStaggerDelay,
 } from "./shared/transitions.js";
+import { synapseWeightColourCss } from "./shared/colour_maps.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -2056,9 +2057,45 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
 
   el.synapseListContainer.innerHTML = "";
 
+  // Compute maximum absolute weight for colour normalisation.
+  const maxAbsWeight = visible.reduce(
+    (mx, s) => Math.max(mx, Math.abs(s.weight ?? 0)),
+    1,
+  );
+
+  // Colour legend for synapse weight scale (#105).
+  const legend = document.createElement("details");
+  legend.className = "synapseLegend";
+  legend.open = true;
+  legend.innerHTML = `<summary>Weight colour scale</summary>
+    <div class="legendItems">
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(maxAbsWeight, maxAbsWeight)
+  }"></span>Strong +ve</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(maxAbsWeight * 0.3, maxAbsWeight)
+  }"></span>Weak +ve</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(0, maxAbsWeight)
+  }"></span>Near zero</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(-maxAbsWeight * 0.3, maxAbsWeight)
+  }"></span>Weak −ve</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(-maxAbsWeight, maxAbsWeight)
+  }"></span>Strong −ve</span>
+    </div>`;
+  el.synapseListContainer.appendChild(legend);
+
   visible.forEach((syn, rowIndex) => {
     const row = document.createElement("div");
     row.className = "synapseRow";
+
+    // Weight-strength colour indicator: left border + inline chip (#105).
+    const weightCss = synapseWeightColourCss(syn.weight, maxAbsWeight);
+    row.style.borderLeftWidth = "4px";
+    row.style.borderLeftStyle = "solid";
+    row.style.borderLeftColor = weightCss;
 
     // Staggered fade-in animation (#104).
     if (animate && !prefersReducedMotion()) {
@@ -2108,7 +2145,7 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     statsHtml.push(
       `<span class="stat ${
         syn.weight >= 0 ? "positive" : "negative"
-      }" title="Weight: strength of connection">w: ${
+      }" title="Weight: strength of connection"><span class="weightChip" style="background:${weightCss}"></span>w: ${
         formatNumber(syn.weight)
       }</span>`,
     );

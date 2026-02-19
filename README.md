@@ -122,6 +122,9 @@ Also note:
   breadcrumb trail.
 - **Synapse Sorting**: Sort inbound synapses by |weight|, weight, or |mean
   contribution|.
+- **Synapse Colour Coding**: Synapse edges and rows are colour-coded by weight
+  strength — green for excitatory (positive), red for inhibitory (negative),
+  grey for weak/near-zero. A collapsible colour legend explains the scale.
 - **Neuron Details**: Shows type, squash, bias, impact score, and recorded
   stats.
 - **Reconstruction Checks**: If enabled in export, shows max value/activation
@@ -308,16 +311,16 @@ pass while the code is actually broken.
 
 Only pure, DOM-free modules can be tested in Deno:
 
-| Module                             | Testable functions                                                                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/impact_attribution.js`       | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                      |
-| `docs/impact_diagnostics.js`       | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                  |
-| `docs/shared/config.js`            | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`                                                                                |
-| `docs/shared/graph_analysis.js`    | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                  |
-| `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`                                                         |
-| `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                                                                        |
-| `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology` |
-| `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                               |
+| Module                             | Testable functions                                                                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/impact_attribution.js`       | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
+| `docs/impact_diagnostics.js`       | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
+| `docs/shared/config.js`            | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`                                                                                          |
+| `docs/shared/graph_analysis.js`    | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
+| `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`                                                                   |
+| `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
+| `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
+| `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
