@@ -113,6 +113,10 @@ Also note:
 
 ## Features
 
+- **Creature overview dashboard**: After loading a snapshot, see an at-a-glance
+  summary of the neural network — neuron/synapse counts, activation function
+  distribution, network depth, and an interactive mini topology diagram. Click
+  any layer to navigate into the trace explorer.
 - **Trace explorer**: Click an output neuron → see inbound synapses → click to
   go upstream toward observations → repeat until you reach inputs. Builds a
   breadcrumb trail.
@@ -304,14 +308,15 @@ pass while the code is actually broken.
 
 Only pure, DOM-free modules can be tested in Deno:
 
-| Module                           | Testable functions                                                             |
-| -------------------------------- | ------------------------------------------------------------------------------ |
-| `docs/impact_attribution.js`     | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`     |
-| `docs/impact_diagnostics.js`     | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc. |
-| `docs/shared/config.js`          | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`                               |
-| `docs/shared/graph_analysis.js`  | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs` |
-| `docs/shared/snapshot_loader.js` | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`        |
-| `docs/shared/colour_maps.js`     | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                       |
+| Module                             | Testable functions                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/impact_attribution.js`       | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                      |
+| `docs/impact_diagnostics.js`       | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                  |
+| `docs/shared/config.js`            | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`                                                                                |
+| `docs/shared/graph_analysis.js`    | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                  |
+| `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`                                                         |
+| `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`                                                                        |
+| `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology` |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.

@@ -1422,6 +1422,207 @@ body {
 }
 
 /* ==========================================================================
+   Creature overview dashboard (#103)
+   ========================================================================== */
+
+.overviewDashboard {
+  flex: 1;
+  padding: 24px 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.overviewCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  animation: overviewFadeIn 0.4s ease both;
+}
+
+.overviewCard:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.overviewCard:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+@keyframes overviewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overviewCard {
+    animation: none;
+  }
+}
+
+.overviewCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 14px;
+}
+
+/* Metrics list */
+.overviewMetricsList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  align-items: baseline;
+}
+
+.overviewMetricsList dt {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.overviewMetricsList dd {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+}
+
+/* Activation distribution */
+.overviewActivationList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.overviewActivationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surfaceSoft);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.overviewActivationChip .chipCount {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Topology diagram */
+.overviewTopologyDiagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow-x: auto;
+  padding: 12px 0;
+  min-height: 80px;
+}
+
+.topoLayer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.topoLayer:hover {
+  background: var(--surfaceSoft);
+}
+
+.topoLayerCircle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.topoLayerCircle.input {
+  background: var(--positive);
+}
+.topoLayerCircle.hidden {
+  background: var(--accent);
+}
+.topoLayerCircle.output {
+  background: var(--highlight);
+}
+
+.topoLayerLabel {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.topoArrow {
+  font-size: 16px;
+  color: var(--muted);
+  padding: 0 2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Overview actions */
+.overviewActions {
+  text-align: center;
+  margin-top: 20px;
+}
+
+/* Topology card spans full width when grid has room */
+.overviewCardTopology {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  .overviewGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewDashboard {
+    padding: 16px 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .overviewCard {
+    padding: 14px;
+  }
+
+  .overviewCardTitle {
+    font-size: 12px;
+  }
+
+  .overviewMetricsList dd {
+    font-size: 14px;
+  }
+}
+
+/* ==========================================================================
    Issue #53: Hide URL/Fetch/Browse controls on mobile when snapshot is loaded
    ========================================================================== */
 

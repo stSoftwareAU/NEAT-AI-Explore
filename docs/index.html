@@ -58,7 +58,34 @@
       </div>
     </header>
 
-    <main class="explorer">
+    <!-- Creature overview dashboard (shown after snapshot loads, before neuron exploration) -->
+    <section
+      id="overviewDashboard"
+      class="overviewDashboard"
+      style="display: none"
+    >
+      <div class="overviewGrid">
+        <div class="overviewCard overviewCardMetrics">
+          <h2 class="overviewCardTitle">Network Summary</h2>
+          <dl id="overviewMetrics" class="overviewMetricsList"></dl>
+        </div>
+        <div class="overviewCard overviewCardActivation">
+          <h2 class="overviewCardTitle">Activation Functions</h2>
+          <div id="overviewActivation" class="overviewActivationList"></div>
+        </div>
+        <div class="overviewCard overviewCardTopology">
+          <h2 class="overviewCardTitle">Network Topology</h2>
+          <div id="overviewTopology" class="overviewTopologyDiagram"></div>
+        </div>
+      </div>
+      <div class="overviewActions">
+        <button id="overviewExploreBtn" class="button">
+          Explore Neurons →
+        </button>
+      </div>
+    </section>
+
+    <main class="explorer" style="display: none">
       <!-- Trace breadcrumb at top -->
       <nav class="traceBar">
         <span class="pathLabel">Path:</span>
