@@ -9,9 +9,9 @@ trace explorer and graph explorer. Closes #104.
   slide when switching neurons (180 ms).
 - **Directional breadcrumb slide**: breadcrumb items animate left (going deeper)
   or right (going back) to indicate navigation direction (200 ms).
-- **Staggered synapse fade-in**: synapse rows fade in sequentially with a
-  capped stagger delay so long lists don't take too long (180 ms each, 250 ms
-  total cap).
+- **Staggered synapse fade-in**: synapse rows fade in sequentially with a capped
+  stagger delay so long lists don't take too long (180 ms each, 250 ms total
+  cap).
 
 ### Graph explorer transitions
 
@@ -26,11 +26,11 @@ trace explorer and graph explorer. Closes #104.
 
 - Only `transform` and `opacity` are animated (GPU-composited properties).
 - All individual animation durations are capped at 300 ms.
-- `prefers-reduced-motion: reduce` skips all animations entirely — both CSS
-  and JS-driven camera animations.
-- Durations are configurable via CSS custom properties (`--transition-crossfade`,
-  `--transition-breadcrumb`, `--transition-synapse-fade`,
-  `--transition-focus-pulse`).
+- `prefers-reduced-motion: reduce` skips all animations entirely — both CSS and
+  JS-driven camera animations.
+- Durations are configurable via CSS custom properties
+  (`--transition-crossfade`, `--transition-breadcrumb`,
+  `--transition-synapse-fade`, `--transition-focus-pulse`).
 
 ### New shared module
 
