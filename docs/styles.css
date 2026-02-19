@@ -421,7 +421,7 @@ body {
   margin-bottom: 12px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 639px) {
   .neuronCards {
     grid-template-columns: 1fr;
   }
@@ -836,9 +836,8 @@ body {
   flex-direction: column;
 }
 
-/* iPhone: use more of the vertical space for modals (they're our primary
-   \"dialogs\"), without covering the entire viewport. */
-@media (max-width: 520px) {
+/* Mobile: use more of the vertical space for modals. */
+@media (max-width: 639px) {
   .modalPanel {
     width: calc(100vw - 16px);
     max-height: calc(100dvh - 16px);
@@ -1263,7 +1262,7 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 639px) {
   .synapseLegend {
     padding: 4px 8px;
   }
@@ -1418,9 +1417,11 @@ body {
 }
 
 /* ==========================================================================
-   Responsiveness (iPhone / iPad / desktop)
+   Responsiveness — Issue #108 holistic overhaul
+   Breakpoints: Mobile <640px | Tablet 640–1024px | Desktop >1024px
    ========================================================================== */
 
+/* Safe-area insets for notched devices (iPhone X+). */
 @supports (padding: env(safe-area-inset-top)) {
   .appHeader {
     padding-top: calc(12px + env(safe-area-inset-top));
@@ -1433,7 +1434,23 @@ body {
   }
 }
 
-@media (max-width: 900px) {
+/* ---------- Header: collapsible URL input on mobile (#108) ---------- */
+.headerUrlDetails {
+  display: contents; /* transparent on desktop — children flow normally */
+}
+
+.headerUrlDetails summary {
+  display: none; /* hidden on desktop */
+}
+
+/* ---------- Tablet (640–1024px): collapsible synapse panel ---------- */
+
+/* Synapse panel toggle button — hidden on desktop & mobile. */
+.synapsePanelToggle {
+  display: none;
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
   .appHeader {
     align-items: flex-start;
     gap: 10px;
@@ -1444,7 +1461,6 @@ body {
     justify-content: flex-start;
   }
 
-  /* Make the URL input usable on narrow screens. */
   #fetchUrl.input {
     flex: 1 1 260px;
     min-width: 180px;
@@ -1455,40 +1471,45 @@ body {
     row-gap: 8px;
   }
 
-  /* Stack panels vertically to avoid horizontal scrolling on iPhone PWA. */
+  /* Full-width neuron panel when synapse panel is hidden. */
   .explorerMain {
-    flex-direction: column;
-    overflow: auto;
+    position: relative;
   }
 
-  /* iOS UX: avoid nested scroll areas (panel-within-panel scrolling). Let the
-     main area scroll as a single surface. */
   .currentNeuron {
-    width: 100%;
+    width: auto;
     min-width: 0;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: none;
-    overflow: visible;
+    flex: 1;
+  }
+
+  /* Synapse panel slides in from the right on tablet. */
+  .synapseList {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(400px, 55vw);
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 20;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .synapseList.isPanelOpen {
+    transform: translateX(0);
+  }
+
+  .synapsePanelToggle {
+    display: inline-flex;
   }
 
   .flowArrow {
     display: none;
-  }
-
-  .synapseList {
-    overflow: visible;
-  }
-
-  .synapseListScroll {
-    overflow: visible;
-    flex: 0 0 auto;
-    padding: 8px 12px;
-  }
-
-  /* Smooth momentum scrolling where supported. */
-  .explorerMain {
-    -webkit-overflow-scrolling: touch;
   }
 
   .synapseHeader {
@@ -1502,7 +1523,14 @@ body {
   }
 }
 
-@media (max-width: 520px) {
+/* ---------- Mobile (<640px): single-column vertical stack ---------- */
+
+/* Bottom tab bar — only visible on mobile. */
+.mobileTabBar {
+  display: none;
+}
+
+@media (max-width: 639px) {
   .appHeader {
     padding: 10px 14px;
     flex-wrap: wrap;
@@ -1510,7 +1538,6 @@ body {
   }
 
   .appHeader h1 {
-    /* Keep the title tidy on iPhone (no 3-line wrap). */
     flex: 1 1 auto;
     min-width: 0;
     font-size: 14px;
@@ -1518,6 +1545,34 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Collapse URL input into <details> on mobile. */
+  .headerUrlDetails {
+    display: block;
+    width: 100%;
+  }
+
+  .headerUrlDetails summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 0;
+    list-style: none;
+  }
+
+  .headerUrlDetails summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .headerUrlDetails .headerUrlInner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
   }
 
   .headerControls {
@@ -1531,9 +1586,9 @@ body {
     min-width: 0;
   }
 
-  /* Keep controls compact: Fetch row, then Browse + Theme together. */
   #fetchBtn.button {
     flex: 1 1 100%;
+    min-height: 44px;
     padding: 6px 10px;
   }
 
@@ -1544,6 +1599,7 @@ body {
 
   #fileBtn.button {
     flex: 1 1 auto;
+    min-height: 44px;
     padding: 6px 10px;
   }
 
@@ -1564,35 +1620,84 @@ body {
     word-break: break-word;
   }
 
+  /* Trace bar sticky at top with horizontal scroll breadcrumb. */
   .traceBar {
     padding: 8px 14px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    background: rgba(251, 191, 36, 0.08);
   }
 
-  /* Issue #59: Ensure trace bar content wraps properly in portrait mode.
-     The breadcrumb takes full width, forcing buttons to wrap below. */
   .breadcrumb {
     flex: 1 1 100%;
     min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
+  /* Compact trace buttons as toolbar. */
   .traceButtons {
     flex: 1 1 100%;
     justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .traceButtons .button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Single-column stack. */
+  .explorerMain {
+    flex-direction: column;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .currentNeuron {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: none;
+    overflow: visible;
+    padding: 14px;
+  }
+
+  .flowArrow {
+    display: none;
+  }
+
+  .synapseList {
+    overflow: visible;
+  }
+
+  .synapseListScroll {
+    overflow: visible;
+    flex: 0 0 auto;
+    padding: 8px 12px;
   }
 
   .synapseHeader {
     padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
-  .currentNeuron {
-    padding: 14px;
+  .sortControls {
+    width: 100%;
+    justify-content: space-between;
   }
 
-  /* Reduce row density + prevent grid overflow on very narrow screens. */
+  /* Synapse rows: single column, touch-friendly spacing. */
   .synapseRow {
     grid-template-columns: 1fr;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 12px;
+    min-height: 44px;
   }
 
   .synapseStats {
@@ -1602,13 +1707,89 @@ body {
   .synapseNav {
     display: none;
   }
+
+  /* Bottom tab bar for mobile navigation. */
+  .mobileTabBar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 4px 0;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around;
+  }
+
+  .mobileTabBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    min-width: 64px;
+    min-height: 44px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: 8px;
+  }
+
+  .mobileTabBtn .mobileTabIcon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .mobileTabBtn.isActive {
+    color: var(--accent);
+    background: rgba(96, 165, 250, 0.1);
+  }
+
+  /* Desktop tab row hidden on mobile — replaced by bottom tab bar. */
+  .tabRow {
+    display: none;
+  }
+
+  /* Add bottom padding so content isn't hidden behind bottom tab bar. */
+  .explorer {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Neuron details collapsible card. */
+  .neuronDetailsCollapsible summary {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    list-style: none;
+  }
+
+  .neuronDetailsCollapsible summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .neuronDetailsCollapsible summary::before {
+    content: "▶";
+    font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+
+  .neuronDetailsCollapsible[open] summary::before {
+    transform: rotate(90deg);
+  }
 }
 
-/* Preserve notch-safe padding on iPhone-sized viewports.
-   Note: The 520px breakpoint uses `padding: ...` shorthands which would
-   otherwise override the earlier safe-area rules. */
+/* Preserve notch-safe padding on mobile viewports. */
 @supports (padding: env(safe-area-inset-top)) {
-  @media (max-width: 520px) {
+  @media (max-width: 639px) {
     .appHeader {
       padding-top: calc(10px + env(safe-area-inset-top));
       padding-right: calc(14px + env(safe-area-inset-right));
@@ -1622,6 +1803,36 @@ body {
       padding-bottom: 8px;
       padding-left: calc(14px + env(safe-area-inset-left));
     }
+  }
+}
+
+/* ---------- Touch-friendly sizing (#108) ---------- */
+
+/* All interactive elements: minimum 44×44px touch target on touch devices. */
+@media (hover: none), (pointer: coarse) {
+  .button,
+  .tabBtn,
+  .breadcrumb button,
+  .synapseRow,
+  .obsRow,
+  .issueRow,
+  .candidateRow,
+  .topoLayer {
+    min-height: 44px;
+  }
+
+  .button,
+  .tabBtn {
+    min-width: 44px;
+  }
+
+  /* Adequate spacing between synapse rows for fat-finger tapping. */
+  .synapseRow {
+    margin: 6px 0;
+  }
+
+  .breadcrumb button {
+    padding: 8px 10px;
   }
 }
 
@@ -1807,7 +2018,7 @@ body {
   grid-column: 1 / -1;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 639px) {
   .overviewGrid {
     grid-template-columns: 1fr;
   }
@@ -1815,9 +2026,7 @@ body {
   .overviewDashboard {
     padding: 16px 14px;
   }
-}
 
-@media (max-width: 520px) {
   .overviewCard {
     padding: 14px;
   }
@@ -1839,12 +2048,10 @@ body {
    Issue #53: Hide URL/Fetch/Browse controls on mobile when snapshot is loaded
    ========================================================================== */
 
-/* On narrow mobile screens, hide the loading controls once a snapshot is loaded
+/* On mobile, hide the loading controls once a snapshot is loaded
    to save vertical space. Users can press "Clear" to reveal them again. */
-@media (max-width: 520px) {
-  body.snapshotLoaded #fetchUrl,
-  body.snapshotLoaded #fetchBtn,
-  body.snapshotLoaded .browseGroup {
+@media (max-width: 639px) {
+  body.snapshotLoaded .headerUrlDetails {
     display: none;
   }
 }
