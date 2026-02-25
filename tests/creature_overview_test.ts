@@ -256,3 +256,91 @@ Deno.test("computeLayerTopology handles empty network", () => {
   const topo = computeLayerTopology([], []);
   assertEquals(topo.layers.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// computeLayerTopology — inter-layer edges (issue #119)
+// ---------------------------------------------------------------------------
+
+Deno.test("computeLayerTopology returns edges between adjacent layers", () => {
+  // input-0 → hidden-a → output-0
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("hidden-a", "hidden"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    makeSynapse("input-0", "hidden-a"),
+    makeSynapse("hidden-a", "output-0"),
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  assert(Array.isArray(topo.edges), "edges should be an array");
+  // Two edges: layer 0→1, layer 1→2
+  assertEquals(topo.edges.length, 2);
+  assertEquals(topo.edges[0].from, 0);
+  assertEquals(topo.edges[0].to, 1);
+  assertEquals(topo.edges[1].from, 1);
+  assertEquals(topo.edges[1].to, 2);
+});
+
+Deno.test("computeLayerTopology returns skip-connection edges", () => {
+  // input-0 → hidden-a → output-0
+  // input-0 → output-0  (skip connection!)
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("hidden-a", "hidden"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    makeSynapse("input-0", "hidden-a"),
+    makeSynapse("hidden-a", "output-0"),
+    makeSynapse("input-0", "output-0"), // skip connection
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  assert(Array.isArray(topo.edges), "edges should be an array");
+  // Three edges: 0→1, 1→2, and 0→2 (skip)
+  assertEquals(topo.edges.length, 3);
+
+  // Find the skip edge (from layer 0 to layer 2)
+  const skip = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 0 && e.to === 2
+  );
+  assert(skip, "should have a skip-connection edge from input to output layer");
+});
+
+Deno.test("computeLayerTopology edges include synapse count", () => {
+  // Two synapses from input layer to hidden layer
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("input-1", "input"),
+    makeNeuron("hidden-a", "hidden"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    makeSynapse("input-0", "hidden-a"),
+    makeSynapse("input-1", "hidden-a"),
+    makeSynapse("hidden-a", "output-0"),
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  const inputToHidden = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 0 && e.to === 1
+  );
+  assert(inputToHidden, "should have input→hidden edge");
+  assertEquals(inputToHidden.count, 2);
+
+  const hiddenToOutput = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 1 && e.to === 2
+  );
+  assert(hiddenToOutput, "should have hidden→output edge");
+  assertEquals(hiddenToOutput.count, 1);
+});
+
+Deno.test("computeLayerTopology edges empty for no synapses", () => {
+  const topo = computeLayerTopology([], []);
+  assert(
+    !topo.edges || topo.edges.length === 0,
+    "no edges for empty network",
+  );
+});
