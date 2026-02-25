@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Issue #126 Fix Evidence</title>
+    <style>
+      body {
+        font-family: system-ui;
+        max-width: 800px;
+        margin: 2em auto;
+        padding: 1em;
+      }
+      .before, .after {
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        padding: 1em;
+        margin: 1em 0;
+      }
+      .before {
+        border-color: #e44;
+        background: #fee;
+      }
+      .after {
+        border-color: #4a4;
+        background: #efe;
+      }
+      h2 {
+        margin-top: 0;
+      }
+      code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+      .status {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .status.empty {
+        color: #999;
+        font-style: italic;
+      }
+      .status.loading {
+        color: #333;
+      }
+      .status.bad {
+        color: #c00;
+        background: #fee;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Issue #126: Loading Completely Broken — Fix Evidence</h1>
+
+    <div class="before">
+      <h2>Before (broken)</h2>
+      <p>Status element: <span class="status empty">(empty — no text)</span></p>
+      <p>
+        When app.js fails to import (stale cache), users see: <strong
+        >nothing</strong>.
+      </p>
+      <p>
+        Service Worker STATIC_FILES was missing: <code>config.js</code>, <code
+        >graph_analysis.js</code>,
+        <code>creature_overview.js</code>, <code>transitions.js</code>, <code
+        >sparkline.js</code>, <code>touch_gestures.js</code>
+      </p>
+      <p>
+        autoLoadWithRetry errors were silently swallowed (unhandled promise).
+      </p>
+    </div>
+
+    <div class="after">
+      <h2>After (fixed)</h2>
+      <p>Status element: <span class="status loading">Loading…</span></p>
+      <p>
+        When app.js fails to import, users see: <span class="status bad"
+        >Failed to load app — please clear your browser cache and reload.</span>
+      </p>
+      <p>
+        All shared modules now listed in SW STATIC_FILES for proper cache
+        invalidation.
+      </p>
+      <p>
+        autoLoadWithRetry errors are caught and displayed in the status bar.
+      </p>
+    </div>
+  </body>
+</html>

@@ -103,7 +103,7 @@
         >
           <div id="progressBar" class="progressBar"></div>
         </div>
-        <span id="status" class="statusInline"></span>
+        <span id="status" class="statusInline">Loading…</span>
       </div>
     </header>
 
@@ -216,7 +216,18 @@
         const v = buildId.includes("__BUILD_ID__")
           ? String(Date.now())
           : buildId;
-        await import(`./graph.js?v=${v}`);
+        try {
+          await import(`./graph.js?v=${v}`);
+        } catch (err) {
+          // Issue #126: Show a visible error when module import fails.
+          console.error("Graph module failed to load:", err);
+          const statusEl = document.getElementById("status");
+          if (statusEl) {
+            statusEl.textContent =
+              "Failed to load app — please clear your browser cache and reload.";
+            statusEl.className = "statusInline bad";
+          }
+        }
       })();
     </script>
   </body>

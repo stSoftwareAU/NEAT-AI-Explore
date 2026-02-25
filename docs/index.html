@@ -59,7 +59,7 @@
         >
           <div id="progressBar" class="progressBar"></div>
         </div>
-        <span id="status" class="statusInline"></span>
+        <span id="status" class="statusInline">Loading…</span>
       </div>
     </header>
 
@@ -315,7 +315,20 @@
         const v = buildId.includes("__BUILD_ID__")
           ? String(Date.now())
           : buildId;
-        await import(`./app.js?v=${v}`);
+        try {
+          await import(`./app.js?v=${v}`);
+        } catch (err) {
+          // Issue #126: If the module fails to import (e.g., stale cached
+          // dependency missing an expected export), show a visible error
+          // instead of failing silently with no UI indication.
+          console.error("App module failed to load:", err);
+          const statusEl = document.getElementById("status");
+          if (statusEl) {
+            statusEl.textContent =
+              "Failed to load app — please clear your browser cache and reload.";
+            statusEl.className = "statusInline bad";
+          }
+        }
       })();
     </script>
 
