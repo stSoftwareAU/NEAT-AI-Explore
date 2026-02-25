@@ -25,7 +25,6 @@ import {
   computePreActivations,
   computeSquashDerivativeStats,
   summariseDeadZoneStats,
-  summariseErrorConcentration,
   summariseSeriesStats,
 } from "./impact_diagnostics.js";
 import {
@@ -60,6 +59,15 @@ import {
   flattenErrors,
   squashBadge,
 } from "./shared/sparkline.js";
+import { computeTopInputCorrelations } from "./shared/correlation.js";
+import {
+  extractDiscoveryCandidates,
+  normaliseCandidate,
+} from "./shared/discovery.js";
+import {
+  computeErrorConcentrationIssues,
+  computeNonFiniteIssues,
+} from "./shared/diagnostics_scan.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -2737,253 +2745,11 @@ if (el.synapsePanelToggle) {
 // Issues tab computations (cached on snapshot load)
 // ============================================================================
 
-function extractDiscoveryCandidates(snapshot) {
-  // Discovery snapshots have varied schema across versions. Keep this defensive.
-  const candidates = snapshot?.derived?.candidates ??
-    snapshot?.derived?.discoveryCandidates ??
-    snapshot?.derived?.discovery_candidates ??
-    snapshot?.discovery?.candidates ??
-    snapshot?.discoveryCandidates ??
-    snapshot?.candidates ??
-    [];
+// extractDiscoveryCandidates and normaliseCandidate imported from
+// ./shared/discovery.js
 
-  const arr = Array.isArray(candidates) ? candidates : [];
-  return arr.map((c, idx) => normaliseCandidate(c, idx)).filter(Boolean);
-}
-
-function normaliseCandidate(raw, idx) {
-  if (!raw || typeof raw !== "object") return null;
-
-  const type = String(
-    raw.type ?? raw.kind ?? raw.candidateType ?? raw.candidate_type ?? "",
-  ).trim();
-
-  // Helper: safe nested getter by trying multiple field paths.
-  function pick(...paths) {
-    for (const p of paths) {
-      const v = p(raw);
-      if (v != null) return v;
-    }
-    return null;
-  }
-
-  function asStr(v) {
-    return typeof v === "string" && v.trim() ? v.trim() : null;
-  }
-
-  function asNum(v) {
-    return typeof v === "number" && isFinite(v) ? v : null;
-  }
-
-  const fromUuid = asStr(pick(
-    (o) => o.fromUuid,
-    (o) => o.from_uuid,
-    (o) => o.fromUUID,
-    (o) => o.synapse?.fromUuid,
-    (o) => o.synapse?.from_uuid,
-  ));
-  const toUuid = asStr(pick(
-    (o) => o.toUuid,
-    (o) => o.to_uuid,
-    (o) => o.toUUID,
-    (o) => o.synapse?.toUuid,
-    (o) => o.synapse?.to_uuid,
-  ));
-
-  const fromIndex = asNum(pick((o) => o.fromIndex, (o) => o.from_index));
-  const toIndex = asNum(pick((o) => o.toIndex, (o) => o.to_index));
-
-  const oldWeight = asNum(pick(
-    (o) => o.oldWeight,
-    (o) => o.old_weight,
-    (o) => o.weight,
-    (o) => o.synapse?.weight,
-  ));
-
-  // New weights: allow arrays or explicit fields.
-  const newWeightsArr = pick((o) => o.newWeights, (o) => o.new_weights);
-  const newWeightA = asNum(
-    pick(
-      (o) => Array.isArray(newWeightsArr) ? newWeightsArr[0] : null,
-      (o) => o.newWeightA,
-      (o) => o.new_weight_a,
-      (o) => o.w1,
-    ),
-  );
-  const newWeightB = asNum(
-    pick(
-      (o) => Array.isArray(newWeightsArr) ? newWeightsArr[1] : null,
-      (o) => o.newWeightB,
-      (o) => o.new_weight_b,
-      (o) => o.w2,
-    ),
-  );
-
-  const newNeuron = raw.newNeuron ?? raw.neuron ?? raw.insertedNeuron ??
-    raw.inserted_neuron ?? null;
-  const newNeuronSquash = asStr(
-    newNeuron?.squash ?? raw.newNeuronSquash ?? raw.new_neuron_squash,
-  );
-  const newNeuronBias = asNum(
-    newNeuron?.bias ?? raw.newNeuronBias ?? raw.new_neuron_bias,
-  );
-
-  const expectedScoreGain = asNum(
-    pick(
-      (o) => o.expectedScoreGain,
-      (o) => o.expected_score_gain,
-      (o) => o.scoreGain,
-    ),
-  );
-  const expectedImpact = asNum(pick((o) => o.expectedImpact, (o) => o.impact));
-  const comment = asStr(
-    pick((o) => o.comment, (o) => o.note, (o) => o.diagnostics),
-  );
-
-  const key = asStr(raw.id) ??
-    asStr(raw.uuid) ??
-    `${type || "candidate"}:${fromUuid ?? "?"}→${toUuid ?? "?"}:${idx}`;
-
-  return {
-    key,
-    type,
-    fromUuid,
-    toUuid,
-    fromIndex,
-    toIndex,
-    oldWeight,
-    newWeightA,
-    newWeightB,
-    newNeuronSquash,
-    newNeuronBias,
-    expectedScoreGain,
-    expectedImpact,
-    comment,
-    raw,
-  };
-}
-
-function computeNonFiniteIssues({ recording }) {
-  const obsIndices = recording?.obsIndices ?? recording?.obs_indices ?? null;
-  const neurons = recording?.neurons ?? {};
-  const out = new Map();
-
-  function obsAt(pos) {
-    if (Array.isArray(obsIndices) && pos >= 0 && pos < obsIndices.length) {
-      return obsIndices[pos];
-    }
-    return pos;
-  }
-
-  function scan1d(arr) {
-    if (!Array.isArray(arr)) return { count: 0, firstPos: null };
-    let count = 0;
-    let firstPos = null;
-    for (let i = 0; i < arr.length; i++) {
-      const v = arr[i];
-      if (typeof v === "number" && isFinite(v)) continue;
-      count += 1;
-      if (firstPos == null) firstPos = i;
-    }
-    return { count, firstPos };
-  }
-
-  function scan2d(arr) {
-    if (!Array.isArray(arr)) return { count: 0, firstPos: null };
-    let count = 0;
-    let firstPos = null;
-    for (let i = 0; i < arr.length; i++) {
-      const row = arr[i];
-      if (!Array.isArray(row)) continue;
-      for (let j = 0; j < row.length; j++) {
-        const v = row[j];
-        if (typeof v === "number" && isFinite(v)) continue;
-        count += 1;
-        if (firstPos == null) firstPos = i;
-      }
-    }
-    return { count, firstPos };
-  }
-
-  for (const [uuid, rec] of Object.entries(neurons)) {
-    if (!rec || typeof rec !== "object") continue;
-    const act = scan1d(rec.activation);
-    const val = scan1d(rec.value);
-    const err = scan2d(rec.errors);
-    const total = act.count + val.count + err.count;
-    if (total <= 0) continue;
-
-    out.set(uuid, {
-      total,
-      activation: {
-        count: act.count,
-        firstObsIndex: act.firstPos == null ? null : obsAt(act.firstPos),
-      },
-      value: {
-        count: val.count,
-        firstObsIndex: val.firstPos == null ? null : obsAt(val.firstPos),
-      },
-      errors: {
-        count: err.count,
-        firstObsIndex: err.firstPos == null ? null : obsAt(err.firstPos),
-      },
-    });
-  }
-
-  return out;
-}
-
-function computeErrorConcentrationIssues({ recording }) {
-  const obsIndices = recording?.obsIndices ?? recording?.obs_indices ?? null;
-  const neurons = recording?.neurons ?? {};
-  const out = new Map();
-
-  function obsAt(pos) {
-    if (Array.isArray(obsIndices) && pos >= 0 && pos < obsIndices.length) {
-      return obsIndices[pos];
-    }
-    return pos;
-  }
-
-  for (const [uuid, rec] of Object.entries(neurons)) {
-    if (!rec || typeof rec !== "object") continue;
-    const errors = rec.errors;
-    if (!Array.isArray(errors) || errors.length === 0) continue;
-
-    /** @type {number[]} */
-    const contrib = [];
-    for (let i = 0; i < errors.length; i++) {
-      const row = errors[i];
-      if (!Array.isArray(row) || row.length === 0) {
-        contrib.push(0);
-        continue;
-      }
-      let sum = 0;
-      let n = 0;
-      for (const e of row) {
-        if (typeof e !== "number" || !isFinite(e)) continue;
-        sum += e * e;
-        n += 1;
-      }
-      contrib.push(n > 0 ? sum / n : 0);
-    }
-
-    const s = summariseErrorConcentration(contrib, { topK: 8 });
-    if (s.total <= 0) continue;
-
-    out.set(uuid, {
-      total: s.total,
-      topK: s.topK.map((t) => ({
-        obsIndex: obsAt(t.index),
-        value: t.value,
-        shareOfTotal: t.shareOfTotal,
-      })),
-      topKShare: s.topKShare,
-    });
-  }
-
-  return out;
-}
+// computeNonFiniteIssues and computeErrorConcentrationIssues imported from
+// ./shared/diagnostics_scan.js
 
 function computeInputIssues({ recording, inputCount, candidates }) {
   const neurons = recording?.neurons ?? {};
@@ -3068,101 +2834,7 @@ function candidateReferencedInputUuids(candidate) {
   return Array.from(out);
 }
 
-function computeTopInputCorrelations(
-  { recording, inputCount, maxInputs, sampleSize, topK },
-) {
-  const neurons = recording?.neurons ?? {};
-  const nInputs = Math.max(0, Math.floor(inputCount ?? 0));
-  const useInputs = Math.min(nInputs, Math.max(0, Math.floor(maxInputs ?? 80)));
-  if (useInputs < 2) return [];
-
-  const seriesByUuid = [];
-  for (let i = 0; i < useInputs; i++) {
-    const uuid = `input-${i}`;
-    const rec = neurons?.[uuid];
-    const series = rec?.activation ?? rec?.value ?? null;
-    if (Array.isArray(series) && series.length > 4) {
-      seriesByUuid.push({ uuid, series });
-    }
-  }
-  if (seriesByUuid.length < 2) return [];
-
-  // Downsample evenly to keep this fast.
-  function sampleSeries(arr) {
-    const take = Math.min(
-      arr.length,
-      Math.max(8, Math.floor(sampleSize ?? 512)),
-    );
-    if (take >= arr.length) return arr;
-    const step = arr.length / take;
-    const out = [];
-    for (let i = 0; i < take; i++) {
-      const idx = Math.min(arr.length - 1, Math.floor(i * step));
-      const v = arr[idx];
-      out.push(typeof v === "number" && isFinite(v) ? v : 0);
-    }
-    return out;
-  }
-
-  const sampled = seriesByUuid.map((s) => ({
-    uuid: s.uuid,
-    arr: sampleSeries(s.series),
-  }));
-
-  // Compute top correlations (|r| high).
-  const k = Math.max(1, Math.floor(topK ?? 12));
-  /** @type {{ a: string, b: string, r: number }[]} */
-  const top = [];
-
-  function insert(item) {
-    // keep ascending by |r|
-    const ar = Math.abs(item.r);
-    let lo = 0;
-    let hi = top.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (Math.abs(top[mid].r) <= ar) lo = mid + 1;
-      else hi = mid;
-    }
-    top.splice(lo, 0, item);
-    if (top.length > k) top.shift();
-  }
-
-  function corr(x, y) {
-    const n = Math.min(x.length, y.length);
-    if (n < 3) return 0;
-    let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
-    for (let i = 0; i < n; i++) {
-      const a = x[i];
-      const b = y[i];
-      sx += a;
-      sy += b;
-      sxx += a * a;
-      syy += b * b;
-      sxy += a * b;
-    }
-    const mx = sx / n;
-    const my = sy / n;
-    const vx = sxx / n - mx * mx;
-    const vy = syy / n - my * my;
-    const cov = sxy / n - mx * my;
-    const denom = Math.sqrt(Math.max(0, vx)) * Math.sqrt(Math.max(0, vy));
-    if (denom <= 0) return 0;
-    return cov / denom;
-  }
-
-  for (let i = 0; i < sampled.length; i++) {
-    for (let j = i + 1; j < sampled.length; j++) {
-      const r = corr(sampled[i].arr, sampled[j].arr);
-      if (top.length < k || Math.abs(r) > Math.abs(top[0].r)) {
-        insert({ a: sampled[i].uuid, b: sampled[j].uuid, r });
-      }
-    }
-  }
-
-  top.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
-  return top;
-}
+// computeTopInputCorrelations imported from ./shared/correlation.js
 
 // ============================================================================
 // Issues tab UI

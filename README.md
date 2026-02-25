@@ -327,6 +327,9 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
 | `docs/shared/touch_gestures.js`    | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
 | `docs/shared/sparkline.js`         | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
+| `docs/shared/correlation.js`       | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
+| `docs/shared/discovery.js`         | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                         |
+| `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeErrorConcentrationIssues`                                                            |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
