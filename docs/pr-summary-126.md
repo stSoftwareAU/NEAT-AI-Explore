@@ -10,9 +10,9 @@ The Service Worker's `STATIC_FILES` list was missing several shared modules
 `sparkline.js`, `touch_gestures.js`). When a new version was deployed, the SW's
 `cacheFirst` strategy could serve stale cached versions of these modules. If a
 stale module was missing a newly-added export (e.g., `AUTO_LOAD_MAX_RETRIES`
-added in #118), the ES module import would fail silently — the bootstrap IIFE
-in `index.html` had no error handling, so users saw a blank page with no
-loading indicator and no error message.
+added in #118), the ES module import would fail silently — the bootstrap IIFE in
+`index.html` had no error handling, so users saw a blank page with no loading
+indicator and no error message.
 
 ### Fixes
 
@@ -25,8 +25,8 @@ loading indicator and no error message.
 3. **`docs/index.html`** and **`docs/graph/index.html`**: Set initial status
    text to "Loading…" so users always see something before JavaScript executes.
 4. **`docs/app.js`** and **`docs/graph/graph.js`**: Added `.catch()` to the
-   `autoLoadWithRetry()` calls so errors are displayed in the status bar
-   instead of being silently swallowed as unhandled promise rejections.
+   `autoLoadWithRetry()` calls so errors are displayed in the status bar instead
+   of being silently swallowed as unhandled promise rejections.
 
 ## Evidence
 
@@ -40,13 +40,14 @@ runs. If the module import fails, a clear error message is shown. All shared
 modules are precached by the SW for proper cache invalidation.
 
 Verified locally:
-- `curl` confirms `id="status" class="statusInline">Loading…` is present in
-  the served HTML before any JS executes.
+
+- `curl` confirms `id="status" class="statusInline">Loading…` is present in the
+  served HTML before any JS executes.
 - WebFetch on the deployed site confirms the page loads and renders correctly
   with no errors.
 
-Note: Headless Chromium screenshots could not be generated (binary crash on
-this platform). Test output and HTML verification are provided instead.
+Note: Headless Chromium screenshots could not be generated (binary crash on this
+platform). Test output and HTML verification are provided instead.
 
 ## Test Plan
 
