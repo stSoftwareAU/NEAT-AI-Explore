@@ -32,8 +32,16 @@ const STATIC_FILES = [
   "./graph/index.html",
   `./graph/graph.js?v=${VERSION}`,
   `./graph/graph.css?v=${VERSION}`,
-  // Shared modules for multiple views.
+  // Shared modules for multiple views (Issue #126: all shared modules must be
+  // listed so they are precached and invalidated with each deploy — missing
+  // modules can be served stale by cacheFirst, breaking imports).
+  "./shared/config.js",
   "./shared/snapshot_loader.js",
+  "./shared/graph_analysis.js",
+  "./shared/creature_overview.js",
+  "./shared/transitions.js",
+  "./shared/sparkline.js",
+  "./shared/touch_gestures.js",
   "./shared/theme.js",
   "./shared/colour_maps.js",
   "./icons/icon-72x72.png",

@@ -4085,7 +4085,10 @@ function initStarfield() {
   }
 
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL).catch((e) => {
+    setStatus(e.message ?? "Auto-load failed", "bad");
+    console.error("Auto-load failed:", e);
+  });
 
   // Animation loop
   let lastT = performance.now();
