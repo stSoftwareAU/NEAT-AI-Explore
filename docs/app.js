@@ -3764,37 +3764,145 @@ function renderTopologyDiagram(topology, outputUuids) {
     return;
   }
 
+  const layers = topology.layers;
+  const edges = topology.edges ?? [];
+  const n = layers.length;
+
+  // Layout constants for the SVG.
+  const nodeR = 20;
+  const nodeSpacing = 72;
+  const padX = nodeR + 8;
+  const baseY = 60;
+  const labelY = baseY + nodeR + 16;
+  const svgW = padX * 2 + (n - 1) * nodeSpacing;
+  const arcClearance = 22; // extra height above nodes for arcs
+
+  // Determine the maximum arc height needed.
+  let maxSpan = 0;
+  for (const e of edges) {
+    const span = Math.abs(e.to - e.from);
+    if (span > 1 && span > maxSpan) maxSpan = span;
+  }
+  const topPad = maxSpan > 0 ? arcClearance + maxSpan * 10 : 8;
+  const svgH = topPad + baseY + nodeR + 24;
+
+  // Centre positions for each layer node.
+  const cx = (i) => padX + i * nodeSpacing;
+  const cy = topPad + nodeR + 4;
+
+  // Colour per layer type.
+  const typeColour = {
+    input: "var(--positive)",
+    hidden: "var(--accent)",
+    output: "var(--highlight)",
+  };
+
+  // Build the SVG.
   const parts = [];
-  for (let i = 0; i < topology.layers.length; i++) {
-    const layer = topology.layers[i];
-    if (i > 0) {
-      parts.push('<span class="topoArrow">→</span>');
+  parts.push(
+    `<svg class="topoSvg" viewBox="0 0 ${svgW} ${svgH}" ` +
+      `width="100%" style="max-width:${svgW}px" ` +
+      `xmlns="http://www.w3.org/2000/svg">`,
+  );
+
+  // --- Draw edges ---
+  for (const e of edges) {
+    const x1 = cx(e.from);
+    const y1 = cy;
+    const x2 = cx(e.to);
+    const y2 = cy;
+    const span = Math.abs(e.to - e.from);
+    const isSkip = span > 1;
+    const strokeW = Math.min(3, 0.5 + Math.log2(1 + e.count));
+    const opacity = isSkip ? 0.55 : 0.35;
+    const colour = isSkip ? "var(--highlight)" : "var(--muted)";
+
+    if (isSkip) {
+      // Arc above for skip connections.
+      const arcH = 14 + span * 10;
+      const midX = (x1 + x2) / 2;
+      const cpY = y1 - nodeR - arcH;
+      parts.push(
+        `<path d="M${x1},${y1 - nodeR} Q${midX},${cpY} ${x2},${y2 - nodeR}" ` +
+          `fill="none" stroke="${colour}" stroke-width="${strokeW}" ` +
+          `stroke-opacity="${opacity}" stroke-dasharray="4 3" />`,
+      );
+      // Arrow-head at destination.
+      parts.push(
+        `<polygon points="${x2},${y2 - nodeR} ${x2 - 4},${y2 - nodeR - 7} ${
+          x2 + 4
+        },${y2 - nodeR - 7}" ` +
+          `fill="${colour}" opacity="${opacity}" />`,
+      );
+    } else {
+      // Straight line for adjacent connections.
+      parts.push(
+        `<line x1="${x1 + nodeR}" y1="${y1}" x2="${x2 - nodeR}" y2="${y2}" ` +
+          `stroke="${colour}" stroke-width="${strokeW}" ` +
+          `stroke-opacity="${opacity}" />`,
+      );
+      // Arrow-head.
+      parts.push(
+        `<polygon points="${x2 - nodeR},${y2} ${x2 - nodeR - 7},${y2 - 4} ${
+          x2 - nodeR - 7
+        },${y2 + 4}" ` +
+          `fill="${colour}" opacity="${opacity}" />`,
+      );
     }
-    const typeClass = layer.type;
+  }
+
+  // --- Draw layer nodes ---
+  for (let i = 0; i < n; i++) {
+    const layer = layers[i];
+    const x = cx(i);
+    const y = cy;
+    const fill = typeColour[layer.type] ?? "var(--muted)";
     const label = layer.type === "hidden" ? `hidden ${i}` : layer.type;
+    const title = `${layer.count} ${layer.type} neuron${
+      layer.count !== 1 ? "s" : ""
+    }`;
+
     parts.push(
-      `<div class="topoLayer" data-layer-index="${i}" data-layer-type="${
-        escapeHtml(layer.type)
-      }" title="${layer.count} ${escapeHtml(layer.type)} neuron${
-        layer.count !== 1 ? "s" : ""
-      }">
-        <div class="topoLayerCircle ${
-        escapeHtml(typeClass)
-      }">${layer.count}</div>
-        <span class="topoLayerLabel">${escapeHtml(label)}</span>
-      </div>`,
+      `<g class="topoNode" data-layer-index="${i}" style="cursor:pointer">` +
+        `<title>${escapeHtml(title)}</title>` +
+        `<circle cx="${x}" cy="${y}" r="${nodeR}" fill="${fill}" />` +
+        `<text x="${x}" y="${
+          y + 5
+        }" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">` +
+        `${layer.count}</text>` +
+        `<text x="${x}" y="${
+          y + nodeR + 16
+        }" text-anchor="middle" fill="var(--muted)" font-size="11">` +
+        `${escapeHtml(label)}</text>` +
+        `</g>`,
     );
   }
+
+  parts.push("</svg>");
+
+  // Summary line showing skip connection count.
+  const skipEdges = edges.filter((e) => Math.abs(e.to - e.from) > 1);
+  const skipSynapseCount = skipEdges.reduce((s, e) => s + e.count, 0);
+  if (skipSynapseCount > 0) {
+    parts.push(
+      `<div class="topoSkipSummary">${skipSynapseCount} skip-connection` +
+        `${
+          skipSynapseCount !== 1 ? "s" : ""
+        } (${skipEdges.length} distinct path${
+          skipEdges.length !== 1 ? "s" : ""
+        })</div>`,
+    );
+  }
+
   el.overviewTopology.innerHTML = parts.join("");
 
   // Click to navigate into the explorer at the first neuron in that layer.
-  el.overviewTopology.querySelectorAll(".topoLayer").forEach((layerEl) => {
-    layerEl.addEventListener("click", () => {
-      const idx = parseInt(layerEl.dataset.layerIndex, 10);
+  el.overviewTopology.querySelectorAll(".topoNode").forEach((nodeEl) => {
+    nodeEl.addEventListener("click", () => {
+      const idx = parseInt(nodeEl.dataset.layerIndex, 10);
       const layer = topology.layers[idx];
       if (!layer?.uuids?.length) return;
-      const uuid = layer.type === "output" ? layer.uuids[0] : layer.uuids[0];
-      enterExplorer(uuid);
+      enterExplorer(layer.uuids[0]);
     });
   });
 }

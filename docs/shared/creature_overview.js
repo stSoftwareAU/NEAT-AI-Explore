@@ -136,7 +136,8 @@ export function computeActivationDistribution(neurons) {
 
 /**
  * @typedef {{ type: string, count: number, uuids: string[] }} Layer
- * @typedef {{ layers: Layer[] }} Topology
+ * @typedef {{ from: number, to: number, count: number }} TopologyEdge
+ * @typedef {{ layers: Layer[], edges: TopologyEdge[] }} Topology
  */
 
 /**
@@ -155,7 +156,7 @@ export function computeLayerTopology(neurons, synapses) {
   const nArr = Array.isArray(neurons) ? neurons : [];
   const sArr = Array.isArray(synapses) ? synapses : [];
 
-  if (nArr.length === 0) return { layers: [] };
+  if (nArr.length === 0) return { layers: [], edges: [] };
 
   const inputUuids = [];
   const outputUuids = [];
@@ -230,5 +231,38 @@ export function computeLayerTopology(neurons, synapses) {
     };
   });
 
-  return { layers };
+  // Build a uuid → layer-index lookup for edge computation.
+  /** @type {Map<string, number>} */
+  const uuidToLayerIndex = new Map();
+  for (let li = 0; li < layers.length; li++) {
+    for (const uuid of layers[li].uuids) {
+      uuidToLayerIndex.set(uuid, li);
+    }
+  }
+
+  // Count inter-layer edges (including skip connections).
+  /** @type {Map<string, number>} key = "fromLayer→toLayer" */
+  const edgeCounts = new Map();
+  for (const s of sArr) {
+    const f = s?.fromUuid;
+    const t = s?.toUuid;
+    if (!f || !t) continue;
+    const fLayer = uuidToLayerIndex.get(f);
+    const tLayer = uuidToLayerIndex.get(t);
+    if (fLayer === undefined || tLayer === undefined) continue;
+    if (fLayer === tLayer) continue; // intra-layer, skip
+    const key = `${fLayer}→${tLayer}`;
+    edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
+  }
+
+  /** @type {TopologyEdge[]} */
+  const edges = [];
+  for (const [key, count] of edgeCounts) {
+    const [fromStr, toStr] = key.split("→");
+    edges.push({ from: Number(fromStr), to: Number(toStr), count });
+  }
+  // Sort for deterministic output: by from, then by to.
+  edges.sort((a, b) => a.from - b.from || a.to - b.to);
+
+  return { layers, edges };
 }
