@@ -782,7 +782,7 @@ async function loadSnapshot(source, label) {
     // Show overview dashboard first (#103), then let user drill in.
     renderOverviewDashboard();
 
-    // Issue #53: Hide URL/Fetch/Browse controls on mobile once snapshot loads.
+    // Issue #53/#116: Hide URL/Fetch/Browse controls once snapshot loads.
     document.body.classList.add("snapshotLoaded");
   } catch (e) {
     hideProgress();
@@ -1224,7 +1224,7 @@ function clearTrace() {
     trace = [];
     showOverviewDashboard();
   }
-  // Issue #53: Show URL/Fetch/Browse controls again on mobile.
+  // Issue #53/#116: Show URL/Fetch/Browse controls again.
   document.body.classList.remove("snapshotLoaded");
 }
 

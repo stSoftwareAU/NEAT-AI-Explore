@@ -2045,15 +2045,13 @@ body {
 }
 
 /* ==========================================================================
-   Issue #53: Hide URL/Fetch/Browse controls on mobile when snapshot is loaded
+   Issue #53/#116: Hide URL/Fetch/Browse controls when snapshot is loaded
    ========================================================================== */
 
-/* On mobile, hide the loading controls once a snapshot is loaded
-   to save vertical space. Users can press "Clear" to reveal them again. */
-@media (max-width: 639px) {
-  body.snapshotLoaded .headerUrlDetails {
-    display: none;
-  }
+/* Hide the loading controls once a snapshot is loaded (all viewports).
+   Users can press "Clear" to reveal them again. (#116) */
+body.snapshotLoaded .headerUrlDetails {
+  display: none;
 }
 
 /* ==========================================================================
