@@ -1,6 +1,8 @@
 import { assert, assertEquals } from "./test_helpers.ts";
 
 import {
+  AUTO_LOAD_MAX_RETRIES,
+  AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
   SNAPSHOT_FALLBACK_URLS,
 } from "../docs/shared/config.js";
@@ -67,5 +69,27 @@ Deno.test("SNAPSHOT_FALLBACK_URLS includes a same-origin fallback", () => {
   assert(
     hasSameOrigin,
     "Expected at least one same-origin (relative path) fallback",
+  );
+});
+
+// --- AUTO_LOAD_MAX_RETRIES (Issue #118) ---
+
+Deno.test("AUTO_LOAD_MAX_RETRIES is a positive integer", () => {
+  assertEquals(typeof AUTO_LOAD_MAX_RETRIES, "number");
+  assert(AUTO_LOAD_MAX_RETRIES >= 1, "Expected at least 1 retry");
+  assertEquals(
+    AUTO_LOAD_MAX_RETRIES,
+    Math.floor(AUTO_LOAD_MAX_RETRIES),
+    "Expected an integer",
+  );
+});
+
+// --- AUTO_LOAD_RETRY_DELAY_MS (Issue #118) ---
+
+Deno.test("AUTO_LOAD_RETRY_DELAY_MS is a positive number", () => {
+  assertEquals(typeof AUTO_LOAD_RETRY_DELAY_MS, "number");
+  assert(
+    AUTO_LOAD_RETRY_DELAY_MS >= 500,
+    "Expected delay of at least 500ms to allow Service Worker to settle",
   );
 });

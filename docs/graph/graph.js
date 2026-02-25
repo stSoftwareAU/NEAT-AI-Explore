@@ -25,6 +25,8 @@ import {
 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 import {
+  AUTO_LOAD_MAX_RETRIES,
+  AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
   SNAPSHOT_FALLBACK_URLS,
 } from "../shared/config.js";
@@ -4064,9 +4066,26 @@ function initStarfield() {
     if (e.key === "Enter") el.fetchBtn?.click?.();
   });
 
-  // Boot with default snapshot.
+  // Boot with default snapshot, with top-level retry (Issue #118).
+  // The first fetch can fail due to Service Worker activation timing or
+  // transient network issues. This outer retry loop gives the system more
+  // time to settle before giving up.
+  async function autoLoadWithRetry(url, label) {
+    for (let attempt = 0; attempt <= AUTO_LOAD_MAX_RETRIES; attempt++) {
+      await loadSnapshot(url, label);
+      if (SNAPSHOT) return; // Success — snapshot was populated.
+
+      if (attempt < AUTO_LOAD_MAX_RETRIES) {
+        const delay = AUTO_LOAD_RETRY_DELAY_MS * Math.pow(2, attempt);
+        const secs = Math.round(delay / 1000);
+        setStatus(`Load failed — retrying in ${secs}s...`, "warn");
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-  loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
 
   // Animation loop
   let lastT = performance.now();

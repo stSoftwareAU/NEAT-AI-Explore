@@ -36,6 +36,8 @@ import {
   readSnapshotFile,
 } from "./shared/snapshot_loader.js";
 import {
+  AUTO_LOAD_MAX_RETRIES,
+  AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
   SNAPSHOT_FALLBACK_URLS,
 } from "./shared/config.js";
@@ -3912,11 +3914,30 @@ if (snapshotUrlB64Param) {
   initialLabel = snapshotUrlParam;
 }
 
+// Auto-load with top-level retry (Issue #118). The first fetch can fail due to
+// Service Worker activation timing or transient network issues, even after the
+// per-fetch retries in fetchJson(). This outer retry loop gives the system more
+// time to settle before giving up.
+async function autoLoadWithRetry(url, label) {
+  for (let attempt = 0; attempt <= AUTO_LOAD_MAX_RETRIES; attempt++) {
+    await loadSnapshot(url, label);
+    if (SNAPSHOT) return; // Success — snapshot was populated.
+
+    // Still no snapshot after loadSnapshot (it caught the error internally).
+    if (attempt < AUTO_LOAD_MAX_RETRIES) {
+      const delay = AUTO_LOAD_RETRY_DELAY_MS * Math.pow(2, attempt);
+      const secs = Math.round(delay / 1000);
+      setStatus(`Load failed — retrying in ${secs}s...`, "warn");
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 if (initialUrl) {
   el.fetchUrl.value = initialUrl;
-  loadSnapshot(initialUrl, initialLabel ?? initialUrl);
+  autoLoadWithRetry(initialUrl, initialLabel ?? initialUrl);
 } else {
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
   setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
-  loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
 }
