@@ -59,7 +59,7 @@
         >
           <div id="progressBar" class="progressBar"></div>
         </div>
-        <span id="status" class="statusInline"></span>
+        <span id="status" class="statusInline">Initialising…</span>
       </div>
     </header>
 
@@ -275,6 +275,33 @@
       </nav>
     </main>
 
+    <!-- Issue #126: catch unhandled errors so the user always gets feedback. -->
+    <script>
+      window.addEventListener("error", function (e) {
+        var s = document.getElementById("status");
+        if (s && !s.dataset.appLoaded) {
+          s.textContent = "Error: " + (e.message || e) +
+            ". Try a hard refresh.";
+          s.className = "statusInline bad";
+        }
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        var s = document.getElementById("status");
+        if (s && !s.dataset.appLoaded) {
+          var msg = e.reason
+            ? e.reason.message || String(e.reason)
+            : "Unknown error";
+          s.textContent = "Error: " + msg + ". Try a hard refresh.";
+          s.className = "statusInline bad";
+        }
+      });
+    </script>
+    <noscript>
+      <p style="padding: 1rem; color: #ef4444">
+        JavaScript is required to run NEAT-AI Explore.
+      </p>
+    </noscript>
+
     <script type="module">
       // Register the Service Worker *before* importing the app module.
       //
@@ -288,6 +315,11 @@
       // and can remain pending forever if installation/activation fails (e.g.
       // quota exceeded, privacy mode restrictions, or an unhandled SW install
       // error). Use a timeout so the app still boots in degraded mode.
+      //
+      // Issue #126 (26-Feb-2026): if the dynamic import fails (e.g. stale
+      // Service Worker cache, network error, or JS error during module
+      // evaluation), show a visible error to the user instead of failing
+      // silently.
       (async () => {
         if ("serviceWorker" in navigator) {
           try {
@@ -315,7 +347,29 @@
         const v = buildId.includes("__BUILD_ID__")
           ? String(Date.now())
           : buildId;
-        await import(`./app.js?v=${v}`);
+        try {
+          await import(`./app.js?v=${v}`);
+        } catch (err) {
+          console.error("App failed to load:", err);
+          const statusEl = document.getElementById("status");
+          if (statusEl) {
+            statusEl.textContent = `Failed to load app: ${
+              err?.message ?? err
+            }. Try a hard refresh (Ctrl+Shift+R).`;
+            statusEl.className = "statusInline bad";
+          }
+          // Attempt to clear stale Service Worker caches so the next
+          // reload has a better chance of succeeding.
+          if (typeof caches !== "undefined") {
+            try {
+              const keys = await caches.keys();
+              await Promise.all(keys.map((k) => caches.delete(k)));
+              console.warn("Cleared all caches after load failure.");
+            } catch (_e) {
+              // Non-fatal.
+            }
+          }
+        }
       })();
     </script>
 

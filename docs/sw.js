@@ -32,8 +32,14 @@ const STATIC_FILES = [
   "./graph/index.html",
   `./graph/graph.js?v=${VERSION}`,
   `./graph/graph.css?v=${VERSION}`,
-  // Shared modules for multiple views.
+  // Shared modules for multiple views (Issue #126: pre-cache all modules
+  // that app.js imports so the app works offline after a single online visit).
   "./shared/snapshot_loader.js",
+  "./shared/config.js",
+  "./shared/graph_analysis.js",
+  "./shared/creature_overview.js",
+  "./shared/transitions.js",
+  "./shared/sparkline.js",
   "./shared/theme.js",
   "./shared/colour_maps.js",
   "./icons/icon-72x72.png",

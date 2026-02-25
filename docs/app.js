@@ -3929,7 +3929,10 @@ if (el.overviewExploreBtn) {
 el.fetchBtn.onclick = () => {
   const raw = el.fetchUrl.value.trim() || DEFAULT_SNAPSHOT_URL;
   const url = normaliseSnapshotUrl(raw);
-  loadSnapshot(url, url);
+  loadSnapshot(url, url).catch((e) => {
+    console.error("Manual fetch failed:", e);
+    setStatus(`Fetch failed: ${e?.message ?? e}`, "bad");
+  });
 };
 
 el.fileBtn.onclick = () => el.fileInput.click();
@@ -4041,11 +4044,21 @@ async function autoLoadWithRetry(url, label) {
   }
 }
 
+// Mark that app.js loaded so the global error handler in index.html
+// stops overriding the status bar (Issue #126).
+if (el.status) el.status.dataset.appLoaded = "1";
+
 if (initialUrl) {
   el.fetchUrl.value = initialUrl;
-  autoLoadWithRetry(initialUrl, initialLabel ?? initialUrl);
+  autoLoadWithRetry(initialUrl, initialLabel ?? initialUrl).catch((e) => {
+    console.error("Auto-load failed:", e);
+    setStatus(`Load failed: ${e?.message ?? e}`, "bad");
+  });
 } else {
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-  setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
-  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  setStatus(`Loading default snapshot…`);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL).catch((e) => {
+    console.error("Auto-load failed:", e);
+    setStatus(`Load failed: ${e?.message ?? e}`, "bad");
+  });
 }
