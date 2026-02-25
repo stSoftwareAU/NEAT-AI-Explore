@@ -30,3 +30,20 @@ export const SNAPSHOT_FALLBACK_URLS = [
   "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/main/docs/snapshot.json.gz",
   "snapshot.json.gz", // last resort: same-origin (if present)
 ];
+
+/**
+ * Maximum number of top-level auto-load retries when the initial page load
+ * fails to fetch a snapshot (Issue #118). This is separate from the per-fetch
+ * retry loop in snapshot_loader.js — it retries the entire load sequence
+ * (including fallback URLs) after a longer delay, giving the Service Worker
+ * and network more time to settle.
+ */
+export const AUTO_LOAD_MAX_RETRIES = 2;
+
+/**
+ * Initial delay (ms) before the first auto-load retry. Doubles on each
+ * subsequent attempt (exponential backoff). Longer than the per-fetch delay
+ * because this covers transient issues like Service Worker activation that
+ * need more time to resolve.
+ */
+export const AUTO_LOAD_RETRY_DELAY_MS = 2000;
