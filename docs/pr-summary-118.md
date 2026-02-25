@@ -20,11 +20,11 @@ Closes #118.
 
 ### Retry strategy (three layers)
 
-| Layer | Scope | Retries | Delay |
-|-------|-------|---------|-------|
-| `snapshot_loader.js` `fetchSnapshotJson` | Single URL fetch | 2 | 500ms × 2^n |
-| `app.js` / `graph.js` `fetchJson` | Fetch + fallback URLs + cache | 2 | 500ms × 2^n |
-| **New:** `autoLoadWithRetry` (this PR) | Entire load sequence | 2 | 2000ms × 2^n |
+| Layer                                    | Scope                         | Retries | Delay        |
+| ---------------------------------------- | ----------------------------- | ------- | ------------ |
+| `snapshot_loader.js` `fetchSnapshotJson` | Single URL fetch              | 2       | 500ms × 2^n  |
+| `app.js` / `graph.js` `fetchJson`        | Fetch + fallback URLs + cache | 2       | 500ms × 2^n  |
+| **New:** `autoLoadWithRetry` (this PR)   | Entire load sequence          | 2       | 2000ms × 2^n |
 
 ## Evidence
 
