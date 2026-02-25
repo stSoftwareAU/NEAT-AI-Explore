@@ -29,6 +29,7 @@ import {
   summariseSeriesStats,
 } from "./impact_diagnostics.js";
 import {
+  computeRetryDelayMs,
   decodeBase64UrlToUtf8,
   gunzipToText,
   isDangerousUrlScheme,
@@ -37,6 +38,8 @@ import {
 } from "./shared/snapshot_loader.js";
 import {
   DEFAULT_SNAPSHOT_URL,
+  LOAD_AUTO_RETRY_DELAY_MS,
+  LOAD_AUTO_RETRY_LIMIT,
   SNAPSHOT_FALLBACK_URLS,
 } from "./shared/config.js";
 import {
@@ -784,10 +787,12 @@ async function loadSnapshot(source, label) {
 
     // Issue #53/#116: Hide URL/Fetch/Browse controls once snapshot loads.
     document.body.classList.add("snapshotLoaded");
+    return true;
   } catch (e) {
     hideProgress();
     setStatus(e.message, "bad");
     console.error(e);
+    return false;
   }
 }
 
@@ -3912,11 +3917,31 @@ if (snapshotUrlB64Param) {
   initialLabel = snapshotUrlParam;
 }
 
+// Issue #118: Auto-retry the initial load if it fails. The per-fetch retry
+// (FETCH_MAX_RETRIES) handles transient network blips, but sometimes the
+// entire load operation needs a longer pause before retrying (e.g. Service
+// Worker activation on first visit, or a briefly unavailable CDN).
+async function autoLoadWithRetry(url, label) {
+  const ok = await loadSnapshot(url, label);
+  if (ok) return;
+
+  for (let attempt = 0; attempt < LOAD_AUTO_RETRY_LIMIT; attempt++) {
+    const delay = computeRetryDelayMs(attempt, LOAD_AUTO_RETRY_DELAY_MS);
+    const delaySec = (delay / 1000).toFixed(1);
+    setStatus(
+      `Load failed — retrying in ${delaySec}s (attempt ${attempt + 2})…`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const retryOk = await loadSnapshot(url, label);
+    if (retryOk) return;
+  }
+}
+
 if (initialUrl) {
   el.fetchUrl.value = initialUrl;
-  loadSnapshot(initialUrl, initialLabel ?? initialUrl);
+  autoLoadWithRetry(initialUrl, initialLabel ?? initialUrl);
 } else {
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
   setStatus(`Loading default snapshot: ${DEFAULT_SNAPSHOT_URL}`);
-  loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
 }

@@ -25,6 +25,21 @@ export const DEFAULT_SNAPSHOT_URL =
  * Fallbacks used when GitHub Pages is blocked by CORS on some networks.
  * `raw.githubusercontent.com` typically ships permissive CORS headers.
  */
+/**
+ * Maximum number of top-level auto-retry attempts when the initial snapshot
+ * load fails (Issue #118). This is separate from the per-fetch retry in
+ * fetchJson/fetchSnapshotJson — it retries the entire load operation after a
+ * longer delay, giving Service Workers and transient network issues more time
+ * to resolve.
+ */
+export const LOAD_AUTO_RETRY_LIMIT = 2;
+
+/**
+ * Base delay (ms) before the first auto-retry. Doubles on each subsequent
+ * attempt (exponential backoff).
+ */
+export const LOAD_AUTO_RETRY_DELAY_MS = 3000;
+
 export const SNAPSHOT_FALLBACK_URLS = [
   "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/Develop/docs/snapshot.json.gz",
   "https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI-Snapshot/main/docs/snapshot.json.gz",

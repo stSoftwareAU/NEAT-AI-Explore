@@ -14,6 +14,7 @@
  */
 
 import {
+  computeRetryDelayMs,
   fetchSnapshotJson,
   readSnapshotFile,
 } from "../shared/snapshot_loader.js";
@@ -26,6 +27,8 @@ import {
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 import {
   DEFAULT_SNAPSHOT_URL,
+  LOAD_AUTO_RETRY_DELAY_MS,
+  LOAD_AUTO_RETRY_LIMIT,
   SNAPSHOT_FALLBACK_URLS,
 } from "../shared/config.js";
 import {
@@ -3591,6 +3594,7 @@ async function loadSnapshot(source, label) {
     // 31-Dec-2025).
     const details = document.getElementById("snapshotDetails");
     if (details instanceof HTMLDetailsElement) details.open = false;
+    return true;
   } catch (e) {
     hideProgress();
     setStatus(e?.message ?? String(e), "bad");
@@ -3600,6 +3604,7 @@ async function loadSnapshot(source, label) {
     // quickly without hunting for the panel.
     const details = document.getElementById("snapshotDetails");
     if (details instanceof HTMLDetailsElement) details.open = true;
+    return false;
   }
 }
 
@@ -4064,9 +4069,26 @@ function initStarfield() {
     if (e.key === "Enter") el.fetchBtn?.click?.();
   });
 
+  // Issue #118: Auto-retry the initial load if it fails.
+  async function autoLoadWithRetry(url, label) {
+    const ok = await loadSnapshot(url, label);
+    if (ok) return;
+
+    for (let attempt = 0; attempt < LOAD_AUTO_RETRY_LIMIT; attempt++) {
+      const delay = computeRetryDelayMs(attempt, LOAD_AUTO_RETRY_DELAY_MS);
+      const delaySec = (delay / 1000).toFixed(1);
+      setStatus(
+        `Load failed — retrying in ${delaySec}s (attempt ${attempt + 2})…`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      const retryOk = await loadSnapshot(url, label);
+      if (retryOk) return;
+    }
+  }
+
   // Boot with default snapshot.
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-  loadSnapshot(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
+  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL);
 
   // Animation loop
   let lastT = performance.now();

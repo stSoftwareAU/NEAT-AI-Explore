@@ -58,6 +58,19 @@ export function isDangerousUrlScheme(s) {
 }
 
 /**
+ * Compute the retry delay for a given attempt using exponential backoff,
+ * capped at 30 seconds (Issue #118).
+ *
+ * @param {number} attempt - Zero-based attempt index.
+ * @param {number} baseDelayMs - Base delay in milliseconds.
+ * @returns {number} Delay in milliseconds.
+ */
+export function computeRetryDelayMs(attempt, baseDelayMs) {
+  const MAX_DELAY_MS = 30000;
+  return Math.min(baseDelayMs * Math.pow(2, attempt), MAX_DELAY_MS);
+}
+
+/**
  * @param {Uint8Array} gzBytes
  * @returns {Promise<string>}
  */
