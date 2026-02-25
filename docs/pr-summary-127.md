@@ -30,9 +30,10 @@ shared modules. The extracted functions are identical to the originals.
   anti-correlation, edge cases, topK limits, maxInputs cap, fallback to value
   series)
 - `tests/discovery_test.ts` — 21 tests covering `normaliseCandidate` and
-  `extractDiscoveryCandidates` (camelCase, snake_case, nested synapse, newWeights
-  array, explicit weights, w1/w2 shorthand, new neuron info, key generation,
-  null/invalid inputs, all schema paths)
+  `extractDiscoveryCandidates` (camelCase, snake_case, nested synapse,
+  newWeights array, explicit weights, w1/w2 shorthand, new neuron info, key
+  generation, null/invalid inputs, all schema paths)
 - `tests/diagnostics_scan_test.ts` — 20 tests covering `scan1d`, `scan2d`,
   `computeNonFiniteIssues`, and `computeErrorConcentrationIssues` (clean data,
-  NaN/Infinity detection, obsIndices mapping, null recording, error concentration)
+  NaN/Infinity detection, obsIndices mapping, null recording, error
+  concentration)
