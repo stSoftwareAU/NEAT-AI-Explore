@@ -4,12 +4,12 @@ Fixed silent loading failures where the app showed no UI indication of errors
 when loading failed. The root causes were:
 
 1. **Unhandled dynamic `import()` rejection**: The bootstrap script in
-   `index.html` had no error handling on the `await import('./app.js')` call.
-   If the module failed to load (stale SW cache, network error, JS error during
+   `index.html` had no error handling on the `await import('./app.js')` call. If
+   the module failed to load (stale SW cache, network error, JS error during
    module evaluation), users saw a blank page with no feedback.
 
-2. **Missing `.catch()` on fire-and-forget promises**: `autoLoadWithRetry()`
-   and the manual fetch button handler called async functions without catching
+2. **Missing `.catch()` on fire-and-forget promises**: `autoLoadWithRetry()` and
+   the manual fetch button handler called async functions without catching
    rejections, causing unhandled promise rejections.
 
 3. **Incomplete Service Worker pre-cache**: Five shared modules imported by
@@ -25,13 +25,13 @@ Fixes applied:
   fallback. On import failure, automatically clears stale SW caches for
   self-healing on next reload.
 
-- **`app.js`**: Added `.catch()` handlers on `autoLoadWithRetry()` calls and
-  the manual fetch button handler. Added `data-appLoaded` flag so global error
+- **`app.js`**: Added `.catch()` handlers on `autoLoadWithRetry()` calls and the
+  manual fetch button handler. Added `data-appLoaded` flag so global error
   handlers yield to app-level status once the module has loaded.
 
-- **`sw.js`**: Added five missing shared modules to `STATIC_FILES`
-  (`config.js`, `graph_analysis.js`, `creature_overview.js`, `transitions.js`,
-  `sparkline.js`) so the app works offline after a single online visit.
+- **`sw.js`**: Added five missing shared modules to `STATIC_FILES` (`config.js`,
+  `graph_analysis.js`, `creature_overview.js`, `transitions.js`, `sparkline.js`)
+  so the app works offline after a single online visit.
 
 Closes #126.
 
