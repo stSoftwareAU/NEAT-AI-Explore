@@ -1,7 +1,7 @@
 ## Summary
 
-Unify theme handling so the trace explorer respects `prefers-color-scheme`
-and stored user preference instead of hard-locking dark mode. Closes #128.
+Unify theme handling so the trace explorer respects `prefers-color-scheme` and
+stored user preference instead of hard-locking dark mode. Closes #128.
 
 ### Changes
 
@@ -10,8 +10,8 @@ and stored user preference instead of hard-locking dark mode. Closes #128.
   `docs/shared/theme.js` module, which supports auto/light/dark with
   localStorage persistence.
 - **`docs/index.html`**: Added a `#themeToggle` button (matching the existing
-  `.themeToggle` CSS class) to the header so users can cycle through
-  Auto / Light / Dark.
+  `.themeToggle` CSS class) to the header so users can cycle through Auto /
+  Light / Dark.
 - **`docs/shared/theme.js`**: Exported the pure helper functions
   (`normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`)
   so they can be unit-tested in Deno.
