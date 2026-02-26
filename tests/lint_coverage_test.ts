@@ -97,6 +97,7 @@ Deno.test("deno lint configuration excludes DOM-dependent files", async () => {
     "docs/app.js",
     "docs/sw.js",
     "docs/shared/theme.js",
+    "docs/starfield/starfield.js",
   ];
   for (const exc of expectedExclusions) {
     assertEquals(
