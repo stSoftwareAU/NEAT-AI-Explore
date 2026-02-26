@@ -1,7 +1,7 @@
 ## Summary
 
-Add starfield view to the service worker cache and fix PWA manifest icon
-purpose values. Closes #129.
+Add starfield view to the service worker cache and fix PWA manifest icon purpose
+values. Closes #129.
 
 ### Changes
 
@@ -19,9 +19,9 @@ purpose values. Closes #129.
      dedicated maskable icons exist, `"any"` is the safer default.
 
 3. **Test updates**:
-   - Updated `tests/pwa_test.ts` to verify starfield files exist on disk,
-     are referenced in `sw.js` STATIC_FILES, that a starfield navigation
-     handler exists, and that manifest icons use single-purpose values.
+   - Updated `tests/pwa_test.ts` to verify starfield files exist on disk, are
+     referenced in `sw.js` STATIC_FILES, that a starfield navigation handler
+     exists, and that manifest icons use single-purpose values.
    - Updated `tests/lint_coverage_test.ts` to include `starfield.js` in the
      expected lint exclusions list.
 
@@ -30,17 +30,16 @@ purpose values. Closes #129.
 ![Starfield view loads in browser](docs/evidence/starfield-view.png)
 
 The starfield page loads correctly (WebGL warning is expected in headless
-Chrome). The HTML shell, CSS, and JS are all served and cached by the
-service worker.
+Chrome). The HTML shell, CSS, and JS are all served and cached by the service
+worker.
 
 ## Test Plan
 
 - Added `sw.js STATIC_FILES includes starfield assets` test in
   `tests/pwa_test.ts`
 - Added `sw.js has starfield navigation handler` test in `tests/pwa_test.ts`
-- Added `manifest icons use single-purpose values` test in
-  `tests/pwa_test.ts`
+- Added `manifest icons use single-purpose values` test in `tests/pwa_test.ts`
 - Updated `docs PWA files exist` test to include starfield files
-- Updated `deno lint configuration excludes DOM-dependent files` test to
-  include `docs/starfield/starfield.js`
+- Updated `deno lint configuration excludes DOM-dependent files` test to include
+  `docs/starfield/starfield.js`
 - All 305 tests pass, `./quality.sh` clean
