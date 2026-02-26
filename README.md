@@ -330,6 +330,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/correlation.js`       | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
 | `docs/shared/discovery.js`         | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
 | `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeErrorConcentrationIssues`                                                           |
+| `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
