@@ -35,6 +35,9 @@ Deno.test("docs PWA files exist", async () => {
     repoPath("docs", "shared", "snapshot_loader.js"),
     repoPath("docs", "shared", "theme.js"),
     repoPath("docs", "shared", "colour_maps.js"),
+    repoPath("docs", "starfield", "index.html"),
+    repoPath("docs", "starfield", "starfield.js"),
+    repoPath("docs", "starfield", "starfield.css"),
   ];
   for (const p of paths) {
     await Deno.stat(p);
@@ -59,5 +62,47 @@ Deno.test("manifest icons and screenshots exist on disk", async () => {
   for (const shot of manifest.screenshots) {
     assert(typeof shot.src === "string");
     await Deno.stat(repoPath("docs", shot.src));
+  }
+});
+
+Deno.test("sw.js STATIC_FILES includes starfield assets", async () => {
+  const swPath = repoPath("docs", "sw.js");
+  const swContent = await Deno.readTextFile(swPath);
+  const starfieldFiles = [
+    "./starfield/index.html",
+    "./starfield/starfield.js",
+    "./starfield/starfield.css",
+  ];
+  for (const file of starfieldFiles) {
+    assert(
+      swContent.includes(file),
+      `sw.js STATIC_FILES should include ${file}`,
+    );
+  }
+});
+
+Deno.test("sw.js has starfield navigation handler", async () => {
+  const swPath = repoPath("docs", "sw.js");
+  const swContent = await Deno.readTextFile(swPath);
+  assert(
+    swContent.includes("starfield"),
+    "sw.js should contain a starfield navigation handler",
+  );
+});
+
+Deno.test("manifest icons use single-purpose values", async () => {
+  const manifestPath = repoPath("docs", "manifest.webmanifest");
+  const manifest = JSON.parse(await Deno.readTextFile(manifestPath));
+  for (const icon of manifest.icons) {
+    const purpose = icon.purpose ?? "any";
+    // Each icon entry should have exactly one purpose value
+    assert(
+      !purpose.includes(" "),
+      `Icon ${icon.src} should have a single purpose value, got "${purpose}"`,
+    );
+    assert(
+      purpose === "any" || purpose === "maskable",
+      `Icon ${icon.src} purpose should be "any" or "maskable", got "${purpose}"`,
+    );
   }
 });
