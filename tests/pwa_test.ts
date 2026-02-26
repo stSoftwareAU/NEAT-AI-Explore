@@ -1,4 +1,4 @@
-import { assert } from "./test_helpers.ts";
+import { assert, assertEquals } from "./test_helpers.ts";
 
 function repoPath(...parts: string[]): string {
   const url = new URL(import.meta.url);
@@ -32,12 +32,73 @@ Deno.test("docs PWA files exist", async () => {
     repoPath("docs", "graph", "index.html"),
     repoPath("docs", "graph", "graph.js"),
     repoPath("docs", "graph", "graph.css"),
+    repoPath("docs", "starfield", "index.html"),
+    repoPath("docs", "starfield", "starfield.js"),
+    repoPath("docs", "starfield", "starfield.css"),
     repoPath("docs", "shared", "snapshot_loader.js"),
     repoPath("docs", "shared", "theme.js"),
     repoPath("docs", "shared", "colour_maps.js"),
   ];
   for (const p of paths) {
     await Deno.stat(p);
+  }
+});
+
+Deno.test("service worker caches starfield files", async () => {
+  const swPath = repoPath("docs", "sw.js");
+  const swSource = await Deno.readTextFile(swPath);
+
+  const requiredPaths = [
+    "./starfield/index.html",
+    "./starfield/starfield.js",
+    "./starfield/starfield.css",
+  ];
+
+  for (const path of requiredPaths) {
+    assert(
+      swSource.includes(path),
+      `sw.js STATIC_FILES should include "${path}"`,
+    );
+  }
+});
+
+Deno.test("service worker handles starfield navigation", async () => {
+  const swPath = repoPath("docs", "sw.js");
+  const swSource = await Deno.readTextFile(swPath);
+
+  // The SW should have a navigation handler that recognises starfield URLs
+  assert(
+    swSource.includes("starfield"),
+    "sw.js should handle starfield navigation",
+  );
+  assert(
+    swSource.includes("./starfield/index.html"),
+    "sw.js should serve starfield/index.html for starfield navigation",
+  );
+});
+
+Deno.test("manifest icons use single-purpose values", async () => {
+  const manifestPath = repoPath("docs", "manifest.webmanifest");
+  const manifest = JSON.parse(await Deno.readTextFile(manifestPath));
+
+  for (const icon of manifest.icons) {
+    assert(
+      typeof icon.purpose === "string",
+      `Icon ${icon.src} should have a purpose field`,
+    );
+    // Each icon entry should have exactly one purpose, not "any maskable"
+    const purposes = icon.purpose.split(/\s+/);
+    assertEquals(
+      purposes.length,
+      1,
+      `Icon ${icon.src} should have a single purpose value, got "${icon.purpose}"`,
+    );
+    assert(
+      purposes[0] === "any" || purposes[0] === "maskable",
+      `Icon ${icon.src} purpose should be "any" or "maskable", got "${
+        purposes[0]
+      }"`,
+    );
   }
 });
 

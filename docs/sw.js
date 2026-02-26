@@ -32,6 +32,11 @@ const STATIC_FILES = [
   "./graph/index.html",
   `./graph/graph.js?v=${VERSION}`,
   `./graph/graph.css?v=${VERSION}`,
+  // Starfield view (Issue #129): separate entry point that re-exports the graph
+  // renderer — must be cached for offline access.
+  "./starfield/index.html",
+  `./starfield/starfield.js?v=${VERSION}`,
+  `./starfield/starfield.css?v=${VERSION}`,
   // Shared modules for multiple views (Issue #126: all shared modules must be
   // listed so they are precached and invalidated with each deploy — missing
   // modules can be served stale by cacheFirst, breaking imports).
@@ -201,9 +206,13 @@ self.addEventListener("fetch", (event) => {
       }
     })();
     const isGraphNav = /\/graph(\/|$)/.test(path);
-    event.respondWith(
-      cacheFirst(isGraphNav ? "./graph/index.html" : "./index.html"),
-    );
+    const isStarfieldNav = /\/starfield(\/|$)/.test(path);
+    const shell = isGraphNav
+      ? "./graph/index.html"
+      : isStarfieldNav
+      ? "./starfield/index.html"
+      : "./index.html";
+    event.respondWith(cacheFirst(shell));
     return;
   }
 
