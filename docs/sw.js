@@ -51,6 +51,7 @@ const STATIC_FILES = [
   "./shared/correlation.js",
   "./shared/discovery.js",
   "./shared/diagnostics_scan.js",
+  "./shared/ui_helpers.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
@@ -126,14 +127,20 @@ function isSameOrigin(url) {
   }
 }
 
+// Canonical origin list: shared/config.js ALLOWED_SNAPSHOT_ORIGINS (Issue #125).
+// Service workers cannot use ES module imports, so keep a local copy here.
+const ALLOWED_SNAPSHOT_ORIGINS = [
+  "https://stsoftwareau.github.io",
+  "https://raw.githubusercontent.com",
+];
+
 function isAllowedSnapshotOrigin(url) {
   // We allow cross-origin snapshot caching for the official Snapshot hosts so
   // the app can work offline while keeping the rest of the cache same-origin.
   try {
     const origin = new URL(url).origin;
     if (origin === self.location.origin) return true;
-    if (origin === "https://stsoftwareau.github.io") return true;
-    if (origin === "https://raw.githubusercontent.com") return true;
+    if (ALLOWED_SNAPSHOT_ORIGINS.includes(origin)) return true;
   } catch {
     // Fall through.
   }

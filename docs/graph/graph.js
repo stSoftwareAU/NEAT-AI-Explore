@@ -15,8 +15,10 @@
 
 import {
   fetchSnapshotJson,
+  normaliseCreature,
   readSnapshotFile,
 } from "../shared/snapshot_loader.js";
+import { escapeHtml, extractTooltips } from "../shared/ui_helpers.js";
 import {
   hash32,
   neuronColourRgb01,
@@ -115,38 +117,7 @@ function hideProgress() {
 // Snapshot parsing (minimal normalisation)
 // ============================================================================
 
-function normaliseCreature(snapshot) {
-  const creature = snapshot?.creature ?? snapshot?.creatureJson;
-  if (!creature) throw new Error("No creature in snapshot");
-
-  const rawNeurons = Array.isArray(creature.neurons) ? creature.neurons : [];
-  const rawSynapses = Array.isArray(creature.synapses) ? creature.synapses : [];
-
-  const neuronsByUuid = new Map(rawNeurons.map((n) => [n.uuid, n]));
-
-  const synapses = rawSynapses.map((s) => {
-    const fromUuid = s.fromUuid ?? s.fromUUID ?? s.from_uuid;
-    const toUuid = s.toUuid ?? s.toUUID ?? s.to_uuid;
-    const weight = s.weight;
-    if (!fromUuid || !toUuid || typeof weight !== "number") return null;
-    return { fromUuid, toUuid, weight };
-  }).filter(Boolean);
-
-  const inputCount = creature.input ?? 0;
-  for (let i = 0; i < inputCount; i++) {
-    const uuid = `input-${i}`;
-    if (!neuronsByUuid.has(uuid)) {
-      neuronsByUuid.set(uuid, {
-        uuid,
-        type: "input",
-        squash: "IDENTITY",
-        bias: 0,
-      });
-    }
-  }
-
-  return { creature, neuronsByUuid, synapses };
-}
+// normaliseCreature imported from shared/snapshot_loader.js (Issue #125).
 
 function getImpacts(snapshot) {
   const derived = snapshot?.derived;
@@ -287,27 +258,9 @@ let uuidToLabel = {};
 let uuidToDescription = {};
 
 function loadLabelsFromSnapshot(snapshot) {
-  const tooltipsByUuid = snapshot?.tooltips ?? snapshot?.meta?.tooltips ?? null;
-  if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
-    uuidToLabel = {};
-    uuidToDescription = {};
-    return;
-  }
-
-  uuidToLabel = {};
-  uuidToDescription = {};
-  for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
-    if (!uuid || typeof uuid !== "string") continue;
-    if (!info || typeof info !== "object") continue;
-    const label = info.label;
-    const description = info.description;
-    if (typeof label === "string" && label.trim().length > 0) {
-      uuidToLabel[uuid] = label.trim();
-    }
-    if (typeof description === "string" && description.trim().length > 0) {
-      uuidToDescription[uuid] = description.trim();
-    }
-  }
+  const result = extractTooltips(snapshot);
+  uuidToLabel = result.labels;
+  uuidToDescription = result.descriptions;
 }
 
 function getAlias(uuid) {
@@ -1184,14 +1137,7 @@ function fmtSig(n, sig = 4) {
   return Number(n.toPrecision(sig)).toString();
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+// escapeHtml imported from shared/ui_helpers.js (Issue #125).
 
 class StarfieldRenderer {
   /**

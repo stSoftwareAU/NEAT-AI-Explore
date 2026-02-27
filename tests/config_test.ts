@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "./test_helpers.ts";
 
 import {
+  ALLOWED_SNAPSHOT_ORIGINS,
   AUTO_LOAD_MAX_RETRIES,
   AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
@@ -70,6 +71,44 @@ Deno.test("SNAPSHOT_FALLBACK_URLS includes a same-origin fallback", () => {
     hasSameOrigin,
     "Expected at least one same-origin (relative path) fallback",
   );
+});
+
+// --- ALLOWED_SNAPSHOT_ORIGINS (Issue #125) ---
+
+Deno.test("ALLOWED_SNAPSHOT_ORIGINS is a non-empty array", () => {
+  assert(Array.isArray(ALLOWED_SNAPSHOT_ORIGINS), "Expected an array");
+  assert(
+    ALLOWED_SNAPSHOT_ORIGINS.length > 0,
+    "Expected at least one allowed origin",
+  );
+});
+
+Deno.test("ALLOWED_SNAPSHOT_ORIGINS includes GitHub Pages origin", () => {
+  assert(
+    ALLOWED_SNAPSHOT_ORIGINS.includes("https://stsoftwareau.github.io"),
+    "Expected GitHub Pages origin",
+  );
+});
+
+Deno.test("ALLOWED_SNAPSHOT_ORIGINS includes raw.githubusercontent.com", () => {
+  assert(
+    ALLOWED_SNAPSHOT_ORIGINS.includes("https://raw.githubusercontent.com"),
+    "Expected raw.githubusercontent.com origin",
+  );
+});
+
+Deno.test("ALLOWED_SNAPSHOT_ORIGINS entries are valid HTTPS origins", () => {
+  for (const origin of ALLOWED_SNAPSHOT_ORIGINS) {
+    assert(
+      origin.startsWith("https://"),
+      `Expected HTTPS origin, got: ${origin}`,
+    );
+    assertEquals(
+      origin.endsWith("/"),
+      false,
+      `Origins should not have a trailing slash: ${origin}`,
+    );
+  }
 });
 
 // --- AUTO_LOAD_MAX_RETRIES (Issue #118) ---

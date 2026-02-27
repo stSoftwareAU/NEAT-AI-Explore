@@ -216,6 +216,63 @@ export async function fetchSnapshotJson(url, opts = {}) {
 }
 
 /**
+ * Normalise a creature from a snapshot into a canonical form.
+ *
+ * Extracts and normalises neurons and synapses, filling in synthetic input
+ * neurons when the snapshot only records them by count.  Returns a plain
+ * object so the caller can store the results however it likes (no global
+ * mutation).
+ *
+ * @param {object} snapshot
+ * @returns {{
+ *   creature: object,
+ *   neuronsByUuid: Map<string, object>,
+ *   synapses: Array<{ fromUuid: string, toUuid: string, weight: number }>,
+ *   inboundByTo: Map<string, Array<{ fromUuid: string, toUuid: string, weight: number }>>,
+ * }}
+ */
+export function normaliseCreature(snapshot) {
+  const creature = snapshot?.creature ?? snapshot?.creatureJson;
+  if (!creature) throw new Error("No creature in snapshot");
+
+  const rawNeurons = Array.isArray(creature.neurons) ? creature.neurons : [];
+  const rawSynapses = Array.isArray(creature.synapses) ? creature.synapses : [];
+
+  const neuronsByUuid = new Map(rawNeurons.map((n) => [n.uuid, n]));
+
+  const synapses = rawSynapses.map((s) => {
+    const fromUuid = s.fromUuid ?? s.fromUUID ?? s.from_uuid;
+    const toUuid = s.toUuid ?? s.toUUID ?? s.to_uuid;
+    const weight = s.weight;
+    if (!fromUuid || !toUuid || typeof weight !== "number") return null;
+    return { fromUuid, toUuid, weight };
+  }).filter(Boolean);
+
+  // Index inbound synapses for fast traversal.
+  /** @type {Map<string, Array<{ fromUuid: string, toUuid: string, weight: number }>>} */
+  const inboundByTo = new Map();
+  for (const s of synapses) {
+    if (!inboundByTo.has(s.toUuid)) inboundByTo.set(s.toUuid, []);
+    inboundByTo.get(s.toUuid).push(s);
+  }
+
+  const inputCount = creature.input ?? 0;
+  for (let i = 0; i < inputCount; i++) {
+    const uuid = `input-${i}`;
+    if (!neuronsByUuid.has(uuid)) {
+      neuronsByUuid.set(uuid, {
+        uuid,
+        type: "input",
+        squash: "IDENTITY",
+        bias: 0,
+      });
+    }
+  }
+
+  return { creature, neuronsByUuid, synapses, inboundByTo };
+}
+
+/**
  * Read a local file from an <input type="file"> and parse as snapshot JSON.
  * Supports .gz via gunzip.
  *

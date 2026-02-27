@@ -319,9 +319,9 @@ Only pure, DOM-free modules can be tested in Deno:
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `docs/impact_attribution.js`       | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
 | `docs/impact_diagnostics.js`       | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
-| `docs/shared/config.js`            | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`                                                                                          |
+| `docs/shared/config.js`            | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`, `ALLOWED_SNAPSHOT_ORIGINS`                                                              |
 | `docs/shared/graph_analysis.js`    | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
-| `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`                                                                   |
+| `docs/shared/snapshot_loader.js`   | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`, `normaliseCreature`                                              |
 | `docs/shared/colour_maps.js`       | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
 | `docs/shared/creature_overview.js` | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
 | `docs/shared/transitions.js`       | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
@@ -331,6 +331,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/discovery.js`         | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
 | `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeErrorConcentrationIssues`                                                           |
 | `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
+| `docs/shared/ui_helpers.js`        | `escapeHtml`, `extractTooltips`                                                                                                           |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
