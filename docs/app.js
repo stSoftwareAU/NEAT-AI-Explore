@@ -31,10 +31,12 @@ import {
   decodeBase64UrlToUtf8,
   gunzipToText,
   isDangerousUrlScheme,
+  normaliseCreature as normaliseCreatureCore,
   normaliseSnapshotUrl,
   readSnapshotFile,
 } from "./shared/snapshot_loader.js";
 import {
+  ALLOWED_SNAPSHOT_ORIGINS,
   AUTO_LOAD_MAX_RETRIES,
   AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
@@ -69,6 +71,7 @@ import {
   computeNonFiniteIssues,
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
+import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -325,34 +328,10 @@ function resetInboundRenderLimit() {
 // ============================================================================
 
 function loadInputLabelsFromSnapshot(snapshot) {
-  const tooltipsByUuid = snapshot?.tooltips ?? snapshot?.meta?.tooltips ?? null;
-  if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
-    uuidToLabel = {};
-    uuidToDescription = {};
-    uuidToGroup = {};
-    return;
-  }
-
-  uuidToLabel = {};
-  uuidToDescription = {};
-  uuidToGroup = {};
-
-  for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
-    if (!uuid || typeof uuid !== "string") continue;
-    if (!info || typeof info !== "object") continue;
-    const label = info.label;
-    const description = info.description;
-    const group = info.group ?? info.category ?? info.domain ?? null;
-    if (typeof label === "string" && label.trim().length > 0) {
-      uuidToLabel[uuid] = label;
-    }
-    if (typeof description === "string" && description.trim().length > 0) {
-      uuidToDescription[uuid] = description;
-    }
-    if (typeof group === "string" && group.trim().length > 0) {
-      uuidToGroup[uuid] = group.trim();
-    }
-  }
+  const result = extractTooltips(snapshot);
+  uuidToLabel = result.labels;
+  uuidToDescription = result.descriptions;
+  uuidToGroup = result.groups;
 }
 
 function getAlias(uuid) {
@@ -425,11 +404,11 @@ function isSameOriginUrl(url) {
 function isSnapshotCacheAllowedUrl(url) {
   // We cache same-origin snapshots and the official Snapshot hosts so the app
   // remains usable offline without caching arbitrary third-party URLs.
+  // Canonical origin list: shared/config.js ALLOWED_SNAPSHOT_ORIGINS (Issue #125).
   try {
     const u = new URL(String(url), window.location.href);
     if (u.origin === window.location.origin) return true;
-    if (u.origin === "https://stsoftwareau.github.io") return true;
-    if (u.origin === "https://raw.githubusercontent.com") return true;
+    if (ALLOWED_SNAPSHOT_ORIGINS.includes(u.origin)) return true;
   } catch (_e) {
     // Fall through.
   }
@@ -625,42 +604,11 @@ async function fetchJson(url) {
 }
 
 function normaliseCreature(snapshot) {
-  const creature = snapshot?.creature ?? snapshot?.creatureJson;
-  if (!creature) throw new Error("No creature in snapshot");
-
-  const rawSynapses = creature.synapses ?? [];
-  synapses = rawSynapses.map((s) => {
-    const fromUuid = s.fromUuid ?? s.fromUUID ?? s.from_uuid;
-    const toUuid = s.toUuid ?? s.toUUID ?? s.to_uuid;
-    const weight = s.weight;
-    if (!fromUuid || !toUuid || typeof weight !== "number") return null;
-    return { fromUuid, toUuid, weight };
-  }).filter(Boolean);
-
-  // Index inbound synapses for fast traversal.
-  inboundByTo = new Map();
-  for (const s of synapses) {
-    if (!inboundByTo.has(s.toUuid)) inboundByTo.set(s.toUuid, []);
-    inboundByTo.get(s.toUuid).push(s);
-  }
-
-  const rawNeurons = creature.neurons ?? [];
-  neuronsByUuid = new Map(rawNeurons.map((n) => [n.uuid, n]));
-
-  const inputCount = creature.input ?? 0;
-  for (let i = 0; i < inputCount; i++) {
-    const uuid = `input-${i}`;
-    if (!neuronsByUuid.has(uuid)) {
-      neuronsByUuid.set(uuid, {
-        uuid,
-        type: "input",
-        squash: "IDENTITY",
-        bias: 0,
-      });
-    }
-  }
-
-  return creature;
+  const result = normaliseCreatureCore(snapshot);
+  synapses = result.synapses;
+  neuronsByUuid = result.neuronsByUuid;
+  inboundByTo = result.inboundByTo;
+  return result.creature;
 }
 
 async function loadSnapshot(source, label) {
@@ -2428,14 +2376,7 @@ function formatSig(n, sigFigs = 3) {
   return Number(n.toPrecision(sigFigs)).toString();
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+// escapeHtml imported from shared/ui_helpers.js (Issue #125).
 
 /**
  * Format an observation reference for display.

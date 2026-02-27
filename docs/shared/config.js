@@ -32,6 +32,21 @@ export const SNAPSHOT_FALLBACK_URLS = [
 ];
 
 /**
+ * Allowed origins for snapshot caching (Issue #125).
+ *
+ * Cross-origin snapshot fetches are only cached for these trusted hosts.
+ * Same-origin requests are always allowed (checked separately by callers).
+ *
+ * The service worker (`sw.js`) cannot use ES module imports, so it keeps a
+ * local copy of this list with a comment pointing here as the canonical
+ * source of truth.
+ */
+export const ALLOWED_SNAPSHOT_ORIGINS = [
+  "https://stsoftwareau.github.io",
+  "https://raw.githubusercontent.com",
+];
+
+/**
  * Maximum number of top-level auto-load retries when the initial page load
  * fails to fetch a snapshot (Issue #118). This is separate from the per-fetch
  * retry loop in snapshot_loader.js — it retries the entire load sequence
