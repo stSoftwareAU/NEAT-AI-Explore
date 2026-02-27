@@ -51,6 +51,9 @@ const STATIC_FILES = [
   "./shared/correlation.js",
   "./shared/discovery.js",
   "./shared/diagnostics_scan.js",
+  "./shared/ui_helpers.js",
+  "./shared/creature_normaliser.js",
+  "./shared/alias_registry.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
@@ -129,6 +132,10 @@ function isSameOrigin(url) {
 function isAllowedSnapshotOrigin(url) {
   // We allow cross-origin snapshot caching for the official Snapshot hosts so
   // the app can work offline while keeping the rest of the cache same-origin.
+  //
+  // NOTE: The canonical list of allowed origins lives in shared/config.js
+  // (ALLOWED_SNAPSHOT_ORIGINS). Service Workers cannot use ES module imports,
+  // so this copy is maintained manually — keep it in sync (Issue #125).
   try {
     const origin = new URL(url).origin;
     if (origin === self.location.origin) return true;

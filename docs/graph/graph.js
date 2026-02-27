@@ -25,6 +25,7 @@ import {
 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
 import {
+  ALLOWED_SNAPSHOT_ORIGINS,
   AUTO_LOAD_MAX_RETRIES,
   AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
@@ -45,6 +46,9 @@ import {
   TAP_THRESHOLD_PX,
   TOUCH_SCALE_FACTOR,
 } from "../shared/touch_gestures.js";
+import { escapeHtml } from "../shared/ui_helpers.js";
+import { normaliseCreature } from "../shared/creature_normaliser.js";
+import { buildAliasRegistry } from "../shared/alias_registry.js";
 
 // Starfield layout settings (tune for intuition > mathematical correctness).
 const FOCUS_MAX_DEPTH = 5;
@@ -115,38 +119,7 @@ function hideProgress() {
 // Snapshot parsing (minimal normalisation)
 // ============================================================================
 
-function normaliseCreature(snapshot) {
-  const creature = snapshot?.creature ?? snapshot?.creatureJson;
-  if (!creature) throw new Error("No creature in snapshot");
-
-  const rawNeurons = Array.isArray(creature.neurons) ? creature.neurons : [];
-  const rawSynapses = Array.isArray(creature.synapses) ? creature.synapses : [];
-
-  const neuronsByUuid = new Map(rawNeurons.map((n) => [n.uuid, n]));
-
-  const synapses = rawSynapses.map((s) => {
-    const fromUuid = s.fromUuid ?? s.fromUUID ?? s.from_uuid;
-    const toUuid = s.toUuid ?? s.toUUID ?? s.to_uuid;
-    const weight = s.weight;
-    if (!fromUuid || !toUuid || typeof weight !== "number") return null;
-    return { fromUuid, toUuid, weight };
-  }).filter(Boolean);
-
-  const inputCount = creature.input ?? 0;
-  for (let i = 0; i < inputCount; i++) {
-    const uuid = `input-${i}`;
-    if (!neuronsByUuid.has(uuid)) {
-      neuronsByUuid.set(uuid, {
-        uuid,
-        type: "input",
-        squash: "IDENTITY",
-        bias: 0,
-      });
-    }
-  }
-
-  return { creature, neuronsByUuid, synapses };
-}
+// normaliseCreature — imported from shared/creature_normaliser.js (Issue #125).
 
 function getImpacts(snapshot) {
   const derived = snapshot?.derived;
@@ -287,27 +260,10 @@ let uuidToLabel = {};
 let uuidToDescription = {};
 
 function loadLabelsFromSnapshot(snapshot) {
-  const tooltipsByUuid = snapshot?.tooltips ?? snapshot?.meta?.tooltips ?? null;
-  if (!tooltipsByUuid || typeof tooltipsByUuid !== "object") {
-    uuidToLabel = {};
-    uuidToDescription = {};
-    return;
-  }
-
-  uuidToLabel = {};
-  uuidToDescription = {};
-  for (const [uuid, info] of Object.entries(tooltipsByUuid)) {
-    if (!uuid || typeof uuid !== "string") continue;
-    if (!info || typeof info !== "object") continue;
-    const label = info.label;
-    const description = info.description;
-    if (typeof label === "string" && label.trim().length > 0) {
-      uuidToLabel[uuid] = label.trim();
-    }
-    if (typeof description === "string" && description.trim().length > 0) {
-      uuidToDescription[uuid] = description.trim();
-    }
-  }
+  // Delegate to shared alias registry (Issue #125).
+  const reg = buildAliasRegistry(snapshot);
+  uuidToLabel = reg.labels;
+  uuidToDescription = reg.descriptions;
 }
 
 function getAlias(uuid) {
@@ -1184,14 +1140,7 @@ function fmtSig(n, sig = 4) {
   return Number(n.toPrecision(sig)).toString();
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+// escapeHtml — imported from shared/ui_helpers.js (Issue #125).
 
 class StarfieldRenderer {
   /**
