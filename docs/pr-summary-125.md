@@ -6,12 +6,12 @@ logic unit-testable. Closes #125.
 
 ### What was extracted
 
-| Function | Source | Destination |
-|---|---|---|
-| `escapeHtml` | app.js + graph.js | `docs/shared/ui_helpers.js` |
-| `extractTooltips` (label/description/group loading) | app.js (`loadInputLabelsFromSnapshot`) + graph.js (`loadLabelsFromSnapshot`) | `docs/shared/ui_helpers.js` |
-| `normaliseCreature` (creature schema normalisation) | app.js + graph.js | `docs/shared/snapshot_loader.js` |
-| `ALLOWED_SNAPSHOT_ORIGINS` (allowed origin list) | app.js + sw.js (hardcoded) | `docs/shared/config.js` |
+| Function                                            | Source                                                                       | Destination                      |
+| --------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------- |
+| `escapeHtml`                                        | app.js + graph.js                                                            | `docs/shared/ui_helpers.js`      |
+| `extractTooltips` (label/description/group loading) | app.js (`loadInputLabelsFromSnapshot`) + graph.js (`loadLabelsFromSnapshot`) | `docs/shared/ui_helpers.js`      |
+| `normaliseCreature` (creature schema normalisation) | app.js + graph.js                                                            | `docs/shared/snapshot_loader.js` |
+| `ALLOWED_SNAPSHOT_ORIGINS` (allowed origin list)    | app.js + sw.js (hardcoded)                                                   | `docs/shared/config.js`          |
 
 ### Allowed-origin centralisation
 
@@ -26,9 +26,11 @@ imports) with a comment pointing to the canonical source.
 Both views continue to work correctly after the refactoring:
 
 ### Trace explorer
+
 ![Trace explorer](docs/evidence/trace-explorer.png)
 
 ### Graph explorer
+
 ![Graph explorer](docs/evidence/graph-explorer.png)
 
 ## Test Plan
