@@ -19,7 +19,7 @@ let themeCanPersist = false;
  * @param {unknown} mode
  * @returns {"auto"|"light"|"dark"}
  */
-function normaliseThemeMode(mode) {
+export function normaliseThemeMode(mode) {
   const m = String(mode ?? "auto");
   if (m === "auto" || m === "light" || m === "dark") return m;
   return "auto";
@@ -86,19 +86,19 @@ function applyThemeMode(mode) {
   }
 }
 
-function themeModeLabel(mode) {
+export function themeModeLabel(mode) {
   if (mode === "light") return "Light";
   if (mode === "dark") return "Dark";
   return "Auto";
 }
 
-function themeModeGlyph(mode) {
+export function themeModeGlyph(mode) {
   if (mode === "light") return "☀";
   if (mode === "dark") return "☾";
   return "A";
 }
 
-function cycleThemeMode(current) {
+export function cycleThemeMode(current) {
   if (current === "auto") return "light";
   if (current === "light") return "dark";
   return "auto";

@@ -68,6 +68,7 @@ import {
   computeErrorConcentrationIssues,
   computeNonFiniteIssues,
 } from "./shared/diagnostics_scan.js";
+import { initThemeMode } from "./shared/theme.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -409,24 +410,8 @@ function hideProgress() {
 }
 
 // ============================================================================
-// Theme mode (dark-only)
+// Theme mode — delegated to shared/theme.js
 // ============================================================================
-
-const THEME_COLOUR_DARK = "#0a0e1a";
-
-function setThemeColourDark() {
-  const metas = document.querySelectorAll('meta[name="theme-color"]');
-  if (!metas?.length) return;
-  for (const meta of metas) meta.setAttribute("content", THEME_COLOUR_DARK);
-}
-
-function initThemeMode() {
-  // Hard-lock to dark mode (visualisation-first UX).
-  // Light mode is intentionally disabled in this repo to keep contrast reliable
-  // across iOS Safari/PWA and desktop browsers (31-Dec-2025).
-  document.documentElement.setAttribute("data-theme", "dark");
-  setThemeColourDark();
-}
 
 function isSameOriginUrl(url) {
   try {
