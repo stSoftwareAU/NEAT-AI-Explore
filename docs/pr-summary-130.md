@@ -4,8 +4,8 @@ Three performance improvements for large snapshots. Closes #130.
 
 1. **Debounced synapse filter**: The `synapseMinAlloc` input now uses a 150ms
    debounce, so `renderSynapseList` only fires after the user pauses typing —
-   avoiding expensive DOM rebuilds on every keystroke for creatures with hundreds
-   of synapses.
+   avoiding expensive DOM rebuilds on every keystroke for creatures with
+   hundreds of synapses.
 
 2. **Lazy correlation computation**: `computeTopInputCorrelations` is no longer
    called eagerly during `loadSnapshot`. Instead, it runs on the first
