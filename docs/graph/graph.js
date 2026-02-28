@@ -4036,16 +4036,42 @@ function initStarfield() {
     console.error("Auto-load failed:", e);
   });
 
-  // Animation loop
+  // Animation loop — track previous camera pose so we can skip label updates
+  // when nothing has changed (Issue #130).
   let lastT = performance.now();
+  let prevYaw = NaN;
+  let prevPitch = NaN;
+  let prevPosX = NaN;
+  let prevPosY = NaN;
+  let prevPosZ = NaN;
+  let prevFocusUuid = null;
   function frame(now) {
     const dt = Math.min(0.05, Math.max(0, (now - lastT) / 1000));
     lastT = now;
     renderer.update(dt);
     renderer.render();
-    // Keep labels in sync with camera motion.
+    // Keep labels in sync with camera motion — but skip the update when the
+    // camera pose and focus UUID are unchanged to avoid unnecessary DOM work.
     const focusUuid = renderer?.meta?.[renderer.focusIndex]?.uuid ?? null;
-    if (focusUuid) updateLabelsForFocus(focusUuid);
+    if (focusUuid) {
+      const yaw = renderer.yaw;
+      const pitch = renderer.pitch;
+      const px = renderer.pos?.x ?? 0;
+      const py = renderer.pos?.y ?? 0;
+      const pz = renderer.pos?.z ?? 0;
+      const changed = focusUuid !== prevFocusUuid ||
+        yaw !== prevYaw || pitch !== prevPitch ||
+        px !== prevPosX || py !== prevPosY || pz !== prevPosZ;
+      if (changed) {
+        updateLabelsForFocus(focusUuid);
+        prevYaw = yaw;
+        prevPitch = pitch;
+        prevPosX = px;
+        prevPosY = py;
+        prevPosZ = pz;
+        prevFocusUuid = focusUuid;
+      }
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

@@ -52,6 +52,7 @@ const STATIC_FILES = [
   "./shared/discovery.js",
   "./shared/diagnostics_scan.js",
   "./shared/ui_helpers.js",
+  "./shared/debounce.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",

@@ -72,6 +72,7 @@ import {
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
+import { debounce } from "./shared/debounce.js";
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -98,6 +99,7 @@ let DIAG_INPUTS = {
 };
 
 let DISCOVERY_CANDIDATES = [];
+let correlationsComputed = false;
 let selectedCandidateKey = null;
 let currentNeuronTab = "details"; // details | issues | candidates
 
@@ -690,6 +692,7 @@ async function loadSnapshot(source, label) {
         inputCount: creature.input ?? 0,
         candidates: DISCOVERY_CANDIDATES,
       });
+      correlationsComputed = false;
 
       // Observations dashboard (reachability + low-signal flags).
       INPUT_DASH = computeInputDashboard({
@@ -716,6 +719,7 @@ async function loadSnapshot(source, label) {
       };
       DISCOVERY_CANDIDATES = [];
       INPUT_DASH = { inputCount: creature.input ?? 0, rows: [] };
+      correlationsComputed = false;
     }
 
     selectedCandidateKey = null;
@@ -801,6 +805,21 @@ let obsFilter = {
 
 function openObsModal() {
   if (!el.obsModal || !el.obsModalBody || !el.obsModalTitle) return;
+
+  // Lazily compute correlations on first modal open (deferred from snapshot
+  // load to avoid O(n^2) work when the user never opens the modal).
+  if (!correlationsComputed && SNAPSHOT) {
+    const creature = SNAPSHOT.creature ?? {};
+    DIAG_INPUTS.correlatedPairs = computeTopInputCorrelations({
+      recording: SNAPSHOT.recording ?? null,
+      inputCount: creature.input ?? 0,
+      maxInputs: 80,
+      sampleSize: 512,
+      topK: 12,
+    });
+    correlationsComputed = true;
+  }
+
   el.obsModal.classList.add("isOpen");
   el.obsModal.setAttribute("aria-hidden", "false");
   renderObsModal();
@@ -2693,14 +2712,9 @@ function computeInputIssues({ recording, inputCount, candidates }) {
     }
   }
 
-  // Highly correlated input pairs (guard-railed).
-  const correlatedPairs = computeTopInputCorrelations({
-    recording,
-    inputCount,
-    maxInputs: 80,
-    sampleSize: 512,
-    topK: 12,
-  });
+  // Correlation computation is deferred to the first Observations modal open
+  // (see openObsModal) to avoid expensive O(n^2) work at snapshot load time.
+  const correlatedPairs = [];
 
   // Candidate coverage for input-N nodes.
   const coverage = [];
@@ -3564,11 +3578,14 @@ function initInboundFilters() {
   syncInboundFilterControls();
 
   if (el.synapseMinAlloc) {
+    const debouncedRenderSynapses = debounce(() => {
+      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
+    }, 150);
     el.synapseMinAlloc.addEventListener("input", () => {
       const n = parseMaybeNumber(el.synapseMinAlloc.value);
       inboundMinAllocImpact = n != null && n > 0 ? n : 0;
       resetInboundRenderLimit();
-      if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
+      debouncedRenderSynapses();
     });
   }
   if (el.synapseTopK) {

@@ -332,6 +332,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeErrorConcentrationIssues`                                                           |
 | `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 | `docs/shared/ui_helpers.js`        | `escapeHtml`, `extractTooltips`                                                                                                           |
+| `docs/shared/debounce.js`         | `debounce`                                                                                                                                |
 
 Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
 skip it rather than faking it with grep-based assertions.
