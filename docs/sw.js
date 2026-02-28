@@ -49,6 +49,7 @@ const STATIC_FILES = [
   "./shared/theme.js",
   "./shared/colour_maps.js",
   "./shared/correlation.js",
+  "./shared/debounce.js",
   "./shared/discovery.js",
   "./shared/diagnostics_scan.js",
   "./shared/ui_helpers.js",

@@ -62,6 +62,7 @@ import {
   squashBadge,
 } from "./shared/sparkline.js";
 import { computeTopInputCorrelations } from "./shared/correlation.js";
+import { createDebounce } from "./shared/debounce.js";
 import {
   extractDiscoveryCandidates,
   normaliseCandidate,
@@ -2693,15 +2694,6 @@ function computeInputIssues({ recording, inputCount, candidates }) {
     }
   }
 
-  // Highly correlated input pairs (guard-railed).
-  const correlatedPairs = computeTopInputCorrelations({
-    recording,
-    inputCount,
-    maxInputs: 80,
-    sampleSize: 512,
-    topK: 12,
-  });
-
   // Candidate coverage for input-N nodes.
   const coverage = [];
   const counts = new Map();
@@ -2733,7 +2725,34 @@ function computeInputIssues({ recording, inputCount, candidates }) {
   }
   coverage.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
 
-  return { constantInputs, correlatedPairs, candidateCoverage: coverage };
+  return {
+    constantInputs,
+    correlatedPairs: null,
+    _correlationParams: { recording, inputCount },
+    candidateCoverage: coverage,
+  };
+}
+
+/**
+ * Lazily computes correlated input pairs on first access and caches the
+ * result on DIAG_INPUTS.  This avoids the O(n²) correlation scan at
+ * snapshot load time when the user may never open the diagnostics panel.
+ */
+function ensureCorrelatedPairs() {
+  if (DIAG_INPUTS.correlatedPairs != null) return DIAG_INPUTS.correlatedPairs;
+  const p = DIAG_INPUTS._correlationParams;
+  if (!p) {
+    DIAG_INPUTS.correlatedPairs = [];
+    return DIAG_INPUTS.correlatedPairs;
+  }
+  DIAG_INPUTS.correlatedPairs = computeTopInputCorrelations({
+    recording: p.recording,
+    inputCount: p.inputCount,
+    maxInputs: 80,
+    sampleSize: 512,
+    topK: 12,
+  });
+  return DIAG_INPUTS.correlatedPairs;
 }
 
 function candidateReferencedInputUuids(candidate) {
@@ -2989,11 +3008,12 @@ function renderIssuesPanel(currentUuid, neuronType) {
       }</div>`,
     );
   }
-  if (DIAG_INPUTS?.correlatedPairs?.length) {
+  const correlatedPairs = ensureCorrelatedPairs();
+  if (correlatedPairs?.length) {
     inputBits.push(`<div class="issueRowTitle">Highly correlated pairs</div>`);
     inputBits.push(
       `<div class="synapseStats">${
-        DIAG_INPUTS.correlatedPairs.slice(0, 8).map((p) =>
+        correlatedPairs.slice(0, 8).map((p) =>
           `<span class="stat">${escapeHtml(p.a)} ↔ ${escapeHtml(p.b)} r=${
             escapeHtml(formatSig(p.r, 4))
           }</span>`
@@ -3564,12 +3584,16 @@ function initInboundFilters() {
   syncInboundFilterControls();
 
   if (el.synapseMinAlloc) {
-    el.synapseMinAlloc.addEventListener("input", () => {
+    const debouncedMinAlloc = createDebounce(() => {
       const n = parseMaybeNumber(el.synapseMinAlloc.value);
       inboundMinAllocImpact = n != null && n > 0 ? n : 0;
       resetInboundRenderLimit();
       if (trace.length > 0) renderSynapseList(trace[trace.length - 1]);
-    });
+    }, 150);
+    el.synapseMinAlloc.addEventListener(
+      "input",
+      () => debouncedMinAlloc.call(),
+    );
   }
   if (el.synapseTopK) {
     el.synapseTopK.addEventListener("change", () => {
