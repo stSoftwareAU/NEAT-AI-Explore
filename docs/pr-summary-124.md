@@ -1,8 +1,8 @@
 ## Summary
 
 Add keyboard focus styles and accessible labels across both the trace explorer
-and graph explorer views to address WCAG 2.1 Level AA compliance gaps.
-Closes #124.
+and graph explorer views to address WCAG 2.1 Level AA compliance gaps. Closes
+#124.
 
 ### Changes
 
