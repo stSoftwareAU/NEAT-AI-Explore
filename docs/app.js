@@ -73,6 +73,15 @@ import {
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
+import {
+  getInitialFocusTarget,
+  installFocusTrap,
+} from "./shared/modal_focus.js";
+
+/** @type {Element|null} Element that triggered the currently open modal. */
+let _modalTrigger = null;
+/** @type {(() => void)|null} Cleanup function for the current focus trap. */
+let _focusTrapCleanup = null;
 
 let SNAPSHOT = null;
 let synapses = [];
@@ -802,15 +811,30 @@ let obsFilter = {
 
 function openObsModal() {
   if (!el.obsModal || !el.obsModalBody || !el.obsModalTitle) return;
+  _modalTrigger = document.activeElement;
   el.obsModal.classList.add("isOpen");
   el.obsModal.setAttribute("aria-hidden", "false");
   renderObsModal();
+  const panel = el.obsModal.querySelector(".modalPanel");
+  if (panel) {
+    const target = getInitialFocusTarget(panel);
+    if (target) target.focus();
+    _focusTrapCleanup = installFocusTrap(panel);
+  }
 }
 
 function closeObsModal() {
   if (!el.obsModal) return;
   el.obsModal.classList.remove("isOpen");
   el.obsModal.setAttribute("aria-hidden", "true");
+  if (_focusTrapCleanup) {
+    _focusTrapCleanup();
+    _focusTrapCleanup = null;
+  }
+  if (_modalTrigger && typeof _modalTrigger.focus === "function") {
+    _modalTrigger.focus();
+    _modalTrigger = null;
+  }
 }
 
 function renderObsModal() {
@@ -1731,15 +1755,30 @@ function renderTopInputsPanel(uuid, neuronType) {
 
 function openExplainModal(focusUuid) {
   if (!el.explainModal || !el.explainModalBody || !el.explainModalTitle) return;
+  _modalTrigger = document.activeElement;
   el.explainModal.classList.add("isOpen");
   el.explainModal.setAttribute("aria-hidden", "false");
   renderExplainModal(focusUuid);
+  const panel = el.explainModal.querySelector(".modalPanel");
+  if (panel) {
+    const target = getInitialFocusTarget(panel);
+    if (target) target.focus();
+    _focusTrapCleanup = installFocusTrap(panel);
+  }
 }
 
 function closeExplainModal() {
   if (!el.explainModal) return;
   el.explainModal.classList.remove("isOpen");
   el.explainModal.setAttribute("aria-hidden", "true");
+  if (_focusTrapCleanup) {
+    _focusTrapCleanup();
+    _focusTrapCleanup = null;
+  }
+  if (_modalTrigger && typeof _modalTrigger.focus === "function") {
+    _modalTrigger.focus();
+    _modalTrigger = null;
+  }
 }
 
 function renderExplainModal(focusUuid) {
@@ -1953,16 +1992,31 @@ function renderImpactBreakdown(uuid, neuronImpact) {
 function openInboundModal() {
   if (!el.pathModal || !el.pathModalBody || !el.pathModalTitle) return;
   if (!lastInboundAllocation || !lastInboundToUuid) return;
+  _modalTrigger = document.activeElement;
   lastInboundPage = 0;
   el.pathModal.classList.add("isOpen");
   el.pathModal.setAttribute("aria-hidden", "false");
   renderInboundModalPage();
+  const panel = el.pathModal.querySelector(".modalPanel");
+  if (panel) {
+    const target = getInitialFocusTarget(panel);
+    if (target) target.focus();
+    _focusTrapCleanup = installFocusTrap(panel);
+  }
 }
 
 function closePathModal() {
   if (!el.pathModal) return;
   el.pathModal.classList.remove("isOpen");
   el.pathModal.setAttribute("aria-hidden", "true");
+  if (_focusTrapCleanup) {
+    _focusTrapCleanup();
+    _focusTrapCleanup = null;
+  }
+  if (_modalTrigger && typeof _modalTrigger.focus === "function") {
+    _modalTrigger.focus();
+    _modalTrigger = null;
+  }
 }
 
 function renderInboundModalPage() {

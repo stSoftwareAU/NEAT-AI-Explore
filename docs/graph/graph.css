@@ -57,6 +57,12 @@
   --negative: #f87171;
 }
 
+/* Keyboard focus visibility (WCAG SC 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
