@@ -46,6 +46,7 @@
             <input
               id="fetchUrl"
               class="input"
+              aria-label="Snapshot URL"
               placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
             />
             <button id="fetchBtn" class="button">Fetch</button>
@@ -103,7 +104,8 @@
         >
           <div id="progressBar" class="progressBar"></div>
         </div>
-        <span id="status" class="statusInline">Loading…</span>
+        <span id="status" class="statusInline" role="status" aria-live="polite"
+        >Loading…</span>
       </div>
     </header>
 
