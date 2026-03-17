@@ -7,11 +7,11 @@ Diagrams added:
 
 1. **Architecture / repo structure** — shows the `docs/` PWA layout, shared
    modules, graph explorer, tests, and their relationships
-2. **Data flow / direction terminology** — illustrates the opposite directions of
-   network computation (inputs to outputs) vs explorer navigation (outputs to
+2. **Data flow / direction terminology** — illustrates the opposite directions
+   of network computation (inputs to outputs) vs explorer navigation (outputs to
    inputs)
-3. **Snapshot loading flow** — shows the four snapshot source paths (file picker,
-   URL param, base64 URL, auto-load default) flowing through
+3. **Snapshot loading flow** — shows the four snapshot source paths (file
+   picker, URL param, base64 URL, auto-load default) flowing through
    `snapshot_loader.js` with security checks and gzip handling
 4. **Testing pipeline** — visualises the `quality.sh` gate: `deno fmt` to
    `deno lint` to `deno test`
