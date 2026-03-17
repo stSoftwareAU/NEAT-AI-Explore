@@ -33,6 +33,67 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   the app and tests)
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
+## Architecture Overview
+
+```mermaid
+graph TD
+    subgraph repo["📁 Repository"]
+        direction TB
+        subgraph docs_dir["docs/ — Published PWA"]
+            direction TB
+            index["index.html<br/>(Trace Explorer)"]
+            appjs["app.js"]
+            styles["styles.css"]
+            sw["sw.js<br/>(Service Worker)"]
+            manifest["manifest.webmanifest"]
+
+            subgraph shared["shared/ — Reusable Modules"]
+                direction TB
+                snap_loader["snapshot_loader.js"]
+                graph_analysis["graph_analysis.js"]
+                colour_maps["colour_maps.js"]
+                creature_overview["creature_overview.js"]
+                theme_mod["theme.js"]
+                correlation["correlation.js"]
+                diagnostics["diagnostics_scan.js"]
+                sparkline["sparkline.js"]
+                discovery["discovery.js"]
+            end
+
+            impact_attr["impact_attribution.js"]
+            impact_diag["impact_diagnostics.js"]
+
+            subgraph graph_dir["graph/ — 3D Explorer"]
+                graph_html["index.html"]
+                graph_js["graph.js"]
+                graph_css["graph.css"]
+            end
+        end
+
+        subgraph tests_dir["tests/ — Deno Tests"]
+            test_files["*_test.ts files"]
+        end
+
+        quality["quality.sh"]
+    end
+
+    index --> appjs
+    appjs --> shared
+    appjs --> impact_attr
+    appjs --> impact_diag
+    graph_js --> shared
+    test_files -.->|import & test| shared
+    test_files -.->|import & test| impact_attr
+    test_files -.->|import & test| impact_diag
+    quality -.->|fmt + lint + test| tests_dir
+
+    style docs_dir fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    style shared fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+    style graph_dir fill:#fff3e0,stroke:#e65100,color:#bf360c
+    style tests_dir fill:#fce4ec,stroke:#c62828,color:#b71c1c
+    style quality fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
+```
+
 ## Versioning (SemVer)
 
 This repo uses **Semantic Versioning** (**SemVer**, `MAJOR.MINOR.PATCH`) as the
@@ -213,15 +274,156 @@ NEAT networks.
 
 ## Direction terminology (to avoid confusion)
 
-- **Dataflow direction (network computation)**: observations/inputs → outputs
-- **Navigation direction (this explorer UI)**: outputs → observations/inputs
+The NEAT network computation direction and the explorer navigation direction are
+**opposite**:
+
+```mermaid
+graph LR
+    subgraph computation["🧠 Network Computation Direction"]
+        direction LR
+        obs["Observations<br/>(Inputs)"]
+        hidden["Hidden<br/>Neurons"]
+        out["Output<br/>Neurons"]
+        obs -->|"activation<br/>flows forward"| hidden
+        hidden -->|"weighted<br/>signals"| out
+    end
+
+    subgraph navigation["🔍 Explorer Navigation Direction"]
+        direction RL
+        out2["Output<br/>Neurons"]
+        hidden2["Hidden<br/>Neurons"]
+        obs2["Observations<br/>(Inputs)"]
+        out2 -->|"click to<br/>trace upstream"| hidden2
+        hidden2 -->|"follow inbound<br/>synapses"| obs2
+    end
+
+    style computation fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    style navigation fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+    style obs fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    style out fill:#c8e6c9,stroke:#388e3c,color:#1b5e20
+    style obs2 fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    style out2 fill:#c8e6c9,stroke:#388e3c,color:#1b5e20
+```
+
 - **Inbound synapses (UI)**: synapses that flow from an upstream neuron into the
   currently selected neuron (i.e. arrows point _toward_ the current neuron)
+
+## Snapshot Loading Flow
+
+How snapshots reach the viewer through `snapshot_loader.js`:
+
+```mermaid
+graph TD
+    subgraph sources["📥 Snapshot Sources"]
+        file_picker["File Picker<br/>(local JSON)"]
+        url_param["?snapshotUrl=<br/>or ?file="]
+        b64_param["?snapshotUrlB64=<br/>(base64url encoded)"]
+        default["No params<br/>(auto-load default)"]
+    end
+
+    file_picker -->|"blob: URL"| normalise
+    url_param -->|"raw URL"| normalise
+    b64_param -->|"decode base64url<br/>→ UTF-8 URL"| decode["decodeBase64UrlToUtf8"]
+    decode --> security
+    default -->|"DEFAULT_SNAPSHOT_URL<br/>from config.js"| normalise
+
+    security["isDangerousUrlScheme?"]
+    normalise["normaliseSnapshotUrl"]
+    normalise --> security
+
+    security -->|"❌ javascript: / data:"| blocked["Blocked<br/>(security)"]
+    security -->|"✅ safe"| fetch_snap["fetch() snapshot"]
+
+    fetch_snap --> gzip{"gzip<br/>compressed?"}
+    gzip -->|"yes (.gz)"| decompress["DecompressionStream<br/>(client-side gunzip)"]
+    gzip -->|"no"| parse["JSON.parse"]
+    decompress --> parse
+
+    parse --> normalise_creature["normaliseCreature"]
+    normalise_creature --> viewer["🖥️ Explorer renders<br/>the snapshot"]
+
+    style sources fill:#fff3e0,stroke:#e65100,color:#bf360c
+    style blocked fill:#ffcdd2,stroke:#c62828,color:#b71c1c
+    style viewer fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    style security fill:#fff9c4,stroke:#f9a825,color:#f57f17
+```
 
 ## Snapshot JSON Format
 
 The expected format matches the output of NEAT-AI-Discovery's
 `export_visualisation_snapshot` function:
+
+```mermaid
+classDiagram
+    class Snapshot {
+        meta
+        creature
+        recording
+        derived
+        tooltips?
+    }
+
+    class Meta {
+        exportedAt : string
+        discoveryVersion : string
+        parquetFile : string
+    }
+
+    class Creature {
+        neurons : Neuron[]
+        synapses : Synapse[]
+        input : number
+        output : number
+    }
+
+    class Neuron {
+        uuid : string
+        type : input | hidden | output
+        squash : string
+        bias : number
+    }
+
+    class Synapse {
+        from : string
+        to : string
+        weight : number
+    }
+
+    class Recording {
+        obsIndices : number[]
+        neurons : NeuronRecording map
+    }
+
+    class NeuronRecording {
+        activation : number[]
+        value : number[]
+        errors : number[][]
+        stats : object
+    }
+
+    class Derived {
+        impactsByNeuronUuid : number map
+        synapses : DerivedSynapse map
+        reconstructionChecks : object[]
+    }
+
+    class DerivedSynapse {
+        fromUuid : string
+        toUuid : string
+        weight : number
+        contribution : number[]
+        stats : object
+    }
+
+    Snapshot --> Meta
+    Snapshot --> Creature
+    Snapshot --> Recording
+    Snapshot --> Derived
+    Creature --> "0..*" Neuron
+    Creature --> "0..*" Synapse
+    Recording --> "0..*" NeuronRecording
+    Derived --> "0..*" DerivedSynapse
+```
 
 ```json
 {
@@ -275,6 +477,33 @@ Or use the quality gate (format + lint + test):
 
 ```bash
 ./quality.sh
+```
+
+### Quality gate pipeline
+
+```mermaid
+graph LR
+    start["./quality.sh"] --> fmt
+
+    subgraph pipeline["Quality Gate Pipeline"]
+        direction LR
+        fmt["📐 deno fmt<br/>--check"]
+        lint["🔍 deno lint"]
+        test["🧪 deno test -A"]
+        fmt -->|"pass"| lint
+        lint -->|"pass"| test
+    end
+
+    test -->|"all pass"| ok["✅ OK"]
+    fmt -->|"fail"| fix_fmt["Fix formatting"]
+    lint -->|"fail"| fix_lint["Fix lint issues"]
+    test -->|"fail"| fix_test["Fix failing tests"]
+
+    style pipeline fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    style ok fill:#c8e6c9,stroke:#388e3c,color:#1b5e20
+    style fix_fmt fill:#ffcdd2,stroke:#c62828,color:#b71c1c
+    style fix_lint fill:#ffcdd2,stroke:#c62828,color:#b71c1c
+    style fix_test fill:#ffcdd2,stroke:#c62828,color:#b71c1c
 ```
 
 ### Unit tests vs benchmarks
