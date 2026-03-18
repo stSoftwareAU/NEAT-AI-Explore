@@ -1,10 +1,17 @@
-# NEAT-AI Explore
+# 🧠 NEAT-AI Explore
+
+[![Licence: Apache 2.0](https://img.shields.io/badge/Licence-Apache%202.0-blue.svg)](LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/Demo-GitHub%20Pages-brightgreen)](https://stsoftwareau.github.io/NEAT-AI-Explore/)
+[![Deno](https://img.shields.io/badge/Tests-Deno-000000?logo=deno)](https://deno.com/)
+[![Version](https://img.shields.io/badge/Version-0.1.0-orange)](version.json)
 
 A static HTML/JS/CSS viewer for exploring a **NEAT network snapshot** (neurons,
 synapses, impacts, and recorded activations). This is a debug tool for
 investigating why discovery candidates fail or succeed.
 
-## Try it now (example snapshot)
+---
+
+## 🚀 Try it now (example snapshot)
 
 - **Trace explorer**:
   [Open Explorer on GitHub Pages](https://stsoftwareau.github.io/NEAT-AI-Explore/)
@@ -18,7 +25,9 @@ investigating why discovery candidates fail or succeed.
 Both views **auto-load the default snapshot** on first open, so you can click
 straight in.
 
-## GitHub Pages + PWA
+---
+
+## 📱 GitHub Pages + PWA
 
 This repo is configured to deploy a **Progressive Web App (PWA)** to **GitHub
 Pages**. The published site lives in `docs/` (mirrors the approach used in
@@ -33,7 +42,9 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   the app and tests)
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 
-## Architecture Overview
+---
+
+## 🏗️ Architecture Overview
 
 ```mermaid
 graph TD
@@ -94,7 +105,9 @@ graph TD
     style quality fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
 ```
 
-## Versioning (SemVer)
+---
+
+## 🔖 Versioning (SemVer)
 
 This repo uses **Semantic Versioning** (**SemVer**, `MAJOR.MINOR.PATCH`) as the
 human-facing version number. See [SemVer](https://semver.org/).
@@ -107,10 +120,13 @@ human-facing version number. See [SemVer](https://semver.org/).
   placeholder in `docs/index.html` and `docs/sw.js` with the commit SHA, so
   users receive updated assets without needing to clear caches.
 
-## Quick Start
+---
+
+## ⚡ Quick Start
 
 1. **Export a snapshot** from NEAT-AI-Discovery using
    `export_visualisation_snapshot`:
+
    ```json
    {
      "parquetFile": "/path/to/records.parquet",
@@ -120,6 +136,7 @@ human-facing version number. See [SemVer](https://semver.org/).
    ```
 
 2. **Serve the `docs/` folder** with any HTTP server:
+
    ```bash
    cd docs
    python3 -m http.server 8000
@@ -154,7 +171,7 @@ Optional fields:
   dashboard (e.g. `macro`, `rates`, `equities`). Example:
   `snapshot.tooltips["input-0"] = { label, description, group: "rates" }`.
 
-### Loading snapshots from S3 (presigned URLs)
+### ☁️ Loading snapshots from S3 (presigned URLs)
 
 If you load a snapshot via a presigned S3 URL from GitHub Pages, the S3 bucket
 must allow **CORS** for the GitHub Pages origin, otherwise the browser will
@@ -164,15 +181,15 @@ block the request.
 - **Allowed methods**: `GET`, `HEAD`
 - **Allowed headers**: `*`
 
-Also note:
+> **💡 Tip:** If you upload `snapshot.json.gz`, either set object metadata
+> `Content-Encoding: gzip` and `Content-Type: application/json` so browsers
+> transparently decompress, _or_ ensure your browser supports
+> `DecompressionStream` (the app will decompress `.gz` client-side when
+> possible).
 
-- If you upload `snapshot.json.gz`, either:
-  - **Recommended**: set object metadata `Content-Encoding: gzip` and
-    `Content-Type: application/json` so browsers transparently decompress, or
-  - Ensure your browser supports `DecompressionStream` (the app will decompress
-    `.gz` client-side when possible).
+---
 
-## Features
+## ✨ Features
 
 - **Creature overview dashboard**: After loading a snapshot, see an at-a-glance
   summary of the neural network — neuron/synapse counts, activation function
@@ -194,7 +211,9 @@ Also note:
 - **Graph explorer**: A 3D neighbourhood view of the NEAT network to build
   intuition about local connectivity and high-impact pathways.
 
-## What the Explorer shows (example snapshot)
+---
+
+## 🔍 What the Explorer shows (example snapshot)
 
 The published app auto-loads a default snapshot (hosted separately so this repo
 doesn't churn with large snapshot artefacts).
@@ -203,13 +222,13 @@ Some interesting findings from that snapshot:
 
 - **output-0 is dominated by a single upstream hidden neuron**:
   `hidden-discovery-739a5119-b981-4ae6-91d1-ca8cc33abc5a → output-0` receives
-  ~74.6% of the inbound allocated impact (using the viewer’s heuristic
+  ~74.6% of the inbound allocated impact (using the viewer's heuristic
   allocation).
 - **A second hidden neuron is the next biggest contributor**:
   `hidden-discovery-6aae3201-115b-4dc4-beee-2d7428399e14 → output-0` receives
   ~14.1% of the inbound allocated impact.
 - **There are prunable candidates**: ~7.6% of non-input neurons have exported
-  impact < 1e-8 (highlighted as “suspicious” in the UI).
+  impact < 1e-8 (highlighted as "suspicious" in the UI).
 
 Snapshot metadata:
 
@@ -217,7 +236,9 @@ Snapshot metadata:
 - **discoveryVersion**: 0.2.12
 - **Network size**: 471 neurons, 16,719 synapses
 
-## Responsiveness (PWA screenshots)
+---
+
+## 📱 Responsiveness (PWA screenshots)
 
 These screenshots are generated from a real browser at iPhone/iPad/desktop
 viewports (see `scripts/generate_pwa_assets.py`).
@@ -242,7 +263,9 @@ viewports (see `scripts/generate_pwa_assets.py`).
 
 ![Desktop inbound modal](docs/screenshots/desktop-inbound-modal.png)
 
-## Graph explorer (3D neighbourhood view)
+---
+
+## 🎮 Graph explorer (3D neighbourhood view)
 
 The graph explorer is an intuition-building alternative visualisation for large
 NEAT networks.
@@ -272,7 +295,9 @@ NEAT networks.
 
 ![Graph explorer tilt](docs/screenshots/graph-desktop-tilt.png)
 
-## Direction terminology (to avoid confusion)
+---
+
+## 🧭 Direction terminology (to avoid confusion)
 
 The NEAT network computation direction and the explorer navigation direction are
 **opposite**:
@@ -308,7 +333,9 @@ graph LR
 - **Inbound synapses (UI)**: synapses that flow from an upstream neuron into the
   currently selected neuron (i.e. arrows point _toward_ the current neuron)
 
-## Snapshot Loading Flow
+---
+
+## 📥 Snapshot Loading Flow
 
 How snapshots reach the viewer through `snapshot_loader.js`:
 
@@ -348,7 +375,9 @@ graph TD
     style security fill:#fff9c4,stroke:#f9a825,color:#f57f17
 ```
 
-## Snapshot JSON Format
+---
+
+## 📦 Snapshot JSON Format
 
 The expected format matches the output of NEAT-AI-Discovery's
 `export_visualisation_snapshot` function:
@@ -433,39 +462,41 @@ classDiagram
     "parquetFile": "/path/to/records.parquet"
   },
   "creature": {
-    "neurons": [...],
-    "synapses": [...],
+    "neurons": ["..."],
+    "synapses": ["..."],
     "input": 20,
     "output": 1
   },
   "recording": {
-    "obsIndices": [0, 1, 2, ...],
+    "obsIndices": [0, 1, 2, "..."],
     "neurons": {
       "output-0": {
-        "activation": [...],
-        "value": [...],
-        "errors": [[...], ...],
-        "stats": { ... }
+        "activation": ["..."],
+        "value": ["..."],
+        "errors": [["..."], "..."],
+        "stats": { "...": "..." }
       }
     }
   },
   "derived": {
-    "impactsByNeuronUuid": { "output-0": 1.0, ... },
+    "impactsByNeuronUuid": { "output-0": 1.0, "...": "..." },
     "synapses": {
       "hidden-0→output-0": {
         "fromUuid": "hidden-0",
         "toUuid": "output-0",
         "weight": 2.0,
-        "contribution": [...],
-        "stats": { "meanContribution": 1.5, ... }
+        "contribution": ["..."],
+        "stats": { "meanContribution": 1.5, "...": "..." }
       }
     },
-    "reconstructionChecks": [...]
+    "reconstructionChecks": ["..."]
   }
 }
 ```
 
-## Testing
+---
+
+## 🧪 Testing
 
 Tests use [Deno](https://deno.com/) and live in `tests/`. Run them with:
 
@@ -536,9 +567,9 @@ const src = await Deno.readTextFile("module.js");
 assert(src.includes("Math.pow"));
 ```
 
-Why: if you swap quicksort for mergesort, "what" tests still pass (correct
-results). "How" tests break even though behaviour is unchanged, or worse, they
-pass while the code is actually broken.
+> **⚠️ Note:** If you swap quicksort for mergesort, "what" tests still pass
+> (correct results). "How" tests break even though behaviour is unchanged, or
+> worse, they pass while the code is actually broken.
 
 ### What can be unit-tested
 
@@ -562,15 +593,23 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 | `docs/shared/ui_helpers.js`        | `escapeHtml`, `extractTooltips`                                                                                                           |
 
-Browser-only code (DOM, WebGL, Service Worker) cannot be unit-tested in Deno —
-skip it rather than faking it with grep-based assertions.
+> **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
+> unit-tested in Deno — skip it rather than faking it with grep-based
+> assertions.
 
-## Australian English
+---
+
+## 🇦🇺 Australian English
 
 Comments and documentation use Australian English spelling (e.g., "colour",
 "behaviour", "organisation").
 
-## PWA asset generation (icons + screenshots)
+> **⚠️ Note:** CSS properties like `prefers-color-scheme` and JavaScript API
+> names retain American English spelling as they are web standards.
+
+---
+
+## 🖼️ PWA asset generation (icons + screenshots)
 
 Icons and screenshots are generated by starting a local web server and opening
 the app in a headless browser (Playwright).
@@ -599,6 +638,8 @@ Outputs:
 
 Last updated: 15-Jan-2026
 
-## Licence
+---
+
+## 📄 Licence
 
 Apache Licence 2.0
