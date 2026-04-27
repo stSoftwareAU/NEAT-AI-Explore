@@ -41,6 +41,11 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   `docs/impact_diagnostics.js` are the single source of truth (imported by both
   the app and tests)
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
+- **Auto-bump workflow**: `.github/workflows/upgrade-dependencies.yml` runs
+  weekly (Mondays 06:00 UTC, plus `workflow_dispatch`), invokes
+  `deno outdated --update --latest`, and opens a PR against `Develop` with the
+  dry-run log embedded in the body. Modelled on NEAT-AI-core's Cargo upgrade
+  workflow.
 
 ---
 
