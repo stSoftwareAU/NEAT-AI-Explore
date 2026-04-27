@@ -2,15 +2,15 @@
 
 Added the **Dependency Review** GitHub Actions workflow at
 `.github/workflows/dependency-review.yml`. The workflow runs on every pull
-request and uses `actions/dependency-review-action@v4` to flag dependencies
-with known vulnerabilities or licence issues before they are merged. Only the
-minimal `contents: read` permission is granted. Closes #154.
+request and uses `actions/dependency-review-action@v4` to flag dependencies with
+known vulnerabilities or licence issues before they are merged. Only the minimal
+`contents: read` permission is granted. Closes #154.
 
 ## Evidence
 
-This is a CI/security workflow change with no UI surface. Verified by a new
-Deno test suite that loads and parses the YAML and asserts on its structure
-(name, triggers, permissions, job, and the two required action steps).
+This is a CI/security workflow change with no UI surface. Verified by a new Deno
+test suite that loads and parses the YAML and asserts on its structure (name,
+triggers, permissions, job, and the two required action steps).
 
 ```mermaid
 flowchart LR
