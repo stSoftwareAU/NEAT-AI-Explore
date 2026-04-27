@@ -7,6 +7,7 @@ set -euo pipefail
 # - Update Deno (best-effort; doesn't fail if Deno is managed by brew/asdf)
 # - Format check
 # - Lint
+# - Type check
 # - Tests
 #
 # Last updated: 21-Dec-2025
@@ -39,6 +40,10 @@ deno fmt --check
 echo ""
 echo "==> Lint"
 deno lint
+
+echo ""
+echo "==> Type check"
+deno check helpers/ scripts/ tests/
 
 echo ""
 echo "==> Tests"
