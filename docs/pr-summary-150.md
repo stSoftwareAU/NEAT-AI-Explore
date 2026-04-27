@@ -7,9 +7,9 @@ the canonical Mermaid dependency diagram. Inserted just before the Licence
 section so it sits alongside other project-wide metadata. Closes #150.
 
 Also formatted three pre-existing unformatted HTML files (`docs/index.html`,
-`docs/graph/index.html`, `docs/starfield/index.html`) so the quality gate
-passes — these were already failing on `Develop` and were unrelated to the
-README change.
+`docs/graph/index.html`, `docs/starfield/index.html`) so the quality gate passes
+— these were already failing on `Develop` and were unrelated to the README
+change.
 
 ## Evidence
 
