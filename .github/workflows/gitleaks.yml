@@ -30,7 +30,9 @@ jobs:
       # NEAT-AI quality.yml pattern.
       - name: Fetch base branch
         if: github.event_name == 'pull_request'
-        run: git fetch origin "${{ github.base_ref }}:${{ github.base_ref }}" || true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch origin "$BASE_REF:$BASE_REF" || true
       # gitleaks/gitleaks-action@v2.3.9
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
