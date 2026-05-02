@@ -1,5 +1,12 @@
 name: Gitleaks
 
+# Detect secrets in pull request diffs using gitleaks-action.
+#
+# Mirrors the canonical NEAT-AI pattern at
+# stSoftwareAU/NEAT-AI/.github/workflows/quality.yml. Third-party
+# actions are pinned to 40-character commit SHAs (Issue #1756) so a
+# hijacked tag cannot exfiltrate CI secrets.
+
 on:
   pull_request:
     branches: ["*"]
@@ -11,10 +18,27 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout@v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      # Fetch the PR base branch so gitleaks-action's computed commit
+      # range (`<base_sha>^..<head_sha>`) resolves on the runner.
+      # Without this step the action fails with
+      # "fatal: Invalid revision range" because the base ref's parent
+      # is not in the shallow checkout (Issue #1756). Mirrors the
+      # NEAT-AI quality.yml pattern.
+      - name: Fetch base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch origin "$BASE_REF:$BASE_REF" || true
+      # gitleaks/gitleaks-action@v2.3.9
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Org-level Gitleaks Pro licence (Issue #1636). Required for
+          # repos under stSoftwareAU/*; without it gitleaks-action exits
+          # with ErrLicense before scanning. Configure in repo or org
+          # secrets.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
