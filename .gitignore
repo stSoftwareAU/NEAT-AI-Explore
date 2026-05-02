@@ -4,6 +4,7 @@
 !.gitignore
 !.gitattributes
 !.github
+!.markdownlint-cli2.jsonc
 
 # Python build artefacts (local tooling only)
 __pycache__/

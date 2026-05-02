@@ -1,0 +1,26 @@
+// Markdown lint configuration for NEAT-AI Explore (Issue #170).
+//
+// Notes:
+// - MD013 (line-length) is disabled — prose and tables in this repo wrap to
+//   readable widths in the editor and CI does not need to enforce a column
+//   limit on Markdown.
+// - MD041 (first-line-h1) is disabled — generated PR-summary documents under
+//   docs/ start with `## Summary` rather than a top-level heading.
+// - Auto-generated PR-summary files and the historical archive are excluded
+//   so that legacy formatting does not block new PRs. The lint applies to
+//   README.md and any other authored docs added in future.
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD041": false
+  },
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    "docs/archive/**",
+    "docs/pr-summary-*.md",
+    "node_modules/**"
+  ]
+}
