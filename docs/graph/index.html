@@ -222,12 +222,36 @@
           await import(`./graph.js?v=${v}`);
         } catch (err) {
           // Issue #126: Show a visible error when module import fails.
+          //
+          // Issue #194: PWA self-heal — see docs/index.html for the rationale.
           console.error("Graph module failed to load:", err);
           const statusEl = document.getElementById("status");
           if (statusEl) {
-            statusEl.textContent =
-              "Failed to load app — please clear your browser cache and reload.";
-            statusEl.className = "statusInline bad";
+            statusEl.textContent = "Recovering — refreshing PWA caches…";
+            statusEl.className = "statusInline";
+          }
+          try {
+            const { recoverFromFailedAppLoad } = await import(
+              `../shared/pwa_recovery.js?v=${v}`
+            );
+            const result = await recoverFromFailedAppLoad({
+              storage: globalThis.sessionStorage,
+              cachesApi: globalThis.caches,
+              swContainer: navigator.serviceWorker,
+              reload: () => globalThis.location.reload(),
+            });
+            if (!result.recovered && statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
+          } catch (recoveryErr) {
+            console.error("PWA recovery failed:", recoveryErr);
+            if (statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
           }
         }
       })();

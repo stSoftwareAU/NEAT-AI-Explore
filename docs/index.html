@@ -389,12 +389,40 @@
           // Issue #126: If the module fails to import (e.g., stale cached
           // dependency missing an expected export), show a visible error
           // instead of failing silently with no UI indication.
+          //
+          // Issue #194: For a PWA — especially on iOS — telling the user to
+          // "clear your browser cache" is a dead end (there is no obvious
+          // cache to clear). Attempt automatic recovery instead: clear all
+          // caches, unregister the SW, and reload. A session flag inside the
+          // helper prevents an infinite recovery loop.
           console.error("App module failed to load:", err);
           const statusEl = document.getElementById("status");
           if (statusEl) {
-            statusEl.textContent =
-              "Failed to load app — please clear your browser cache and reload.";
-            statusEl.className = "statusInline bad";
+            statusEl.textContent = "Recovering — refreshing PWA caches…";
+            statusEl.className = "statusInline";
+          }
+          try {
+            const { recoverFromFailedAppLoad } = await import(
+              `./shared/pwa_recovery.js?v=${v}`
+            );
+            const result = await recoverFromFailedAppLoad({
+              storage: globalThis.sessionStorage,
+              cachesApi: globalThis.caches,
+              swContainer: navigator.serviceWorker,
+              reload: () => globalThis.location.reload(),
+            });
+            if (!result.recovered && statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
+          } catch (recoveryErr) {
+            console.error("PWA recovery failed:", recoveryErr);
+            if (statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
           }
         }
       })();
