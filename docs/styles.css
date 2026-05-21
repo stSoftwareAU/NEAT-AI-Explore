@@ -806,6 +806,39 @@ body {
   gap: 2px;
 }
 
+/*
+ * Collapsible <details> wrapper for the Observation contributions panel
+ * (Issue #187). Collapsed by default on phone viewports (≤520px, matching
+ * isNarrowMobile()) to respect the compact-layout decisions from #184.
+ */
+.observationContributionsDetails {
+  margin: 0;
+}
+
+.observationContributionsSummary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.observationContributionsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.observationContributionsSummary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+  color: var(--muted);
+}
+
+.observationContributionsDetails[open]
+  > .observationContributionsSummary::before {
+  transform: rotate(90deg);
+}
+
 .observationContributionsGroup {
   font-size: 11px;
   color: var(--muted);

@@ -102,11 +102,37 @@ export function buildObservationContributionsRow(row, lookups = {}) {
 }
 
 /**
+ * Decide whether the panel's `<details>` should be open on first render.
+ *
+ * Defaults track the compact-layout decisions from #184: collapsed on phone
+ * viewports (≤520px, matching `isNarrowMobile()` in docs/app.js), open
+ * everywhere else. A user toggle from the current session wins over the
+ * viewport default so re-renders don't snap the panel shut after the user
+ * has expanded it.
+ *
+ * @param {{ isPhone?: boolean, userToggle?: ("open" | "closed" | null | undefined) }} [opts]
+ * @returns {boolean} true when the `<details>` element should render with
+ *   the `open` attribute.
+ */
+export function isObservationContributionsOpen(opts = {}) {
+  const { isPhone = false, userToggle = null } = opts ?? {};
+  if (userToggle === "open") return true;
+  if (userToggle === "closed") return false;
+  return !isPhone;
+}
+
+/**
  * Build the full HTML for the Observation contributions panel.
  *
  * Returns an empty string when the panel should not render (non-output
  * neuron, or no contributions). Callers (typically docs/app.js) set the
  * returned string as the panel container's innerHTML.
+ *
+ * The panel body is wrapped in a native `<details>` element with the
+ * heading carried by `<summary>` so it remains keyboard accessible with no
+ * extra JS. The default open/closed state follows the phone breakpoint
+ * (collapsed on ≤520px, open otherwise — see #184), while an explicit
+ * `userToggle` overrides that default for the current session.
  *
  * @param {object} params
  * @param {string} params.uuid — focused output neuron UUID.
@@ -115,6 +141,9 @@ export function buildObservationContributionsRow(row, lookups = {}) {
  * @param {(uuid: string) => (string | null)} [params.getAlias]
  * @param {(uuid: string) => (string | null)} [params.getGroup]
  * @param {number} [params.max=MAX_OBSERVATION_ROWS]
+ * @param {boolean} [params.isPhone=false] — viewport matches the phone breakpoint.
+ * @param {("open"|"closed"|null)} [params.userToggle=null] — session-scoped
+ *   user override; wins over the viewport default.
  * @returns {string}
  */
 export function buildObservationContributionsHtml(params) {
@@ -125,6 +154,8 @@ export function buildObservationContributionsHtml(params) {
     getAlias,
     getGroup,
     max = MAX_OBSERVATION_ROWS,
+    isPhone = false,
+    userToggle = null,
   } = params ?? {};
 
   if (!shouldRenderObservationContributions(uuid, neuronType)) return "";
@@ -138,17 +169,25 @@ export function buildObservationContributionsHtml(params) {
     "Top input observations ranked by their multi-hop share of this output. " +
     "Each row shows the observation's group as a subtitle when available.";
 
-  const headerHtml = `
-    <div class="impactBreakdownHeader">
-      <div class="impactBreakdownTitle">${escapeHtml(title)}</div>
-    </div>
-    <div class="impactBreakdownNote">${escapeHtml(note)}</div>
-  `;
+  // Summary shows enough context when collapsed: title + (count) so a phone
+  // user can scan without expanding (#187).
+  const summaryLabel = `${title} (top ${top.length})`;
+  const open = isObservationContributionsOpen({ isPhone, userToggle });
+  const openAttr = open ? " open" : "";
 
   const rows = top
     .map((row) => buildObservationContributionsRow(row, { getAlias, getGroup }))
     .join("");
 
-  return headerHtml +
-    `<div class="impactBreakdownList observationContributionsList">${rows}</div>`;
+  return `
+    <details class="observationContributionsDetails" data-uuid="${
+    escapeHtml(uuid)
+  }"${openAttr}>
+      <summary class="impactBreakdownHeader observationContributionsSummary">
+        <span class="impactBreakdownTitle">${escapeHtml(summaryLabel)}</span>
+      </summary>
+      <div class="impactBreakdownNote">${escapeHtml(note)}</div>
+      <div class="impactBreakdownList observationContributionsList">${rows}</div>
+    </details>
+  `;
 }
