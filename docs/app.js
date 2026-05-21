@@ -77,6 +77,7 @@ import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
   buildObservationContributionsHtml,
 } from "./shared/observation_contributions.js";
+import { buildSynapseFromCellHtml } from "./shared/synapse_render.js";
 import {
   getInitialFocusTarget,
   installFocusTrap,
@@ -2492,10 +2493,7 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     }
 
     row.innerHTML = `
-      <div class="synapseFrom">
-        ${nameHtml}
-        <span class="neuronType">${fromType}</span>
-      </div>
+      ${buildSynapseFromCellHtml(nameHtml, fromType)}
       <div class="synapseStats">${statsHtml.join("")}</div>
       <div class="synapseNav">→</div>
     `;
