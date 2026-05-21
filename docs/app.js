@@ -75,6 +75,9 @@ import { initThemeMode } from "./shared/theme.js";
 import { formatTraceScore } from "./shared/trace_score.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
+  buildObservationContributionsHtml,
+} from "./shared/observation_contributions.js";
+import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
@@ -241,18 +244,15 @@ const el = {
   pathModalBody: document.getElementById("pathModalBody"),
   pathModalClose: document.getElementById("pathModalClose"),
   pathModalMore: document.getElementById("pathModalMore"),
-  topInputsPanel: document.getElementById("topInputsPanel"),
+  observationContributionsPanel: document.getElementById(
+    "observationContributionsPanel",
+  ),
   obsBtn: document.getElementById("obsBtn"),
   obsModal: document.getElementById("obsModal"),
   obsModalBackdrop: document.getElementById("obsModalBackdrop"),
   obsModalTitle: document.getElementById("obsModalTitle"),
   obsModalBody: document.getElementById("obsModalBody"),
   obsModalClose: document.getElementById("obsModalClose"),
-  explainModal: document.getElementById("explainModal"),
-  explainModalBackdrop: document.getElementById("explainModalBackdrop"),
-  explainModalTitle: document.getElementById("explainModalTitle"),
-  explainModalBody: document.getElementById("explainModalBody"),
-  explainModalClose: document.getElementById("explainModalClose"),
   synapseCount: document.getElementById("synapseCount"),
   synapseSort: document.getElementById("synapseSort"),
   synapseMinAlloc: document.getElementById("synapseMinAlloc"),
@@ -1840,7 +1840,7 @@ function renderCurrentNeuron(uuid) {
 
   renderImpactBreakdown(uuid, impact);
   renderImpactDiagnosticsPanel(uuid, n.type);
-  renderTopInputsPanel(uuid, n.type);
+  renderObservationContributions(uuid, n.type);
   renderIssuesPanel(uuid, n.type);
   renderCandidatesPanel(uuid);
   applyNeuronTabState();
@@ -1875,16 +1875,24 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
   });
 }
 
-function renderTopInputsPanel(uuid, neuronType) {
-  if (!el.topInputsPanel) return;
+/**
+ * Observation contributions panel (Issue #186).
+ *
+ * Renders the top 50 input observations ranked by their multi-hop share of
+ * the focused output neuron. Only rendered on output neuron cards; hidden
+ * and input neurons clear the panel and bail.
+ */
+function renderObservationContributions(uuid, neuronType) {
+  const panel = el.observationContributionsPanel;
+  if (!panel) return;
   if (!SNAPSHOT) {
-    el.topInputsPanel.innerHTML = "";
+    panel.innerHTML = "";
     return;
   }
 
-  // Inputs don't have meaningful upstream inputs.
-  if (uuid.startsWith("input-") || neuronType === "input") {
-    el.topInputsPanel.innerHTML = "";
+  // Restrict to output neurons (Issue #186).
+  if (neuronType !== "output") {
+    panel.innerHTML = "";
     return;
   }
 
@@ -1899,142 +1907,13 @@ function renderTopInputsPanel(uuid, neuronType) {
     TOP_INPUT_CACHE.set(cacheKey, cached);
   }
 
-  const top = (cached.inputs ?? []).slice(0, 8);
-  if (top.length === 0) {
-    el.topInputsPanel.innerHTML = "";
-    return;
-  }
-
-  const title = "Top observations → upstream";
-  const note =
-    "Bounded, explainable heuristic: walk upstream from the focused neuron using inbound share allocation, and summarise which inputs receive the most share. This is diagnostic, not ground truth.";
-
-  const headerHtml = `
-    <div class="impactBreakdownHeader">
-      <div class="impactBreakdownTitle">${escapeHtml(title)}</div>
-      <button class="impactBreakdownBtn" type="button" data-open-explain="1" title="Inspect full list">Inspect</button>
-    </div>
-    <div class="impactBreakdownNote">${escapeHtml(note)}</div>
-  `;
-
-  const rows = top.map((r) => {
-    const alias = getAlias(r.uuid);
-    const label = alias ? `${alias} (${r.uuid})` : r.uuid;
-    const pct = formatSig((r.score ?? 0) * 100, 4) + "%";
-    return `
-      <div class="impactBreakdownRow">
-        <div class="impactBreakdownOut">${escapeHtml(label)}</div>
-        <div class="impactBreakdownStats">
-          <span class="stat" title="Allocated share (normalised across shown inputs)">${
-      escapeHtml(pct)
-    }</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  el.topInputsPanel.innerHTML = headerHtml +
-    `<div class="impactBreakdownList">${rows}</div>`;
-
-  el.topInputsPanel.onclick = (ev) => {
-    const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    const btn = target.closest(".impactBreakdownBtn");
-    if (!btn) return;
-    if (btn.getAttribute("data-open-explain") === "1") openExplainModal(uuid);
-  };
-}
-
-function openExplainModal(focusUuid) {
-  if (!el.explainModal || !el.explainModalBody || !el.explainModalTitle) return;
-  _modalTrigger = document.activeElement;
-  el.explainModal.classList.add("isOpen");
-  el.explainModal.setAttribute("aria-hidden", "false");
-  renderExplainModal(focusUuid);
-  const panel = el.explainModal.querySelector(".modalPanel");
-  if (panel) {
-    const target = getInitialFocusTarget(panel);
-    if (target) target.focus();
-    _focusTrapCleanup = installFocusTrap(panel);
-  }
-}
-
-function closeExplainModal() {
-  if (!el.explainModal) return;
-  el.explainModal.classList.remove("isOpen");
-  el.explainModal.setAttribute("aria-hidden", "true");
-  if (_focusTrapCleanup) {
-    _focusTrapCleanup();
-    _focusTrapCleanup = null;
-  }
-  if (_modalTrigger && typeof _modalTrigger.focus === "function") {
-    _modalTrigger.focus();
-    _modalTrigger = null;
-  }
-}
-
-function renderExplainModal(focusUuid) {
-  if (!el.explainModalBody || !el.explainModalTitle) return;
-  if (!SNAPSHOT) return;
-
-  const cacheKey = `topInputs:${focusUuid}`;
-  const cached = TOP_INPUT_CACHE.get(cacheKey) ??
-    computeTopContributingInputs(focusUuid);
-
-  const focusLabel = truncateNeuronName(focusUuid);
-  el.explainModalTitle.textContent = `Top observations for ${focusLabel}`;
-
-  const truncatedNote = cached.truncated
-    ? `<div class="impactBreakdownTruncated" title="Computation was bounded to keep the UI fast on large creatures.">Truncated</div>`
-    : "";
-
-  const items = (cached.inputs ?? []).slice(0, 80).map((r) => {
-    const alias = getAlias(r.uuid);
-    const label = alias ? `${alias} (${r.uuid})` : r.uuid;
-    const pct = formatSig((r.score ?? 0) * 100, 6) + "%";
-    const path = Array.isArray(r.path)
-      ? r.path.map(truncateNeuronName).join(" → ")
-      : "";
-    return `
-      <div class="issueRow" data-jump-uuid="${escapeHtml(r.uuid)}">
-        <div class="issueRowTitle">${escapeHtml(label)}</div>
-        <div class="synapseStats">
-          <span class="stat" title="Allocated share (normalised across shown inputs)">${
-      escapeHtml(pct)
-    }</span>
-          <span class="stat" title="Example upstream chain (highest-share branch encountered)">${
-      escapeHtml(path)
-    }</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  el.explainModalBody.innerHTML = `
-    <div class="impactBreakdownHeader">
-      <div class="impactBreakdownTitle">Top contributing observations</div>
-      ${truncatedNote}
-    </div>
-    <div class="impactBreakdownNote">
-      We explore upstream using inbound share allocation (|meanContribution| fallback |weight|), bounded by depth and work limits so it stays fast on iPhone.
-      Tap a row to jump to that observation.
-    </div>
-    <div class="issueList">${
-    items || `<div class="emptyState">No inputs found.</div>`
-  }</div>
-  `;
-
-  el.explainModalBody.onclick = (ev) => {
-    const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    const row = target.closest("[data-jump-uuid]");
-    if (!row) return;
-    const uuid = row.getAttribute("data-jump-uuid");
-    if (uuid) {
-      closeExplainModal();
-      navigateTo(uuid);
-    }
-  };
+  panel.innerHTML = buildObservationContributionsHtml({
+    uuid,
+    neuronType,
+    inputs: cached.inputs ?? [],
+    getAlias,
+    getGroup: getInputGroup,
+  });
 }
 
 function renderImpactDiagnosticsPanel(uuid, neuronType) {
@@ -2330,17 +2209,6 @@ if (el.obsModalClose) {
 }
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeObsModal();
-});
-
-// Explain modal wiring (close / backdrop / Esc).
-if (el.explainModalBackdrop) {
-  el.explainModalBackdrop.onclick = () => closeExplainModal();
-}
-if (el.explainModalClose) {
-  el.explainModalClose.onclick = () => closeExplainModal();
-}
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeExplainModal();
 });
 
 function getInboundSynapses(toUuid) {

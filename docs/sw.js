@@ -56,6 +56,7 @@ const STATIC_FILES = [
   "./shared/ui_helpers.js",
   "./shared/modal_focus.js",
   "./shared/trace_header.js",
+  "./shared/observation_contributions.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
