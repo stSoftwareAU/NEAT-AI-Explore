@@ -45,7 +45,11 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   weekly (Mondays 06:00 UTC, plus `workflow_dispatch`), invokes
   `deno outdated --update --latest`, and opens a PR against `Develop` with the
   dry-run log embedded in the body. Modelled on NEAT-AI-core's Cargo upgrade
-  workflow.
+  workflow. Before the upgrade runs, `scripts/jsr_quarantine_check.ts` queries
+  the JSR registry for each external import's latest publication time and aborts
+  the job if any package is younger than `VIBE_BUMP_QUARANTINE_HOURS` (default
+  24h) — closing the cron-window exposure to freshly-published malicious
+  versions. `stSoftwareAU/*` scopes bypass the gate as internal.
 
 ---
 
