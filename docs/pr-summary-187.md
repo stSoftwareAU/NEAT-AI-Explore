@@ -2,7 +2,13 @@
 
 ## Summary
 
-Wraps the "Observation contributions" panel in a native `<details>`/`<summary>` element so it can be collapsed without extra JS. The default open/closed state tracks the phone breakpoint: collapsed on `≤520px` (matching `isNarrowMobile()`, in line with the compact-layout decisions from #184) and open on tablet/desktop. A user's manual expand/collapse is remembered in a session-scoped `Map<uuid, "open"|"closed">` in `docs/app.js` so re-renders preserve the choice. Closes #187.
+Wraps the "Observation contributions" panel in a native `<details>`/`<summary>`
+element so it can be collapsed without extra JS. The default open/closed state
+tracks the phone breakpoint: collapsed on `≤520px` (matching `isNarrowMobile()`,
+in line with the compact-layout decisions from #184) and open on tablet/desktop.
+A user's manual expand/collapse is remembered in a session-scoped
+`Map<uuid, "open"|"closed">` in `docs/app.js` so re-renders preserve the choice.
+Closes #187.
 
 ## Evidence
 
@@ -10,8 +16,12 @@ Wraps the "Observation contributions" panel in a native `<details>`/`<summary>` 
 
 Pure helper render output, side-by-side:
 
-- **Phone viewport (top frame, 360px wide):** `<details>` rendered without the `open` attribute; only the summary `▸ Observation contributions (top 5)` is visible.
-- **Desktop viewport (bottom frame, 900px wide):** `<details>` rendered with `open`; summary caret rotates to `▾` and the full ranked list of observation contributions is visible.
+- **Phone viewport (top frame, 360px wide):** `<details>` rendered without the
+  `open` attribute; only the summary `▸ Observation contributions (top 5)` is
+  visible.
+- **Desktop viewport (bottom frame, 900px wide):** `<details>` rendered with
+  `open`; summary caret rotates to `▾` and the full ranked list of observation
+  contributions is visible.
 
 ```mermaid
 flowchart LR
@@ -45,9 +55,13 @@ Full quality gate (`./quality.sh < /dev/null`) — 475 tests pass.
 
 ## Acceptance Criteria
 
-- [x] On phone viewports the "Observation contributions" panel is collapsed by default.
+- [x] On phone viewports the "Observation contributions" panel is collapsed by
+      default.
 - [x] On tablet/desktop viewports the panel is open by default.
-- [x] A user can manually expand/collapse the panel and the choice survives a re-render in the same session (`OBSERVATION_CONTRIBUTIONS_TOGGLE` map in `docs/app.js`, updated by a `toggle` event listener).
+- [x] A user can manually expand/collapse the panel and the choice survives a
+      re-render in the same session (`OBSERVATION_CONTRIBUTIONS_TOGGLE` map in
+      `docs/app.js`, updated by a `toggle` event listener).
 - [x] Native `<details>/<summary>` used; no keyboard regressions.
-- [x] Tests cover default-collapsed (phone), default-open (desktop), and toggle persistence.
+- [x] Tests cover default-collapsed (phone), default-open (desktop), and toggle
+      persistence.
 - [x] `./quality.sh` passes.
