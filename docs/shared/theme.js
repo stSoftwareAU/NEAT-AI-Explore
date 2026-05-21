@@ -105,35 +105,54 @@ export function cycleThemeMode(current) {
 }
 
 /**
- * Initialise theme mode and wire a toggle button.
+ * Initialise theme mode and wire one or more toggle buttons.
+ *
+ * Multiple buttons are useful when the same control needs to appear in more
+ * than one place (e.g., Issue #184 moved the trace explorer's theme toggle
+ * into the trace nav row for phone viewports while keeping the header one
+ * for the snapshot loading screen).
  *
  * @param {{
  *   toggleButtonId?: string,
+ *   toggleButtonIds?: ReadonlyArray<string>,
  * }} [opts]
  */
 export function initThemeMode(opts = {}) {
-  const btnId = String(opts?.toggleButtonId ?? "themeToggle");
-  /** @type {HTMLButtonElement | null} */
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
+  const ids = Array.isArray(opts?.toggleButtonIds)
+    ? opts.toggleButtonIds.map((s) => String(s))
+    : [String(opts?.toggleButtonId ?? "themeToggle")];
+
+  /** @type {HTMLButtonElement[]} */
+  const buttons = [];
+  for (const id of ids) {
+    const btn = document.getElementById(id);
+    if (btn) buttons.push(/** @type {HTMLButtonElement} */ (btn));
+  }
+  if (buttons.length === 0) return;
 
   themeCanPersist = canUseLocalStorage();
   const saved = themeCanPersist ? safeGetThemeMode() : "auto";
   applyThemeMode(saved);
 
-  const updateButton = () => {
-    btn.textContent = themeModeGlyph(themeModeMemory);
-    btn.title = `Theme: ${themeModeLabel(themeModeMemory)} (tap to cycle)`;
-    btn.setAttribute("aria-label", btn.title);
+  const updateButtons = () => {
+    const glyph = themeModeGlyph(themeModeMemory);
+    const title = `Theme: ${themeModeLabel(themeModeMemory)} (tap to cycle)`;
+    for (const btn of buttons) {
+      btn.textContent = glyph;
+      btn.title = title;
+      btn.setAttribute("aria-label", title);
+    }
   };
 
-  updateButton();
+  updateButtons();
 
-  btn.addEventListener("click", () => {
+  const onClick = () => {
     const next = cycleThemeMode(themeModeMemory);
     applyThemeMode(next);
-    updateButton();
-  });
+    updateButtons();
+  };
+
+  for (const btn of buttons) btn.addEventListener("click", onClick);
 
   // Keep Auto mode in sync with OS theme changes.
   try {

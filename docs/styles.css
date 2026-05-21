@@ -356,6 +356,53 @@ body {
   flex-shrink: 0;
 }
 
+/* Issue #184: compact "Score:" badge that sits next to the "Path:" label. */
+.traceScore {
+  font-size: 12px;
+  color: var(--trace);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.traceScore[hidden] {
+  display: none;
+}
+
+/*
+ * Issue #184: trace nav overflow menu.
+ *
+ * On desktop and tablet the wrapper is transparent (display: contents) so
+ * the secondary action buttons flow inline alongside Back/Clear. The
+ * summary trigger and the wrapper's menu styling are only activated on
+ * phone viewports below.
+ */
+.traceOverflow {
+  display: contents;
+}
+
+.traceOverflowMenu {
+  display: contents;
+}
+
+.traceOverflowSummary {
+  display: none;
+}
+
+/*
+ * Issue #184: the trace-bar theme toggle is hidden by default. Phone
+ * viewports promote it (and hide the header theme toggle) so the theme
+ * control lives on the same compact row as the trace navigation buttons.
+ *
+ * Specificity bumped to (0,3,0) so it beats `.button.themeToggle` above.
+ */
+.button.themeToggle.traceThemeToggle {
+  display: none;
+}
+
 /* Main explorer area */
 .explorerMain {
   display: flex;
@@ -1637,23 +1684,97 @@ body {
     background: rgba(251, 191, 36, 0.08);
   }
 
+  /*
+   * Issue #184: keep the breadcrumb scrollable but flexing inline alongside
+   * the other trace-bar items so Path: + Score: + breadcrumb fit on one row.
+   */
   .breadcrumb {
-    flex: 1 1 100%;
-    min-width: 0;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   /* Compact trace buttons as toolbar. */
   .traceButtons {
-    flex: 1 1 100%;
-    justify-content: flex-start;
     gap: 4px;
   }
 
   .traceButtons .button {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /*
+   * Issue #184: on phone viewports collapse secondary trace actions into
+   * a popup menu so Back/Clear/Theme stay always visible and the row
+   * does not wrap onto a second line for narrow widths.
+   */
+  .traceOverflow {
+    display: inline-flex;
+    position: relative;
+  }
+
+  .traceOverflowSummary {
+    display: inline-flex;
+    min-height: 44px;
+    min-width: 44px;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .traceOverflow .traceOverflowMenu {
+    display: none;
+  }
+
+  .traceOverflow[data-overflow-open="true"] .traceOverflowMenu {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    gap: 4px;
+    z-index: 60;
+    min-width: 200px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  }
+
+  .traceOverflow[data-overflow-open="true"] .traceOverflowMenu .button {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+
+  /* Promote trace-bar theme toggle, hide the header copy on phone. */
+  .button.themeToggle.traceThemeToggle {
+    display: inline-flex;
+  }
+
+  .appHeader #themeToggle {
+    display: none;
+  }
+
+  /*
+   * Issue #184: keep Path: + Score: + breadcrumb on the same row by
+   * letting the breadcrumb shrink alongside its siblings rather than
+   * claiming a full row of its own. The overflow menu absorbs the
+   * secondary buttons so this row is the only one needed.
+   */
+  .pathLabel,
+  .traceScore {
+    flex: 0 0 auto;
+  }
+
+  .breadcrumb {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .traceButtons {
+    flex: 0 0 auto;
+    margin-left: auto;
   }
 
   /* Single-column stack. */
