@@ -47,6 +47,7 @@ const STATIC_FILES = [
   "./shared/sparkline.js",
   "./shared/touch_gestures.js",
   "./shared/theme.js",
+  "./shared/trace_score.js",
   "./shared/colour_maps.js",
   "./shared/correlation.js",
   "./shared/debounce.js",

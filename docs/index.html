@@ -99,40 +99,60 @@
       <!-- Trace breadcrumb at top -->
       <nav class="traceBar">
         <span class="pathLabel">Path:</span>
-        <!-- Issue #184: inbound-allocation Σ score, shown beside Path on the
-             breadcrumb line so it's visible without opening the modal. -->
-        <span id="tracePathScore" class="pathScore" hidden>
-          <span class="pathScoreLabel">Score:</span>
-          <span id="tracePathScoreValue" class="pathScoreValue">—</span>
-        </span>
+        <span
+          id="traceScore"
+          class="traceScore"
+          aria-label="Current neuron impact"
+          title="Current neuron impact (share of output influence)"
+          hidden
+        ></span>
         <ol id="traceBreadcrumb" class="breadcrumb"></ol>
         <div class="traceButtons">
           <button id="traceBackBtn" class="button buttonSmall">← Back</button>
           <button id="traceClearBtn" class="button buttonSmall buttonSecondary">
             Clear
           </button>
-          <!-- Issue #184: on phone viewports Observations / 🧠 / Synapses
-               collapse into a `⋯` overflow menu. On desktop the wrapper has
-               display:contents so the buttons render inline as before. -->
-          <div class="traceOverflow" id="traceOverflow">
+          <!--
+            Issue #184: secondary theme toggle hosted in the trace nav row
+            so phone viewports can drop the header theme toggle and reclaim
+            a row of vertical space. Hidden on desktop via CSS; the header
+            #themeToggle remains the primary control there.
+          -->
+          <button
+            id="themeToggleTrace"
+            class="button themeToggle traceThemeToggle"
+            aria-label="Theme"
+            type="button"
+          >
+            A
+          </button>
+          <!--
+            Issue #184: overflow wrapper. On desktop it is transparent
+            (display: contents) so the children flow inline as before. On
+            phone the .traceOverflowSummary button toggles
+            .traceOverflowMenu as a popup so Back/Clear stay visible while
+            Observations/🧠/Synapses collapse into a single overflow.
+          -->
+          <div
+            class="traceOverflow"
+            data-overflow-open="false"
+          >
             <button
-              id="traceOverflowToggle"
-              class="button buttonSmall buttonSecondary traceOverflowToggle"
               type="button"
+              class="button buttonSmall buttonSecondary traceOverflowSummary"
+              aria-label="More actions"
               aria-haspopup="true"
               aria-expanded="false"
-              aria-controls="traceOverflowMenu"
-              aria-label="More actions"
               title="More actions"
             >
               ⋯
             </button>
-            <div
-              id="traceOverflowMenu"
-              class="traceOverflowMenu"
-              role="menu"
-            >
-              <button id="obsBtn" class="button buttonSmall buttonSecondary">
+            <div class="traceOverflowMenu" role="menu">
+              <button
+                id="obsBtn"
+                class="button buttonSmall buttonSecondary"
+                role="menuitem"
+              >
                 Observations
               </button>
               <a
@@ -141,12 +161,14 @@
                 href="./graph/"
                 aria-label="Open 3D neural network view"
                 title="Open 3D neural network view"
+                role="menuitem"
               >🧠</a>
               <button
                 id="synapsePanelToggle"
                 class="button buttonSmall buttonSecondary synapsePanelToggle"
                 aria-label="Toggle synapse panel"
                 title="Toggle synapse panel"
+                role="menuitem"
               >
                 Synapses ⇄
               </button>

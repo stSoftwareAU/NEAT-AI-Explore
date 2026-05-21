@@ -72,6 +72,7 @@ import {
   computeNonFiniteIssues,
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
+import { formatTraceScore } from "./shared/trace_score.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
   getInitialFocusTarget,
@@ -219,6 +220,7 @@ const el = {
   progressBar: document.getElementById("progressBar"),
   status: document.getElementById("status"),
   traceBreadcrumb: document.getElementById("traceBreadcrumb"),
+  traceScore: document.getElementById("traceScore"),
   traceBackBtn: document.getElementById("traceBackBtn"),
   traceClearBtn: document.getElementById("traceClearBtn"),
   graphBtn: document.getElementById("graphBtn"),
@@ -1324,6 +1326,11 @@ function clearTrace() {
 function renderTrace() {
   el.traceBreadcrumb.innerHTML = "";
 
+  // Issue #184: keep the "Score:" badge next to "Path:" in sync with the
+  // current step of the trace so phone users can see the inbound-allocation
+  // score without opening the path-summary modal.
+  renderTraceScore();
+
   // Build the list of items to display, truncating in the middle if needed.
   // When path is long, show: first 2 → … → last 2
   // This preserves the origin (output neuron) and current position.
@@ -1355,6 +1362,70 @@ function renderTrace() {
     }
 
     el.traceBreadcrumb.appendChild(li);
+  });
+}
+
+/**
+ * Issue #184: update the "Score:" badge that sits next to the "Path:" label
+ * in the trace nav row. The badge shows the current (deepest) neuron's
+ * impact as a compact percentage. When there is no trace yet, the badge is
+ * hidden so it does not consume horizontal space.
+ */
+function renderTraceScore() {
+  if (!el.traceScore) return;
+  const currentUuid = trace.length > 0 ? trace[trace.length - 1] : null;
+  if (!currentUuid) {
+    el.traceScore.hidden = true;
+    el.traceScore.textContent = "";
+    return;
+  }
+  const impact = getNeuronImpact(currentUuid);
+  const label = formatTraceScore(impact);
+  el.traceScore.textContent = `Score: ${label}`;
+  el.traceScore.hidden = false;
+}
+
+/**
+ * Issue #184: wire the "⋯" overflow button in the trace nav row.
+ *
+ * On phone viewports the secondary trace actions (Observations, 🧠,
+ * Synapses) collapse into a popup menu so Back/Clear stay always visible.
+ * On wider viewports CSS keeps the wrapper transparent (display: contents),
+ * so the children flow inline — the overflow button is hidden and this
+ * handler is a no-op for menu visibility.
+ */
+function initTraceOverflowMenu() {
+  const wrapper = document.querySelector(".traceOverflow");
+  if (!(wrapper instanceof HTMLElement)) return;
+  const summary = wrapper.querySelector(".traceOverflowSummary");
+  if (!(summary instanceof HTMLElement)) return;
+
+  const setOpen = (open) => {
+    wrapper.setAttribute("data-overflow-open", open ? "true" : "false");
+    summary.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+
+  const close = () => setOpen(false);
+
+  summary.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const isOpen = wrapper.getAttribute("data-overflow-open") === "true";
+    setOpen(!isOpen);
+  });
+
+  // Close when a menu item is clicked so the popup does not linger.
+  wrapper.querySelectorAll(".traceOverflowMenu [role=menuitem]")
+    .forEach((item) => {
+      item.addEventListener("click", () => close());
+    });
+
+  // Close on outside click and Escape.
+  document.addEventListener("click", (ev) => {
+    if (wrapper.getAttribute("data-overflow-open") !== "true") return;
+    if (!wrapper.contains(/** @type {Node} */ (ev.target))) close();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") close();
   });
 }
 
@@ -3799,7 +3870,11 @@ const snapshotUrlB64Param = params.get("snapshotUrlB64");
 const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
   params.get("file");
 
-initThemeMode();
+// Issue #184: wire both header and trace-bar theme toggles to the same
+// handler so phone viewports can hide the header button and still cycle
+// themes from the trace nav row.
+initThemeMode({ toggleButtonIds: ["themeToggle", "themeToggleTrace"] });
+initTraceOverflowMenu();
 initTouchTooltips();
 initInboundFilters();
 initCompactTraceNav();
