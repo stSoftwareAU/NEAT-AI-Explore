@@ -87,12 +87,37 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
  * This is designed for *large* creatures: it explores the highest-share inbound
  * branches first and caps work so it remains usable on iPhone.
  *
+ * Cycle handling
+ * --------------
+ * The walk is a best-first traversal upstream from `focusUuid`. Each queued
+ * frontier item carries its own `path` array — the chain of neurons from the
+ * currently-explored node back up to `focusUuid`. Before enqueuing an inbound
+ * predecessor we check whether that predecessor already appears on the
+ * current path; if it does, the edge is a back-edge and we skip it.
+ *
+ * This is equivalent to "visit each `(neuron, depth)` pair on a given walk at
+ * most once and skip back-edges": a neuron may still be attributed multiple
+ * times along *different* (acyclic) paths — which is what summing
+ * contribution share across all upstream paths requires — but a single walk
+ * never revisits a neuron it has already passed through. Combined with
+ * `maxDepth`, this guarantees termination on any graph, including recurrent
+ * networks.
+ *
+ * Output-neuron callers
+ * ---------------------
+ * Snapshots typically have a small number of output neurons, so we can
+ * afford to be more thorough when the focus is an output. Pass
+ * `exhaustive: true` to relax the per-node fan-out cap, the global work cap,
+ * the depth cap and the frontier-queue cap. The defaults are kept identical
+ * to the previous behaviour for all other callers.
+ *
  * @param {{
  *   focusUuid: string,
  *   getInboundEdges: (toUuid: string) => Edge[],
  *   maxDepth?: number,
  *   maxWork?: number,
  *   maxInboundPerNode?: number,
+ *   exhaustive?: boolean,
  * }} input
  * @returns {{
  *   focusUuid: string,
@@ -103,12 +128,22 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
 export function computeTopContributingInputs(input) {
   const focusUuid = input?.focusUuid ?? "";
   const getInboundEdges = input?.getInboundEdges;
-  const maxDepth = Math.max(1, Math.floor(input?.maxDepth ?? 7));
-  const maxWork = Math.max(50, Math.floor(input?.maxWork ?? 1600));
+  const exhaustive = input?.exhaustive === true;
+  const maxDepth = Math.max(
+    1,
+    Math.floor(input?.maxDepth ?? (exhaustive ? 32 : 7)),
+  );
+  const maxWork = Math.max(
+    50,
+    Math.floor(input?.maxWork ?? (exhaustive ? 100000 : 1600)),
+  );
   const maxInboundPerNode = Math.max(
     5,
-    Math.floor(input?.maxInboundPerNode ?? 40),
+    Math.floor(
+      input?.maxInboundPerNode ?? (exhaustive ? Number.MAX_SAFE_INTEGER : 40),
+    ),
   );
+  const queueCap = exhaustive ? 5000 : 300;
 
   if (!focusUuid || typeof getInboundEdges !== "function") {
     return { focusUuid: focusUuid ?? "", inputs: [], truncated: false };
@@ -137,7 +172,7 @@ export function computeTopContributingInputs(input) {
     queue.push(item);
     // Simple bounded priority queue by score (descending).
     queue.sort((a, b) => b.score - a.score);
-    if (queue.length > 300) queue.length = 300;
+    if (queue.length > queueCap) queue.length = queueCap;
   }
 
   while (queue.length > 0) {
@@ -188,6 +223,10 @@ export function computeTopContributingInputs(input) {
       const nextUuid = s.fromUuid;
       const nextScore = cur.score * (s.share ?? 0);
       if (nextScore <= 0) continue;
+      // Skip back-edges: if `nextUuid` is already on this walk's path, the
+      // edge would close a cycle. Other walks may still attribute through
+      // `nextUuid` along different paths.
+      if (cur.path.includes(nextUuid)) continue;
       const nextPath = [nextUuid].concat(cur.path);
       push({
         uuid: nextUuid,
