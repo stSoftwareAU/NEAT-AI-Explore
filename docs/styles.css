@@ -798,6 +798,23 @@ body {
   max-width: 140px;
 }
 
+/* Observation contributions panel (Issue #186). */
+.observationContributionsLabelWrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.observationContributionsGroup {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
 .impactBreakdownStats {
   display: flex;
   flex-wrap: wrap;

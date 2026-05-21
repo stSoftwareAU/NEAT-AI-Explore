@@ -225,7 +225,11 @@
           >
             <div id="impactBreakdown" class="impactBreakdown"></div>
             <div id="impactDiagnosticsPanel" class="impactBreakdown"></div>
-            <div id="topInputsPanel" class="impactBreakdown"></div>
+            <div
+              id="observationContributionsPanel"
+              class="impactBreakdown observationContributions"
+            >
+            </div>
           </div>
           <div
             id="neuronTabPanelIssues"
@@ -446,31 +450,6 @@
           </button>
         </div>
         <div id="obsModalBody" class="modalBody"></div>
-      </div>
-    </div>
-
-    <!-- Explain \"why this score\" modal (top contributing observations). -->
-    <div id="explainModal" class="modal" aria-hidden="true">
-      <div id="explainModalBackdrop" class="modalBackdrop"></div>
-      <div
-        class="modalPanel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Top contributing observations"
-      >
-        <div class="modalHeader">
-          <div id="explainModalTitle" class="modalTitle">
-            Top contributing observations
-          </div>
-          <button
-            id="explainModalClose"
-            class="button buttonSmall buttonSecondary"
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-        <div id="explainModalBody" class="modalBody"></div>
       </div>
     </div>
 
