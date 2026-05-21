@@ -217,7 +217,7 @@ Deno.test("upgrade-dependencies workflow builds a markdown summary embedding the
   );
 });
 
-Deno.test("upgrade-dependencies workflow opens a PR via peter-evans/create-pull-request@v7", async () => {
+Deno.test("upgrade-dependencies workflow opens a PR via peter-evans/create-pull-request pinned to a 40-char SHA (#190)", async () => {
   const wf = await loadWorkflow();
   const job = Object.values(wf.jobs ?? {})[0];
   const steps = job!.steps ?? [];
@@ -225,9 +225,12 @@ Deno.test("upgrade-dependencies workflow opens a PR via peter-evans/create-pull-
     (s.uses ?? "").startsWith("peter-evans/create-pull-request@")
   );
   assert(createPr, "workflow must open a pull request with the updates");
+  const ref = (createPr!.uses ?? "").split("@")[1] ?? "";
+  // Pin to a 40-char commit SHA so a hijacked tag cannot push to Develop.
+  // The human-readable version is kept in a comment above the `uses:` line.
   assert(
-    (createPr!.uses ?? "").includes("v7"),
-    "must use peter-evans/create-pull-request@v7",
+    /^[0-9a-f]{40}$/.test(ref),
+    `peter-evans/create-pull-request must be pinned to a 40-char commit SHA, got '${ref}' (#190)`,
   );
   assertEquals(
     createPr!.if,

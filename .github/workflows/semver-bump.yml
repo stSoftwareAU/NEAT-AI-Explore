@@ -14,14 +14,16 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref != 'Develop'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           token: ${{ secrets.ACTIONS_PUSH }}
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v2
+        # denoland/setup-deno@v2.0.4
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
         with:
           deno-version: v2.x
 
