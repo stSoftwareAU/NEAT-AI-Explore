@@ -114,6 +114,45 @@ Deno.test("upgrade-dependencies workflow checks out Develop and sets up Deno v2"
   );
 });
 
+Deno.test("upgrade-dependencies workflow runs the JSR quarantine gate before deno outdated (#189)", async () => {
+  const wf = await loadWorkflow();
+  const job = Object.values(wf.jobs ?? {})[0];
+  const steps = job!.steps ?? [];
+
+  const quarantineIdx = steps.findIndex((s) =>
+    typeof s.run === "string" && s.run.includes("jsr_quarantine_check.ts")
+  );
+  const outdatedIdx = steps.findIndex((s) =>
+    typeof s.run === "string" && s.run.includes("deno outdated")
+  );
+
+  assert(
+    quarantineIdx >= 0,
+    "workflow must run scripts/jsr_quarantine_check.ts",
+  );
+  assert(
+    outdatedIdx > quarantineIdx,
+    "JSR quarantine gate must run before `deno outdated`",
+  );
+
+  const step = steps[quarantineIdx] as WorkflowStep & {
+    env?: Record<string, string>;
+  };
+  assert(
+    step.env !== undefined && "VIBE_BUMP_QUARANTINE_HOURS" in step.env,
+    "quarantine step must set VIBE_BUMP_QUARANTINE_HOURS",
+  );
+  const run = step.run ?? "";
+  assert(
+    /--allow-net=api\.jsr\.io/.test(run),
+    "quarantine step must restrict network access to api.jsr.io",
+  );
+  assert(
+    /--allow-read/.test(run),
+    "quarantine step must grant --allow-read so it can load deno.json",
+  );
+});
+
 Deno.test("upgrade-dependencies workflow runs deno outdated --update --latest with tee capture", async () => {
   const wf = await loadWorkflow();
   const job = Object.values(wf.jobs ?? {})[0];
