@@ -1876,11 +1876,27 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
 }
 
 /**
+ * Session-scoped user overrides for the "Observation contributions" panel's
+ * collapsed/expanded state (#187). Keyed by focused output neuron UUID;
+ * value is the user's explicit choice. Absent keys fall back to the
+ * viewport default (collapsed on phone, expanded on tablet/desktop).
+ *
+ * @type {Map<string, "open" | "closed">}
+ */
+const OBSERVATION_CONTRIBUTIONS_TOGGLE = new Map();
+
+/**
  * Observation contributions panel (Issue #186).
  *
  * Renders the top 50 input observations ranked by their multi-hop share of
  * the focused output neuron. Only rendered on output neuron cards; hidden
  * and input neurons clear the panel and bail.
+ *
+ * On phone viewports (≤520px, matching `isNarrowMobile()`) the panel is
+ * collapsed by default to respect the compact-layout decisions from #184
+ * (#187). The user's manual expand/collapse is remembered in
+ * `OBSERVATION_CONTRIBUTIONS_TOGGLE` so re-renders preserve their choice
+ * within the same session.
  */
 function renderObservationContributions(uuid, neuronType) {
   const panel = el.observationContributionsPanel;
@@ -1913,7 +1929,35 @@ function renderObservationContributions(uuid, neuronType) {
     inputs: cached.inputs ?? [],
     getAlias,
     getGroup: getInputGroup,
+    isPhone: isNarrowMobile(),
+    userToggle: OBSERVATION_CONTRIBUTIONS_TOGGLE.get(uuid) ?? null,
   });
+
+  // Track user toggles so the panel state survives re-renders in the same
+  // session (#187).
+  const details = panel.querySelector(
+    `details.observationContributionsDetails[data-uuid="${cssEscape(uuid)}"]`,
+  );
+  if (details) {
+    details.addEventListener("toggle", () => {
+      OBSERVATION_CONTRIBUTIONS_TOGGLE.set(
+        uuid,
+        details.open ? "open" : "closed",
+      );
+    });
+  }
+}
+
+/**
+ * Minimal CSS attribute selector escaper for UUIDs that may include
+ * characters with special meaning in selectors. UUIDs in this project are
+ * conservative (`input-N`, hex chunks), but escape defensively for safety.
+ */
+function cssEscape(value) {
+  if (typeof globalThis.CSS?.escape === "function") {
+    return globalThis.CSS.escape(value);
+  }
+  return String(value).replace(/(["\\\]])/g, "\\$1");
 }
 
 function renderImpactDiagnosticsPanel(uuid, neuronType) {

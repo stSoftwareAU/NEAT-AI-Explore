@@ -19,6 +19,7 @@ import {
   buildObservationContributionsHtml,
   buildObservationContributionsRow,
   formatSharePercent,
+  isObservationContributionsOpen,
   MAX_OBSERVATION_ROWS,
   shouldRenderObservationContributions,
 } from "../docs/shared/observation_contributions.js";
@@ -180,4 +181,162 @@ Deno.test("formatSharePercent: formats a fractional share as a percent string", 
   assertEquals(formatSharePercent(0.5, 4), "50.00%");
   assertEquals(formatSharePercent(1, 4), "100.0%");
   assertEquals(formatSharePercent(0, 4), "0.000%");
+});
+
+// ============================================================================
+// Collapsible <details> wrapper (Issue #187).
+// ============================================================================
+
+Deno.test("isObservationContributionsOpen: open on desktop by default", () => {
+  assertEquals(isObservationContributionsOpen({ isPhone: false }), true);
+  assertEquals(isObservationContributionsOpen({}), true);
+});
+
+Deno.test("isObservationContributionsOpen: collapsed on phone by default", () => {
+  assertEquals(isObservationContributionsOpen({ isPhone: true }), false);
+});
+
+Deno.test("isObservationContributionsOpen: user toggle wins over viewport default", () => {
+  // User explicitly opened on phone — stay open across re-renders.
+  assertEquals(
+    isObservationContributionsOpen({ isPhone: true, userToggle: "open" }),
+    true,
+  );
+  // User explicitly closed on desktop — stay closed across re-renders.
+  assertEquals(
+    isObservationContributionsOpen({ isPhone: false, userToggle: "closed" }),
+    false,
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: wraps body in <details> with summary", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(3),
+  });
+  assert(
+    html.includes("<details"),
+    "panel must use a native <details> element",
+  );
+  assert(
+    html.includes("<summary"),
+    "panel must carry the heading in a <summary> element",
+  );
+  // The summary shows the count so a phone user can scan when collapsed.
+  assert(
+    html.includes("Observation contributions (top 3)"),
+    "summary must show the row count alongside the title",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: collapsed by default on phone viewports", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: true,
+  });
+  // The `open` attribute must NOT appear on the <details> element.
+  assert(
+    !/<details[^>]*\sopen[\s>]/.test(html),
+    "details must be collapsed on phone viewports by default",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: open by default on desktop viewports", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: false,
+  });
+  assert(
+    /<details[^>]*\sopen[\s>]/.test(html),
+    "details must be open on desktop viewports by default",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: user 'open' override persists across re-render on phone", () => {
+  // First render on phone: collapsed by default.
+  const firstRender = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: true,
+  });
+  assert(
+    !/<details[^>]*\sopen[\s>]/.test(firstRender),
+    "first render on phone is collapsed",
+  );
+
+  // Caller (docs/app.js) records the user expanding the panel and passes
+  // userToggle: "open" on the next render — the panel must stay open.
+  const secondRender = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: true,
+    userToggle: "open",
+  });
+  assert(
+    /<details[^>]*\sopen[\s>]/.test(secondRender),
+    "user 'open' toggle must persist across re-render on phone viewports",
+  );
+
+  // And a third render with the same override stays open — the toggle is
+  // session-scoped, not one-shot.
+  const thirdRender = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: true,
+    userToggle: "open",
+  });
+  assert(
+    /<details[^>]*\sopen[\s>]/.test(thirdRender),
+    "user 'open' toggle survives repeated re-renders",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: user 'closed' override persists across re-render on desktop", () => {
+  // Default desktop render is open.
+  const firstRender = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: false,
+  });
+  assert(
+    /<details[^>]*\sopen[\s>]/.test(firstRender),
+    "first render on desktop is open",
+  );
+
+  // User collapses the panel — subsequent renders must respect that choice.
+  const secondRender = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(5),
+    isPhone: false,
+    userToggle: "closed",
+  });
+  assert(
+    !/<details[^>]*\sopen[\s>]/.test(secondRender),
+    "user 'closed' toggle must persist across re-render on desktop viewports",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: data-uuid is set on the <details> element", () => {
+  // docs/app.js looks up the details element by data-uuid to attach the
+  // toggle listener — guard the attribute so that lookup doesn't silently
+  // regress.
+  const html = buildObservationContributionsHtml({
+    uuid: "output-7",
+    neuronType: "output",
+    inputs: makeRows(2),
+  });
+  assert(
+    html.includes(`data-uuid="output-7"`),
+    "<details> must carry data-uuid for the toggle wiring in docs/app.js",
+  );
 });
