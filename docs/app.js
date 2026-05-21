@@ -82,7 +82,9 @@ import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
-import { formatTraceScore } from "./shared/trace_header.js";
+// Aliased on import: `trace_score.js` also exports a `formatTraceScore`
+// (a different function — see Issue #200) so we rename this one locally.
+import { formatTraceScore as formatPathAllocationScore } from "./shared/trace_header.js";
 
 /** @type {Element|null} Element that triggered the currently open modal. */
 let _modalTrigger = null;
@@ -288,7 +290,7 @@ function updateTracePathScoreUI(allocation) {
   const wrap = el.tracePathScore;
   const valueEl = el.tracePathScoreValue;
   if (!wrap || !valueEl) return;
-  const text = formatTraceScore(allocation);
+  const text = formatPathAllocationScore(allocation);
   if (text == null) {
     wrap.setAttribute("hidden", "");
     valueEl.textContent = "—";
@@ -296,57 +298,6 @@ function updateTracePathScoreUI(allocation) {
     wrap.removeAttribute("hidden");
     valueEl.textContent = text;
   }
-}
-
-/**
- * Wire the `⋯` overflow-menu toggle on phone viewports. The menu is
- * controlled by the `.isOpen` class on the wrapper; clicking the toggle
- * flips it, clicking outside closes it, and clicking a menu item also
- * closes it so the menu doesn't linger after navigation.
- */
-function initTraceOverflowMenu() {
-  const wrap = el.traceOverflow;
-  const toggle = el.traceOverflowToggle;
-  const menu = el.traceOverflowMenu;
-  if (!wrap || !toggle || !menu) return;
-
-  const close = () => {
-    wrap.classList.remove("isOpen");
-    toggle.setAttribute("aria-expanded", "false");
-  };
-  const open = () => {
-    wrap.classList.add("isOpen");
-    toggle.setAttribute("aria-expanded", "true");
-  };
-
-  toggle.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    if (wrap.classList.contains("isOpen")) close();
-    else open();
-  });
-
-  // Close after selecting a menu item.
-  menu.addEventListener("click", (ev) => {
-    const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.closest(".button")) close();
-  });
-
-  // Close on outside click.
-  document.addEventListener("click", (ev) => {
-    if (!wrap.classList.contains("isOpen")) return;
-    const target = ev.target;
-    if (target instanceof Node && wrap.contains(target)) return;
-    close();
-  });
-
-  // Close on Escape.
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && wrap.classList.contains("isOpen")) {
-      close();
-      toggle.focus();
-    }
-  });
 }
 
 /**
