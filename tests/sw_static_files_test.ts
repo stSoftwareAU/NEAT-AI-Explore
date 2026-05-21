@@ -112,6 +112,38 @@ Deno.test("index.html has error handling for app module import", async () => {
   );
 });
 
+Deno.test("HTML entry points do not tell PWA users to clear browser cache (Issue #194)", async () => {
+  // The previous error message ("Failed to load app — please clear your
+  // browser cache and reload") was a dead end on installed PWAs (especially
+  // iOS), where there is no obvious cache to clear. The replacement is the
+  // automatic recovery path via docs/shared/pwa_recovery.js.
+  const entryPoints = [
+    repoPath("docs", "index.html"),
+    repoPath("docs", "graph", "index.html"),
+    repoPath("docs", "starfield", "index.html"),
+  ];
+  for (const path of entryPoints) {
+    const html = await Deno.readTextFile(path);
+    assert(
+      !html.includes("please clear your browser cache"),
+      `${path} must not instruct PWA users to clear the browser cache`,
+    );
+    assert(
+      html.includes("pwa_recovery.js"),
+      `${path} must wire up the PWA recovery helper`,
+    );
+  }
+});
+
+Deno.test("SW STATIC_FILES caches pwa_recovery.js (Issue #194)", async () => {
+  const swSource = await Deno.readTextFile(repoPath("docs", "sw.js"));
+  const staticFiles = parseStaticFiles(swSource);
+  assert(
+    staticFiles.includes("./shared/pwa_recovery.js"),
+    "sw.js STATIC_FILES must include ./shared/pwa_recovery.js so the recovery helper is reachable offline",
+  );
+});
+
 Deno.test("index.html shows initial loading status before JS runs", async () => {
   const html = await Deno.readTextFile(repoPath("docs", "index.html"));
   // The status element should have visible text content so users see

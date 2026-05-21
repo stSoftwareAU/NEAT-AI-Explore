@@ -234,7 +234,40 @@
         const v = buildId.includes("__BUILD_ID__")
           ? String(Date.now())
           : buildId;
-        await import(`./starfield.js?v=${v}`);
+        try {
+          await import(`./starfield.js?v=${v}`);
+        } catch (err) {
+          // Issue #194: PWA self-heal — clear caches, unregister SW, reload.
+          console.error("Starfield module failed to load:", err);
+          const statusEl = document.getElementById("status");
+          if (statusEl) {
+            statusEl.textContent = "Recovering — refreshing PWA caches…";
+            statusEl.className = "statusInline";
+          }
+          try {
+            const { recoverFromFailedAppLoad } = await import(
+              `../shared/pwa_recovery.js?v=${v}`
+            );
+            const result = await recoverFromFailedAppLoad({
+              storage: globalThis.sessionStorage,
+              cachesApi: globalThis.caches,
+              swContainer: navigator.serviceWorker,
+              reload: () => globalThis.location.reload(),
+            });
+            if (!result.recovered && statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
+          } catch (recoveryErr) {
+            console.error("PWA recovery failed:", recoveryErr);
+            if (statusEl) {
+              statusEl.textContent =
+                "Failed to load app. Tap and hold the icon, remove the app, then reinstall.";
+              statusEl.className = "statusInline bad";
+            }
+          }
+        }
       })();
     </script>
   </body>
