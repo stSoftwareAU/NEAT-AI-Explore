@@ -77,6 +77,7 @@ import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
+import { formatTraceScore } from "./shared/trace_header.js";
 
 /** @type {Element|null} Element that triggered the currently open modal. */
 let _modalTrigger = null;
@@ -261,7 +262,125 @@ const el = {
   overviewTopology: document.getElementById("overviewTopology"),
   overviewExploreBtn: document.getElementById("overviewExploreBtn"),
   explorerMain: document.querySelector(".explorer"),
+  // Issue #184 — compact phone trace nav.
+  tracePathScore: document.getElementById("tracePathScore"),
+  tracePathScoreValue: document.getElementById("tracePathScoreValue"),
+  traceOverflow: document.getElementById("traceOverflow"),
+  traceOverflowToggle: document.getElementById("traceOverflowToggle"),
+  traceOverflowMenu: document.getElementById("traceOverflowMenu"),
+  themeToggle: document.getElementById("themeToggle"),
+  appHeaderControls: document.querySelector(".headerControls"),
+  traceButtons: document.querySelector(".traceButtons"),
 };
+
+// ============================================================================
+// Issue #184 — compact phone trace nav
+// ============================================================================
+
+/**
+ * Update the "Score: …" indicator beside Path on the breadcrumb line.
+ * Pass `null` (or an allocation without a finite totalScore) to hide it.
+ */
+function updateTracePathScoreUI(allocation) {
+  const wrap = el.tracePathScore;
+  const valueEl = el.tracePathScoreValue;
+  if (!wrap || !valueEl) return;
+  const text = formatTraceScore(allocation);
+  if (text == null) {
+    wrap.setAttribute("hidden", "");
+    valueEl.textContent = "—";
+  } else {
+    wrap.removeAttribute("hidden");
+    valueEl.textContent = text;
+  }
+}
+
+/**
+ * Wire the `⋯` overflow-menu toggle on phone viewports. The menu is
+ * controlled by the `.isOpen` class on the wrapper; clicking the toggle
+ * flips it, clicking outside closes it, and clicking a menu item also
+ * closes it so the menu doesn't linger after navigation.
+ */
+function initTraceOverflowMenu() {
+  const wrap = el.traceOverflow;
+  const toggle = el.traceOverflowToggle;
+  const menu = el.traceOverflowMenu;
+  if (!wrap || !toggle || !menu) return;
+
+  const close = () => {
+    wrap.classList.remove("isOpen");
+    toggle.setAttribute("aria-expanded", "false");
+  };
+  const open = () => {
+    wrap.classList.add("isOpen");
+    toggle.setAttribute("aria-expanded", "true");
+  };
+
+  toggle.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    if (wrap.classList.contains("isOpen")) close();
+    else open();
+  });
+
+  // Close after selecting a menu item.
+  menu.addEventListener("click", (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.closest(".button")) close();
+  });
+
+  // Close on outside click.
+  document.addEventListener("click", (ev) => {
+    if (!wrap.classList.contains("isOpen")) return;
+    const target = ev.target;
+    if (target instanceof Node && wrap.contains(target)) return;
+    close();
+  });
+
+  // Close on Escape.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && wrap.classList.contains("isOpen")) {
+      close();
+      toggle.focus();
+    }
+  });
+}
+
+/**
+ * On phone viewports the theme `A` toggle moves down from the app header
+ * into the trace nav row so the header doesn't waste a whole line. Listen
+ * for viewport changes so the placement stays in sync as the user rotates
+ * the device or resizes the window.
+ */
+function syncThemeTogglePlacement() {
+  const toggle = el.themeToggle;
+  const traceButtons = el.traceButtons;
+  const headerControls = el.appHeaderControls;
+  if (!toggle || !traceButtons || !headerControls) return;
+  let isMobile = false;
+  try {
+    isMobile = window.matchMedia?.("(max-width: 639px)")?.matches === true;
+  } catch (_e) {
+    isMobile = false;
+  }
+  const inTraceBar = toggle.parentElement === traceButtons;
+  if (isMobile && !inTraceBar) {
+    traceButtons.appendChild(toggle);
+  } else if (!isMobile && !headerControls.contains(toggle)) {
+    headerControls.appendChild(toggle);
+  }
+}
+
+function initCompactTraceNav() {
+  initTraceOverflowMenu();
+  syncThemeTogglePlacement();
+  try {
+    const mql = window.matchMedia?.("(max-width: 639px)");
+    mql?.addEventListener?.("change", syncThemeTogglePlacement);
+  } catch (_e) {
+    // No-op — matchMedia unavailable.
+  }
+}
 
 // ============================================================================
 // Inbound list filters (to keep large creatures usable)
@@ -1194,6 +1313,8 @@ function clearTrace() {
   }
   // Issue #53/#116: Show URL/Fetch/Browse controls again.
   document.body.classList.remove("snapshotLoaded");
+  // Issue #184 — hide the inline path-score badge when leaving exploration.
+  updateTracePathScoreUI(null);
 }
 
 // ============================================================================
@@ -1918,6 +2039,8 @@ function renderImpactBreakdown(uuid, neuronImpact) {
   const inbound = getInboundSynapses(uuid);
   if (inbound.length === 0 || neuronImpact == null) {
     el.impactBreakdown.innerHTML = "";
+    // Issue #184 — no allocation to display alongside the path.
+    updateTracePathScoreUI(null);
     return;
   }
 
@@ -1935,6 +2058,8 @@ function renderImpactBreakdown(uuid, neuronImpact) {
   lastInboundAllocation = allocation;
   lastInboundToUuid = uuid;
   lastInboundPage = 0;
+  // Issue #184 — surface the Σ score beside Path on the breadcrumb line.
+  updateTracePathScoreUI(allocation);
 
   const title = "Impact ← inbound synapses";
   const note =
@@ -3677,6 +3802,7 @@ const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
 initThemeMode();
 initTouchTooltips();
 initInboundFilters();
+initCompactTraceNav();
 
 // Provide an easy on-ramp to the 3D graph explorer, carrying the current query
 // params (e.g. snapshotUrl / snapshotUrlB64) across.

@@ -54,6 +54,7 @@ const STATIC_FILES = [
   "./shared/diagnostics_scan.js",
   "./shared/ui_helpers.js",
   "./shared/modal_focus.js",
+  "./shared/trace_header.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",

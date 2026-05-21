@@ -356,6 +356,47 @@ body {
   flex-shrink: 0;
 }
 
+/* Issue #184 — inbound-allocation Σ score shown beside the Path label.
+   Hidden until an allocation is computed for the focused neuron. */
+.pathScore {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pathScore[hidden] {
+  display: none;
+}
+
+.pathScoreLabel {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pathScoreValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Issue #184 — overflow wrapper. On desktop it is transparent so its
+   children render inline as siblings of the always-visible buttons. The
+   wrapper only becomes a real positioned container on phone viewports. */
+.traceOverflow {
+  display: contents;
+}
+
+.traceOverflowMenu {
+  display: contents;
+}
+
+.traceOverflowToggle {
+  display: none;
+}
+
 /* Main explorer area */
 .explorerMain {
   display: flex;
@@ -1630,30 +1671,89 @@ body {
   .traceBar {
     padding: 8px 14px;
     flex-wrap: wrap;
-    row-gap: 8px;
+    row-gap: 6px;
     position: sticky;
     top: 0;
     z-index: 15;
     background: rgba(251, 191, 36, 0.08);
   }
 
+  /* Issue #184: Path + Score share the breadcrumb line. Breadcrumb wraps
+     to the rest of the row instead of forcing a new line; the trace
+     buttons (Back, Clear, ⋯, theme A) sit on a second row. */
   .breadcrumb {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .pathScore {
+    flex: 0 0 auto;
   }
 
   /* Compact trace buttons as toolbar. */
   .traceButtons {
     flex: 1 1 100%;
     justify-content: flex-start;
+    align-items: center;
     gap: 4px;
   }
 
   .traceButtons .button {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /* Issue #184: Overflow `⋯` menu — Observations / 🧠 / Synapses collapse
+     into a pop-up so Back + Clear stay always-visible. */
+  .traceOverflow {
+    display: inline-block;
+    position: relative;
+    margin-left: auto;
+  }
+
+  .traceOverflowToggle {
+    display: inline-flex;
+  }
+
+  .traceOverflowMenu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    min-width: 180px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    z-index: 30;
+  }
+
+  .traceOverflow.isOpen .traceOverflowMenu {
+    display: flex;
+  }
+
+  .traceOverflow.isOpen .traceOverflowToggle {
+    background: rgba(96, 165, 250, 0.25);
+    border-color: var(--accent);
+  }
+
+  .traceOverflowMenu .button {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+
+  /* Issue #184: Theme `A` toggle moves down into the trace nav row on
+     phone viewports — JS reparents the element to .traceButtons. The
+     button still uses .themeToggle sizing. */
+  .traceButtons #themeToggle.themeToggle {
+    margin-left: 0;
+    flex: 0 0 auto;
   }
 
   /* Single-column stack. */

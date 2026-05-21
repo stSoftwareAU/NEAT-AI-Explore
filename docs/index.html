@@ -99,30 +99,59 @@
       <!-- Trace breadcrumb at top -->
       <nav class="traceBar">
         <span class="pathLabel">Path:</span>
+        <!-- Issue #184: inbound-allocation Σ score, shown beside Path on the
+             breadcrumb line so it's visible without opening the modal. -->
+        <span id="tracePathScore" class="pathScore" hidden>
+          <span class="pathScoreLabel">Score:</span>
+          <span id="tracePathScoreValue" class="pathScoreValue">—</span>
+        </span>
         <ol id="traceBreadcrumb" class="breadcrumb"></ol>
         <div class="traceButtons">
           <button id="traceBackBtn" class="button buttonSmall">← Back</button>
           <button id="traceClearBtn" class="button buttonSmall buttonSecondary">
             Clear
           </button>
-          <button id="obsBtn" class="button buttonSmall buttonSecondary">
-            Observations
-          </button>
-          <a
-            id="graphBtn"
-            class="button buttonSmall buttonSecondary"
-            href="./graph/"
-            aria-label="Open 3D neural network view"
-            title="Open 3D neural network view"
-          >🧠</a>
-          <button
-            id="synapsePanelToggle"
-            class="button buttonSmall buttonSecondary synapsePanelToggle"
-            aria-label="Toggle synapse panel"
-            title="Toggle synapse panel"
-          >
-            Synapses ⇄
-          </button>
+          <!-- Issue #184: on phone viewports Observations / 🧠 / Synapses
+               collapse into a `⋯` overflow menu. On desktop the wrapper has
+               display:contents so the buttons render inline as before. -->
+          <div class="traceOverflow" id="traceOverflow">
+            <button
+              id="traceOverflowToggle"
+              class="button buttonSmall buttonSecondary traceOverflowToggle"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="traceOverflowMenu"
+              aria-label="More actions"
+              title="More actions"
+            >
+              ⋯
+            </button>
+            <div
+              id="traceOverflowMenu"
+              class="traceOverflowMenu"
+              role="menu"
+            >
+              <button id="obsBtn" class="button buttonSmall buttonSecondary">
+                Observations
+              </button>
+              <a
+                id="graphBtn"
+                class="button buttonSmall buttonSecondary"
+                href="./graph/"
+                aria-label="Open 3D neural network view"
+                title="Open 3D neural network view"
+              >🧠</a>
+              <button
+                id="synapsePanelToggle"
+                class="button buttonSmall buttonSecondary synapsePanelToggle"
+                aria-label="Toggle synapse panel"
+                title="Toggle synapse panel"
+              >
+                Synapses ⇄
+              </button>
+            </div>
+          </div>
         </div>
       </nav>
 
