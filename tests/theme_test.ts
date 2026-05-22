@@ -40,8 +40,20 @@ Deno.test("themeModeLabel returns human-readable labels", () => {
 
 // ── themeModeGlyph ──────────────────────────────────────────────────────────
 
-Deno.test("themeModeGlyph returns expected symbols", () => {
-  assertEquals(themeModeGlyph("auto"), "A");
-  assertEquals(themeModeGlyph("light"), "☀");
-  assertEquals(themeModeGlyph("dark"), "☾");
+// Issue #204: the single theme toggle uses emoji glyphs so the dark/light/auto
+// states read visually rather than as ambiguous letters. Variation Selector-16
+// (U+FE0F) is appended to monochrome code points to request the emoji
+// presentation in browsers.
+Deno.test("themeModeGlyph returns emoji symbols for each mode", () => {
+  assertEquals(themeModeGlyph("auto"), "🌓");
+  assertEquals(themeModeGlyph("light"), "☀️");
+  assertEquals(themeModeGlyph("dark"), "🌙");
+});
+
+Deno.test("themeModeGlyph falls back to auto glyph for invalid input", () => {
+  // Unknown modes should not crash — they should yield the auto glyph so the
+  // toggle button always renders something readable.
+  assertEquals(themeModeGlyph("invalid"), "🌓");
+  assertEquals(themeModeGlyph(null), "🌓");
+  assertEquals(themeModeGlyph(undefined), "🌓");
 });

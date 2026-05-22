@@ -63,7 +63,7 @@
         <span id="status" class="statusInline" role="status" aria-live="polite"
         >Loading…</span>
         <button id="themeToggle" class="button themeToggle" aria-label="Theme">
-          A
+          🌓
         </button>
       </div>
     </header>
@@ -113,19 +113,12 @@
             Clear
           </button>
           <!--
-            Issue #184: secondary theme toggle hosted in the trace nav row
-            so phone viewports can drop the header theme toggle and reclaim
-            a row of vertical space. Hidden on desktop via CSS; the header
-            #themeToggle remains the primary control there.
+            Issue #184 / Issue #204: the single #themeToggle (declared in
+            .headerControls) is moved here by syncThemeTogglePlacement() on
+            phone viewports so the header doesn't waste a row. There is no
+            duplicate trace-only button — keeping two caused the "two A
+            buttons" bug reported in #204.
           -->
-          <button
-            id="themeToggleTrace"
-            class="button themeToggle traceThemeToggle"
-            aria-label="Theme"
-            type="button"
-          >
-            A
-          </button>
           <!--
             Issue #184: overflow wrapper. On desktop it is transparent
             (display: contents) so the children flow inline as before. On
