@@ -4,7 +4,7 @@
   --panel: #ffffff;
   --panelHover: #eef2ff;
   --text: #111827;
-  --muted: #6b7280;
+  --muted: #4b5563;
   --border: rgba(17, 24, 39, 0.12);
 
   /* Reusable tinted surfaces (avoid hard-coding white overlays). */
@@ -54,7 +54,7 @@
   --panel: #ffffff;
   --panelHover: #eef2ff;
   --text: #111827;
-  --muted: #6b7280;
+  --muted: #4b5563;
   --border: rgba(17, 24, 39, 0.12);
   --surfaceSoft: rgba(17, 24, 39, 0.06);
   --surfaceSofter: rgba(17, 24, 39, 0.04);
