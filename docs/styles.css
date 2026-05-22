@@ -393,15 +393,10 @@ body {
 }
 
 /*
- * Issue #184: the trace-bar theme toggle is hidden by default. Phone
- * viewports promote it (and hide the header theme toggle) so the theme
- * control lives on the same compact row as the trace navigation buttons.
- *
- * Specificity bumped to (0,3,0) so it beats `.button.themeToggle` above.
+ * Issue #184 / Issue #204: the single #themeToggle button is relocated
+ * between header and trace bar by syncThemeTogglePlacement() in app.js
+ * — no CSS-driven duplicate is needed.
  */
-.button.themeToggle.traceThemeToggle {
-  display: none;
-}
 
 /* Main explorer area */
 .explorerMain {
@@ -1797,14 +1792,11 @@ body {
     min-height: 44px;
   }
 
-  /* Promote trace-bar theme toggle, hide the header copy on phone. */
-  .button.themeToggle.traceThemeToggle {
-    display: inline-flex;
-  }
-
-  .appHeader #themeToggle {
-    display: none;
-  }
+  /*
+   * Issue #204: the single #themeToggle is relocated into .traceButtons by
+   * syncThemeTogglePlacement() on phone, so the header copy no longer needs
+   * to be hidden via CSS. The button keeps its existing .themeToggle sizing.
+   */
 
   /*
    * Issue #184: keep Path: + Score: + breadcrumb on the same row by

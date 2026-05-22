@@ -92,10 +92,19 @@ export function themeModeLabel(mode) {
   return "Auto";
 }
 
+/**
+ * Emoji glyph for each theme mode. Issue #204 replaced the literal "A" auto
+ * indicator with proper emojis so the single dark/light/auto toggle reads
+ * visually. VS-16 (U+FE0F) is appended to monochrome code points to request
+ * the emoji presentation across browsers.
+ *
+ * @param {unknown} mode
+ * @returns {string}
+ */
 export function themeModeGlyph(mode) {
-  if (mode === "light") return "☀";
-  if (mode === "dark") return "☾";
-  return "A";
+  if (mode === "light") return "☀️";
+  if (mode === "dark") return "🌙";
+  return "🌓";
 }
 
 export function cycleThemeMode(current) {

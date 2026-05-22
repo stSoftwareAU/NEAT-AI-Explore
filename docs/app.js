@@ -3731,10 +3731,10 @@ const snapshotUrlB64Param = params.get("snapshotUrlB64");
 const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
   params.get("file");
 
-// Issue #184: wire both header and trace-bar theme toggles to the same
-// handler so phone viewports can hide the header button and still cycle
-// themes from the trace nav row.
-initThemeMode({ toggleButtonIds: ["themeToggle", "themeToggleTrace"] });
+// Issue #184 / Issue #204: there is a single #themeToggle button.
+// syncThemeTogglePlacement() relocates it between .headerControls and
+// .traceButtons based on viewport width, so we only ever bind one button.
+initThemeMode({ toggleButtonId: "themeToggle" });
 initTraceOverflowMenu();
 initTouchTooltips();
 initInboundFilters();
