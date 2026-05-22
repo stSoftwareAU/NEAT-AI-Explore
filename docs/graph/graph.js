@@ -4031,10 +4031,19 @@ function initStarfield() {
   }
 
   el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
-  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL).catch((e) => {
-    setStatus(e.message ?? "Auto-load failed", "bad");
-    console.error("Auto-load failed:", e);
-  });
+  // Skip auto-load when `?noAutoLoad=1` is set (used by pa11y-ci so the page
+  // settles without waiting on a remote network fetch that would time out in CI).
+  const _autoLoadParams = new URLSearchParams(
+    typeof location !== "undefined" ? location.search : "",
+  );
+  if (_autoLoadParams.get("noAutoLoad") !== "1") {
+    autoLoadWithRetry(DEFAULT_SNAPSHOT_URL, DEFAULT_SNAPSHOT_URL).catch(
+      (e) => {
+        setStatus(e.message ?? "Auto-load failed", "bad");
+        console.error("Auto-load failed:", e);
+      },
+    );
+  }
 
   // Animation loop — track previous camera pose to skip label updates when
   // nothing has changed (avoids unnecessary DOM work each frame).

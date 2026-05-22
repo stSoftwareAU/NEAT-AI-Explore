@@ -4,6 +4,10 @@
 // - MD013 (line-length) is disabled — prose and tables in this repo wrap to
 //   readable widths in the editor and CI does not need to enforce a column
 //   limit on Markdown.
+// - MD024 (no-duplicate-heading) uses siblings_only mode — CHANGELOG.md
+//   follows Keep a Changelog, which repeats section headings (Added, Changed,
+//   etc.) under different version headings. Only true sibling duplicates are
+//   flagged.
 // - MD041 (first-line-h1) is disabled — generated PR-summary documents under
 //   docs/ start with `## Summary` rather than a top-level heading.
 // - The historical archive (which now holds every PR-summary file per
@@ -14,6 +18,7 @@
   "config": {
     "default": true,
     "MD013": false,
+    "MD024": { "siblings_only": true },
     "MD041": false
   },
   "globs": [
