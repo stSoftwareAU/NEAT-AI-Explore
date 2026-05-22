@@ -6,9 +6,10 @@
 //   limit on Markdown.
 // - MD041 (first-line-h1) is disabled — generated PR-summary documents under
 //   docs/ start with `## Summary` rather than a top-level heading.
-// - Auto-generated PR-summary files and the historical archive are excluded
-//   so that legacy formatting does not block new PRs. The lint applies to
-//   README.md and any other authored docs added in future.
+// - The historical archive (which now holds every PR-summary file per
+//   Issue #208) is excluded so that legacy formatting does not block new
+//   PRs. The lint applies to README.md and any other authored docs added
+//   in future.
 {
   "config": {
     "default": true,
@@ -20,7 +21,6 @@
   ],
   "ignores": [
     "docs/archive/**",
-    "docs/pr-summary-*.md",
     "node_modules/**"
   ]
 }
