@@ -41,6 +41,11 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   `docs/impact_diagnostics.js` are the single source of truth (imported by both
   the app and tests)
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
+- **Accessibility workflow**: `.github/workflows/a11y.yml` runs
+  [`pa11y-ci`](https://github.com/pa11y/pa11y-ci) against the Explorer, Graph
+  and Starfield pages on every pull request. The configuration lives in
+  `pa11yci.json` and targets the WCAG 2 AA standard, so regressions in labels,
+  contrast, focus traps or ARIA usage are caught before they reach GitHub Pages.
 - **Auto-bump workflow**: `.github/workflows/upgrade-dependencies.yml` runs
   weekly (Mondays 06:00 UTC, plus `workflow_dispatch`), invokes
   `deno outdated --update --latest`, and opens a PR against `Develop` with the
