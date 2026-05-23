@@ -29,12 +29,15 @@ jobs:
 
       - name: Check Version Update
         id: check_version
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -Eeuo pipefail
 
-          # Get the base branch version
-          git fetch origin ${{ github.base_ref }}:${{ github.base_ref }} || true
-          git show origin/${{ github.base_ref }}:version.json > /tmp/base_version.json 2>/dev/null || echo "{}" > /tmp/base_version.json
+          # Get the base branch version — route BASE_REF via env to defuse
+          # GH Actions script-injection (Issue #217).
+          git fetch origin "$BASE_REF:$BASE_REF" || true
+          git show "origin/$BASE_REF:version.json" > /tmp/base_version.json 2>/dev/null || echo "{}" > /tmp/base_version.json
 
           BASE_VERSION=$(deno eval "try { const json = JSON.parse(Deno.readTextFileSync('/tmp/base_version.json')); console.log(json.version || ''); } catch { console.log(''); }")
 
@@ -44,24 +47,24 @@ jobs:
           echo "Base version: $BASE_VERSION"
           echo "Current version: $CURRENT_VERSION"
 
-          if [ -z \"$BASE_VERSION\" ]; then
-            echo \"Could not determine base version, skipping update\"
-            echo \"needs_update=false\" >> $GITHUB_OUTPUT
-          elif [ \"$CURRENT_VERSION\" = \"$BASE_VERSION\" ]; then
-            echo \"Version unchanged, will update patch version\"
-            echo \"needs_update=true\" >> $GITHUB_OUTPUT
-            echo \"base_version=$BASE_VERSION\" >> $GITHUB_OUTPUT
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Could not determine base version, skipping update"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          elif [ "$CURRENT_VERSION" = "$BASE_VERSION" ]; then
+            echo "Version unchanged, will update patch version"
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo \"Version has been updated in PR\"
-            echo \"needs_update=false\" >> $GITHUB_OUTPUT
+            echo "Version has been updated in PR"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Update Patch Version
         if: steps.check_version.outputs.needs_update == 'true'
+        env:
+          BASE_VERSION: ${{ steps.check_version.outputs.base_version }}
         run: |
           set -Eeuo pipefail
-
-          BASE_VERSION="${{ steps.check_version.outputs.base_version }}"
 
           # Parse version (e.g., 0.1.0 -> 0.1.1)
           IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
@@ -75,9 +78,11 @@ jobs:
 
           echo "Updating version from $BASE_VERSION to $NEW_VERSION"
 
-          deno eval "
+          # Pass NEW_VERSION to deno via env so it is not concatenated into
+          # the script source (defence in depth, Issue #217).
+          NEW_VERSION="$NEW_VERSION" deno eval "
             const json = JSON.parse(Deno.readTextFileSync('version.json'));
-            json.version = '$NEW_VERSION';
+            json.version = Deno.env.get('NEW_VERSION');
             Deno.writeTextFileSync('version.json', JSON.stringify(json, null, 2) + '\n');
           "
 
