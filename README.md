@@ -551,6 +551,23 @@ graph LR
     style fix_test fill:#ffcdd2,stroke:#c62828,color:#b71c1c
 ```
 
+### Required checks (branch protection)
+
+The default branch (**Develop**) is protected by the `Develop` repository
+ruleset (`.github/rulesets/develop.json` is the settings-as-code mirror). The
+following status check is **required** and blocks PR merge when it fails:
+
+- **`quality`** — the job from
+  [`.github/workflows/deno-quality.yml`](.github/workflows/deno-quality.yml).
+  This runs `deno fmt --check`, `deno lint`, `deno check` (repo-wide, including
+  `docs/`), and `deno test -A` with coverage. A failing `deno check` — for
+  example, the duplicate top-level identifier regression fixed in #201 — will
+  turn this check red and disable the **Merge** button until the underlying
+  issue is fixed.
+
+Run `./quality.sh` locally before pushing to land green on the first attempt.
+See Issue #211 for the rationale and the configuration audit trail.
+
 ### Unit tests vs benchmarks
 
 - **Unit tests verify correctness** — import a module, call a function with

@@ -27,6 +27,21 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.2] - 2026-05-24
+
+### Added
+
+- `quality` is now a **required status check** on the `Develop` branch (Issue
+  #211): failures block PR merge instead of only showing a red tick.
+- `.github/rulesets/develop.json`: settings-as-code mirror of the live GitHub
+  Ruleset so branch-protection configuration is auditable in the repository.
+- `tests/develop_ruleset_test.ts`: regression tests that pin the required-check
+  list and catch accidental relaxation of the ruleset.
+- README **Required checks** section under **Testing** explaining why the Merge
+  button is disabled while Deno quality checks are red.
+
+---
+
 ## [0.1.1] - 2026-05-24
 
 ### Security
@@ -96,6 +111,7 @@ git log and the `docs/pr-summary-*.md` files.
 
 ---
 
-[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/stSoftwareAU/NEAT-AI-Explore/releases/tag/v0.1.0
