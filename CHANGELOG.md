@@ -27,6 +27,24 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.1] - 2026-05-24
+
+### Security
+
+- Hardened `.github/workflows/semver-bump.yml` against GH Actions
+  script-injection: `${{ github.base_ref }}` is no longer interpolated directly
+  into `run:` blocks — it is routed through `env: BASE_REF` and referenced as
+  `"$BASE_REF"` (Issue #217).
+
+### Added
+
+- `tests/semver_bump_workflow_test.ts`: 6 tests verifying no direct
+  `github.base_ref` / `github.head_ref` interpolation appears in any `run:`
+  block, that `BASE_REF` is exposed via `env:`, and that no backslash-escaped
+  quotes remain in `run:` blocks.
+
+---
+
 ## [0.1.0] - 2025-12-19
 
 The first tagged version of NEAT-AI Explore. This entry summarises the
@@ -78,5 +96,6 @@ git log and the `docs/pr-summary-*.md` files.
 
 ---
 
-[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/stSoftwareAU/NEAT-AI-Explore/releases/tag/v0.1.0
