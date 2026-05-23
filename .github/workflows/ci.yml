@@ -30,7 +30,9 @@ jobs:
         run: deno lint
 
       - name: Type check
-        run: deno check helpers/ scripts/ tests/
+        # Issue #210 — keep aligned with quality.sh; cover docs/ so type
+        # errors in the published PWA are not invisible to CI.
+        run: deno check helpers/ scripts/ tests/ docs/
 
       - name: Tests
         run: deno test -A

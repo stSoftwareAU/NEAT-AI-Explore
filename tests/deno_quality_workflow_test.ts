@@ -112,6 +112,27 @@ Deno.test("deno-quality workflow runs deno check for type checking", async () =>
   assert(check, "workflow must run 'deno check'");
 });
 
+// Issue #210 — the deno check step must cover the whole repo, not just the
+// old `helpers/ scripts/ tests/` allowlist, so type errors under docs/ are
+// caught in CI.
+Deno.test("deno-quality workflow's deno check covers docs/ (Issue #210)", async () => {
+  const wf = await loadWorkflow();
+  const job = wf.jobs?.quality;
+  assert(job, "expected a 'quality' job");
+  const steps = job!.steps ?? [];
+  const check = findRunStep(steps, "deno check");
+  assert(check, "workflow must run 'deno check'");
+  const run = check!.run!;
+  assert(
+    run.includes("docs/"),
+    `'deno check' step must cover docs/, got: ${run}`,
+  );
+  assert(
+    !/deno check\s+helpers\/\s+scripts\/\s+tests\/\s*$/m.test(run),
+    `'deno check' step must not be restricted to helpers/ scripts/ tests/, got: ${run}`,
+  );
+});
+
 Deno.test("deno-quality workflow runs deno test with coverage", async () => {
   const wf = await loadWorkflow();
   const job = wf.jobs?.quality;
