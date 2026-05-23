@@ -43,7 +43,9 @@ deno lint
 
 echo ""
 echo "==> Type check"
-deno check helpers/ scripts/ tests/
+# Issue #210 — type-check the whole repo (no path allowlist) so errors under
+# docs/ are caught before they can ship.
+deno check helpers/ scripts/ tests/ docs/
 
 echo ""
 echo "==> Tests"

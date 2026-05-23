@@ -87,6 +87,26 @@ Deno.test("ci workflow runs deno check for type checking", async () => {
   );
 });
 
+// Issue #210 — the ci workflow's deno check must cover docs/ so type errors
+// under the published PWA are surfaced in CI, matching quality.sh.
+Deno.test("ci workflow's deno check covers docs/ (Issue #210)", async () => {
+  const wf = await loadWorkflow();
+  const job = wf.jobs?.quality;
+  assert(job, "expected a 'quality' job");
+  const steps = job!.steps ?? [];
+  const check = findRunStep(steps, "deno check");
+  assert(check, "workflow must run 'deno check'");
+  const run = check!.run!;
+  assert(
+    run.includes("docs/"),
+    `'deno check' step must cover docs/, got: ${run}`,
+  );
+  assert(
+    !/deno check\s+helpers\/\s+scripts\/\s+tests\/\s*$/m.test(run),
+    `'deno check' step must not be restricted to helpers/ scripts/ tests/, got: ${run}`,
+  );
+});
+
 Deno.test("ci workflow sets up Deno via denoland/setup-deno", async () => {
   const wf = await loadWorkflow();
   const job = wf.jobs?.quality;
