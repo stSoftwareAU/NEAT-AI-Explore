@@ -103,33 +103,39 @@ Deno.test("SW STATIC_FILES includes all shared modules imported by graph.js", as
   );
 });
 
-Deno.test("index.html has error handling for app module import", async () => {
-  const html = await Deno.readTextFile(repoPath("docs", "index.html"));
-  // The bootstrap IIFE should have a try-catch around the dynamic import.
+Deno.test("boot.js has error handling for app module import", async () => {
+  // Issue #218: the bootstrap IIFE was moved from an inline <script> in
+  // index.html to docs/boot.js so the page can declare `script-src 'self'`
+  // without 'unsafe-inline'. The try/catch + dynamic import still belong to
+  // the boot script — assert on the new location.
+  const boot = await Deno.readTextFile(repoPath("docs", "boot.js"));
   assert(
-    html.includes("catch") && html.includes("import("),
-    "index.html should wrap the app module import in a try-catch for error visibility",
+    boot.includes("catch") && boot.includes("import("),
+    "docs/boot.js should wrap the app module import in a try-catch for error visibility",
   );
 });
 
-Deno.test("HTML entry points do not tell PWA users to clear browser cache (Issue #194)", async () => {
+Deno.test("Boot scripts do not tell PWA users to clear browser cache (Issue #194)", async () => {
   // The previous error message ("Failed to load app — please clear your
   // browser cache and reload") was a dead end on installed PWAs (especially
   // iOS), where there is no obvious cache to clear. The replacement is the
   // automatic recovery path via docs/shared/pwa_recovery.js.
-  const entryPoints = [
-    repoPath("docs", "index.html"),
-    repoPath("docs", "graph", "index.html"),
-    repoPath("docs", "starfield", "index.html"),
+  //
+  // Issue #218: the recovery wiring moved out of inline <script> blocks and
+  // into the extracted boot.js files — check those instead of the HTML.
+  const bootScripts = [
+    repoPath("docs", "boot.js"),
+    repoPath("docs", "graph", "boot.js"),
+    repoPath("docs", "starfield", "boot.js"),
   ];
-  for (const path of entryPoints) {
-    const html = await Deno.readTextFile(path);
+  for (const path of bootScripts) {
+    const src = await Deno.readTextFile(path);
     assert(
-      !html.includes("please clear your browser cache"),
+      !src.includes("please clear your browser cache"),
       `${path} must not instruct PWA users to clear the browser cache`,
     );
     assert(
-      html.includes("pwa_recovery.js"),
+      src.includes("pwa_recovery.js"),
       `${path} must wire up the PWA recovery helper`,
     );
   }
