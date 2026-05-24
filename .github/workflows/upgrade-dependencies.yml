@@ -31,14 +31,17 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: JSR dependency quarantine gate
-        # Block the upgrade if any external JSR package's latest version was
-        # published less than VIBE_BUMP_QUARANTINE_HOURS hours ago. Closes the
-        # cron-window exposure to freshly-published malicious versions (#189).
+      - name: External dependency quarantine gate
+        # Block the upgrade if any external package (JSR, npm, deno.land/x)
+        # has a latest version published less than VIBE_BUMP_QUARANTINE_HOURS
+        # hours ago — and fail-close on raw https:// specifiers that cannot
+        # be age-checked. Closes the cron-window exposure to freshly-published
+        # malicious versions (#189, widened in #223 for npm + deno.land/x).
         env:
           VIBE_BUMP_QUARANTINE_HOURS: ${{ vars.VIBE_BUMP_QUARANTINE_HOURS || '24' }}
         run: |
-          deno run --allow-read --allow-net=api.jsr.io \
+          deno run --allow-read \
+            --allow-net=api.jsr.io,registry.npmjs.org,cdn.deno.land,deno.land \
             scripts/jsr_quarantine_check.ts deno.json
 
       - name: Upgrade dependencies
