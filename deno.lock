@@ -17,8 +17,9 @@
     "jsr:@std/yaml@1": "1.1.0",
     "npm:@playwright/test@*": "1.58.2",
     "npm:playwright-core@1.52.0": "1.52.0",
-    "npm:playwright@*": "1.58.2",
-    "npm:playwright@1.49.1": "1.49.1"
+    "npm:playwright@*": "1.60.0",
+    "npm:playwright@1.49.1": "1.49.1",
+    "npm:playwright@1.60.0": "1.60.0"
   },
   "jsr": {
     "@std/assert@1.0.18": {
@@ -103,6 +104,10 @@
       "integrity": "sha512-yZkEtftgwS8CsfYo7nm0KE8jsvm6i/PTgVtB8DL726wNf6H2IMsDuxCpJj59KDaxCtSnrWan2AeDqM7JBaultg==",
       "bin": true
     },
+    "playwright-core@1.60.0": {
+      "integrity": "sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==",
+      "bin": true
+    },
     "playwright@1.49.1": {
       "integrity": "sha512-VYL8zLoNTBxVOrJBbDuRgDWa3i+mfQgDTrL8Ah9QXZ7ax4Dsj0MSq5bYgytRnDVVe+njoKnfsYkH3HzqVj5UZA==",
       "dependencies": [
@@ -117,6 +122,16 @@
       "integrity": "sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A==",
       "dependencies": [
         "playwright-core@1.58.2"
+      ],
+      "optionalDependencies": [
+        "fsevents"
+      ],
+      "bin": true
+    },
+    "playwright@1.60.0": {
+      "integrity": "sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==",
+      "dependencies": [
+        "playwright-core@1.60.0"
       ],
       "optionalDependencies": [
         "fsevents"
@@ -490,7 +505,8 @@
     "dependencies": [
       "jsr:@std/http@1",
       "jsr:@std/path@1",
-      "jsr:@std/yaml@1"
+      "jsr:@std/yaml@1",
+      "npm:playwright@1.60.0"
     ]
   }
 }
