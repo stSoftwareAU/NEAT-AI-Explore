@@ -16,8 +16,9 @@ model, and the conventions every PR is expected to follow.
 - [Deno](https://deno.com/) (a recent stable release; `quality.sh` runs
   `deno upgrade` on a best-effort basis).
 - A POSIX shell (`bash`) for running `quality.sh`.
-- (Optional) Python 3 + Playwright if you want to regenerate PWA icons and
-  screenshots via `scripts/generate_pwa_assets.py`.
+- (Optional) Playwright's Chromium binary if you want to regenerate PWA icons
+  and screenshots via `scripts/generate_pwa_assets.ts`. Install it once with
+  `deno run -A --node-modules-dir=none npm:playwright install chromium`.
 
 No `node_modules`, no build step — the app is plain HTML/JS/CSS served from
 `docs/`.

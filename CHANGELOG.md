@@ -27,6 +27,29 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.7] - 2026-05-25
+
+### Changed
+
+- Ported `scripts/generate_pwa_assets.py` to Deno TypeScript
+  (`scripts/generate_pwa_assets.ts`) — removes the Python/Pillow dependency and
+  aligns the icon-generation pipeline with the project's Deno-first toolchain
+  (Issue #227). Uses jimp for pure-JS raster output (avoids `node_modules/`),
+  generates `docs/icons/icon-source.png`, all 11 sized PNGs, and a
+  multi-resolution `docs/favicon.ico` (16/32/48 px).
+
+### Added
+
+- `tests/generate_pwa_assets_check_test.ts`: regression tests covering
+  `deno check`, bare specifiers, deterministic seed, all 11 icon sizes, every
+  output filename, and removal of the Python script.
+
+### Removed
+
+- Deleted `scripts/generate_pwa_assets.py` — superseded by the Deno port above.
+
+---
+
 ## [0.1.6] - 2026-05-24
 
 ### Changed
@@ -167,7 +190,7 @@ git log and the `docs/pr-summary-*.md` files.
   client-side gunzip via `DecompressionStream`, and a default snapshot
   auto-loaded when no query parameters are supplied.
 - **PWA support**: `manifest.webmanifest`, service worker (`docs/sw.js`), icons
-  and screenshots generated via `scripts/generate_pwa_assets.py`.
+  and screenshots generated via `scripts/generate_pwa_assets.ts`.
 - **Shared, DOM-free modules** under `docs/shared/` covering graph analysis,
   colour maps, snapshot loading, correlation, diagnostics scanning, sparklines,
   discovery, theme handling, touch gestures, and creature overview — each
