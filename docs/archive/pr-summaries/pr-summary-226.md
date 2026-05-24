@@ -3,9 +3,9 @@
 Ported `scripts/capture_transition_evidence.py` to Deno using `npm:playwright`
 (via the existing `deno.json` imports map added in #224), then deleted the
 Python original. The Deno port preserves the script's intent: target the
-developer's already-running dev server at `http://localhost:8091/`, navigate
-to the trace and graph explorers, wait up to 60 s for the snapshot to
-render, and write screenshots to `docs/evidence/`. Closes #226.
+developer's already-running dev server at `http://localhost:8091/`, navigate to
+the trace and graph explorers, wait up to 60 s for the snapshot to render, and
+write screenshots to `docs/evidence/`. Closes #226.
 
 ## Evidence
 
@@ -17,9 +17,10 @@ Backend/CLI script — no UI to screenshot. Verified via:
 - `./quality.sh` → green (560 tests passing).
 
 The script targets the developer's running dev server (it does not start one
-itself), so end-to-end browser execution requires `python3 -m http.server
-8091 --directory docs` (or equivalent) running locally — out of scope for
-unattended CI but documented in the script header.
+itself), so end-to-end browser execution requires
+`python3 -m http.server
+8091 --directory docs` (or equivalent) running locally —
+out of scope for unattended CI but documented in the script header.
 
 ```mermaid
 flowchart LR
