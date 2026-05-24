@@ -167,7 +167,7 @@ git log and the `docs/pr-summary-*.md` files.
   client-side gunzip via `DecompressionStream`, and a default snapshot
   auto-loaded when no query parameters are supplied.
 - **PWA support**: `manifest.webmanifest`, service worker (`docs/sw.js`), icons
-  and screenshots generated via `scripts/generate_pwa_assets.py`.
+  and screenshots generated via `scripts/generate_pwa_assets.ts`.
 - **Shared, DOM-free modules** under `docs/shared/` covering graph analysis,
   colour maps, snapshot loading, correlation, diagnostics scanning, sparklines,
   discovery, theme handling, touch gestures, and creature overview — each
