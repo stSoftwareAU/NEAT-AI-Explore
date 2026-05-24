@@ -27,6 +27,26 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.6] - 2026-05-24
+
+### Changed
+
+- Ported `scripts/capture_transition_evidence.py` to Deno TypeScript
+  (`scripts/capture_transition_evidence.ts`) — removes the Python dependency and
+  aligns the script with the project's Deno-first toolchain (Issue #226).
+
+### Added
+
+- `tests/capture_transition_evidence_check_test.ts`: unit tests for the ported
+  transition-evidence capture script.
+
+### Removed
+
+- Deleted `scripts/capture_transition_evidence.py` — superseded by the Deno port
+  above.
+
+---
+
 ## [0.1.5] - 2026-05-24
 
 ### Changed
@@ -171,7 +191,8 @@ git log and the `docs/pr-summary-*.md` files.
 
 ---
 
-[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.2...v0.1.3
