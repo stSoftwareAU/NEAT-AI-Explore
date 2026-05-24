@@ -27,6 +27,30 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.3] - 2026-05-24
+
+### Security
+
+- Widened `scripts/jsr_quarantine_check.ts` to gate **every** external ecosystem
+  in `deno.json` `imports` — JSR, npm, and `deno.land/x` — and fail-closed on
+  raw `https://`/`http://` tarball specifiers that cannot be age-checked (Issue
+  #223, closes #216).
+- The weekly upgrade workflow now allows the gate to reach `registry.npmjs.org`,
+  `cdn.deno.land`, and `deno.land` in addition to `api.jsr.io`.
+
+### Added
+
+- `parseImportSpec` and `parseImports` in `scripts/jsr_quarantine_check.ts` now
+  recognise `jsr:`, `npm:`, `deno.land/x/`, and raw `https://` specifiers.
+- `fetchLatestVersionNpm` and `fetchLatestVersionDenoLandX` registry helpers for
+  age-checking npm and deno.land/x packages.
+- `isInternalImport` treats `@jsr/stsoftwareau__*` and `@stsoftwareau/*` npm
+  packages as internal (no quarantine required).
+- 14 new tests in `tests/jsr_quarantine_check_test.ts` covering each ecosystem,
+  blocked/cleared classification, and fail-closed behaviour for raw URLs.
+
+---
+
 ## [0.1.2] - 2026-05-24
 
 ### Added
@@ -111,7 +135,8 @@ git log and the `docs/pr-summary-*.md` files.
 
 ---
 
-[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/stSoftwareAU/NEAT-AI-Explore/releases/tag/v0.1.0
