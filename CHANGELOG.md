@@ -27,6 +27,23 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.4] - 2026-05-24
+
+### Changed
+
+- Ported `scripts/verify_starfield_layout.py` to Deno TypeScript
+  (`scripts/verify_starfield_layout.ts`) — removes the Python dependency and
+  aligns the script with the project's Deno-first toolchain (Issue #224).
+
+### Added
+
+- `tests/verify_starfield_layout_check_test.ts`: unit tests for the ported
+  starfield-layout verification logic.
+- `deno.json` imports `npm:playwright` for headless browser automation used by
+  the starfield layout verifier.
+
+---
+
 ## [0.1.3] - 2026-05-24
 
 ### Security
