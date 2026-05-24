@@ -27,6 +27,23 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.8] - 2026-05-25
+
+### Changed
+
+- Refreshed `deno.lock` via `deno cache --reload` after the Python Playwright
+  port-out landed — removes four orphan `npm:playwright*` specifiers and bumps
+  `jsr:@std/*` packages to their latest patch versions (Issue #228).
+
+### Added
+
+- `tests/deno_lock_playwright_test.ts`: regression tests that pin the
+  single-language stack — asserts no orphan playwright specifiers in
+  `deno.lock`, no Python files under `scripts/`, no Python project metadata at
+  the repo root, and no Python Playwright install instructions in docs.
+
+---
+
 ## [0.1.7] - 2026-05-25
 
 ### Changed
