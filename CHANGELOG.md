@@ -27,6 +27,23 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.9] - 2026-05-25
+
+### Added
+
+- Content-Security-Policy `<meta>` tag added to each PWA entry HTML
+  (`docs/index.html`, `docs/graph/index.html`, `docs/starfield/index.html`) with
+  a strict `script-src 'self'` policy and `connect-src` mirroring the existing
+  `ALLOWED_SNAPSHOT_ORIGINS` allowlist (Issue #218).
+- Inline `<script type="module">` boot blocks extracted to dedicated
+  `docs/boot.js`, `docs/graph/boot.js`, and `docs/starfield/boot.js` files so
+  the CSP can enforce `script-src 'self'` without `'unsafe-inline'`.
+- `X-Content-Type-Options: nosniff` and
+  `Referrer-Policy: strict-origin-when-cross-origin` meta tags added to all
+  three entry HTML files.
+
+---
+
 ## [0.1.8] - 2026-05-25
 
 ### Changed
