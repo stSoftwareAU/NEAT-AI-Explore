@@ -27,6 +27,25 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.5] - 2026-05-24
+
+### Changed
+
+- Ported `scripts/verify_theme_layout.py` to Deno TypeScript
+  (`scripts/verify_theme_layout.ts`) — removes the Python dependency and aligns
+  the script with the project's Deno-first toolchain (Issue #225).
+
+### Added
+
+- `tests/verify_theme_layout_check_test.ts`: unit tests for the ported
+  theme-layout verification logic.
+
+### Removed
+
+- Deleted `scripts/verify_theme_layout.py` — superseded by the Deno port above.
+
+---
+
 ## [0.1.4] - 2026-05-24
 
 ### Changed
@@ -152,7 +171,9 @@ git log and the `docs/pr-summary-*.md` files.
 
 ---
 
-[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/stSoftwareAU/NEAT-AI-Explore/compare/v0.1.0...v0.1.1
