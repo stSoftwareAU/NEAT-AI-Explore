@@ -9,9 +9,9 @@
  * How:
  * - Source files contain the placeholder `__BUILD_ID__`.
  * - This script replaces it with a provided build ID (usually a short git SHA)
- *   in:
- *   - docs/index.html
- *   - docs/sw.js
+ *   in every entry HTML, the Service Worker, and the per-page boot.js scripts
+ *   that were extracted from inline <script> blocks for the Content-Security-
+ *   Policy in Issue #218.
  *
  * Usage (from repo root):
  *   deno run --allow-read --allow-write ./scripts/inject_build_id.ts <buildId>
@@ -27,6 +27,11 @@ if (!buildId) usageAndExit();
 
 const files = [
   "./docs/index.html",
+  "./docs/boot.js",
+  "./docs/graph/index.html",
+  "./docs/graph/boot.js",
+  "./docs/starfield/index.html",
+  "./docs/starfield/boot.js",
   "./docs/sw.js",
 ];
 

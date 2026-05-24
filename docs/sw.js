@@ -22,6 +22,10 @@ const STATIC_FILES = [
   "./index.html",
   `./styles.css?v=${VERSION}`,
   `./app.js?v=${VERSION}`,
+  // Boot script extracted from inline <script> in Issue #218 so the entry HTML
+  // can declare `script-src 'self'` without 'unsafe-inline'. Must be precached
+  // alongside the HTML so the PWA still boots offline.
+  `./boot.js?v=${VERSION}`,
   "./impact_attribution.js",
   "./impact_diagnostics.js",
   "./vendor/fflate.browser.js",
@@ -32,10 +36,12 @@ const STATIC_FILES = [
   "./graph/index.html",
   `./graph/graph.js?v=${VERSION}`,
   `./graph/graph.css?v=${VERSION}`,
+  `./graph/boot.js?v=${VERSION}`,
   // Starfield view (Issue #129): cached so starfield works offline.
   "./starfield/index.html",
   `./starfield/starfield.js?v=${VERSION}`,
   `./starfield/starfield.css?v=${VERSION}`,
+  `./starfield/boot.js?v=${VERSION}`,
   // Shared modules for multiple views (Issue #126: all shared modules must be
   // listed so they are precached and invalidated with each deploy — missing
   // modules can be served stale by cacheFirst, breaking imports).

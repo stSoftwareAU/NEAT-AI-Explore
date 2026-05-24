@@ -38,6 +38,10 @@ Deno.test("docs PWA files exist", async () => {
     repoPath("docs", "starfield", "index.html"),
     repoPath("docs", "starfield", "starfield.js"),
     repoPath("docs", "starfield", "starfield.css"),
+    // Boot scripts extracted from inline <script> blocks for the CSP in #218.
+    repoPath("docs", "boot.js"),
+    repoPath("docs", "graph", "boot.js"),
+    repoPath("docs", "starfield", "boot.js"),
   ];
   for (const p of paths) {
     await Deno.stat(p);
@@ -88,6 +92,47 @@ Deno.test("sw.js has starfield navigation handler", async () => {
     swContent.includes("starfield"),
     "sw.js should contain a starfield navigation handler",
   );
+});
+
+Deno.test("sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)", async () => {
+  const swPath = repoPath("docs", "sw.js");
+  const swContent = await Deno.readTextFile(swPath);
+  // CSP `script-src 'self'` requires the boot scripts to be fetched, never
+  // inlined. They must therefore be precached so the PWA still boots offline.
+  const bootFiles = [
+    "./boot.js?v=${VERSION}",
+    "./graph/boot.js?v=${VERSION}",
+    "./starfield/boot.js?v=${VERSION}",
+  ];
+  for (const file of bootFiles) {
+    assert(
+      swContent.includes(file),
+      `sw.js STATIC_FILES should include ${file}`,
+    );
+  }
+});
+
+Deno.test("inject_build_id.ts substitutes __BUILD_ID__ in every entry HTML and boot.js (#218)", async () => {
+  const scriptPath = repoPath("scripts", "inject_build_id.ts");
+  const content = await Deno.readTextFile(scriptPath);
+  // Boot scripts contain the same __BUILD_ID__ placeholder the HTML used to
+  // hold inline. They must be on the substitution list so production deploys
+  // get a stable cache buster (not the Date.now() dev fallback).
+  const required = [
+    "./docs/index.html",
+    "./docs/boot.js",
+    "./docs/graph/index.html",
+    "./docs/graph/boot.js",
+    "./docs/starfield/index.html",
+    "./docs/starfield/boot.js",
+    "./docs/sw.js",
+  ];
+  for (const file of required) {
+    assert(
+      content.includes(`"${file}"`),
+      `inject_build_id.ts files[] should include "${file}"`,
+    );
+  }
 });
 
 Deno.test("manifest icons use single-purpose values", async () => {
