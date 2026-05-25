@@ -11,6 +11,8 @@
  * influence on the network outputs), formatted as a compact percentage.
  */
 
+import { formatDecimal } from "./number_format.js";
+
 /**
  * Format a neuron impact as a compact percentage suitable for the breadcrumb
  * "Score:" badge.
@@ -25,8 +27,8 @@ export function formatTraceScore(impact) {
 
   const pct = n * 100;
   const abs = Math.abs(pct);
-  if (abs >= 10) return `${pct.toFixed(1)}%`;
-  if (abs >= 1) return `${pct.toFixed(2)}%`;
+  if (abs >= 10) return `${formatDecimal(pct, 1)}%`;
+  if (abs >= 1) return `${formatDecimal(pct, 2)}%`;
   if (abs === 0) return "0%";
   return `${pct.toPrecision(2)}%`;
 }

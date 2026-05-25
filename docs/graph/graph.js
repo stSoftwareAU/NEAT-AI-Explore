@@ -26,6 +26,7 @@ import {
   u32ToU01,
 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
+import { formatInteger } from "../shared/number_format.js";
 import {
   AUTO_LOAD_MAX_RETRIES,
   AUTO_LOAD_RETRY_DELAY_MS,
@@ -3530,7 +3531,9 @@ async function loadSnapshot(source, label) {
     ).length;
     const inputCount = graph.creature.input ?? 0;
     setStatus(
-      `Observations: ${inputCount.toLocaleString()}, Neurons: ${neuronCount.toLocaleString()} & Synapses: ${graph.synapses.length.toLocaleString()}`,
+      `Observations: ${formatInteger(inputCount)}, Neurons: ${
+        formatInteger(neuronCount)
+      } & Synapses: ${formatInteger(graph.synapses.length)}`,
       "ok",
     );
 

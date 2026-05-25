@@ -55,6 +55,7 @@ import {
   synapseStaggerDelay,
 } from "./shared/transitions.js";
 import { synapseWeightColourCss } from "./shared/colour_maps.js";
+import { formatDecimal, formatInteger } from "./shared/number_format.js";
 import {
   computeErrorHistogram,
   computeSparklinePoints,
@@ -716,8 +717,9 @@ async function loadSnapshot(source, label) {
     ).length;
     const inputCount = creature.input ?? 0;
 
-    const baseStatus =
-      `Observations: ${inputCount.toLocaleString()}, Neurons: ${neuronCount.toLocaleString()} & Synapses: ${synapses.length.toLocaleString()}`;
+    const baseStatus = `Observations: ${formatInteger(inputCount)}, Neurons: ${
+      formatInteger(neuronCount)
+    } & Synapses: ${formatInteger(synapses.length)}`;
     setStatus(
       loadedFromCache ? `${baseStatus} (cached)` : baseStatus,
       loadedFromCache ? "warn" : "ok",
@@ -2473,7 +2475,7 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
 function formatNumber(n, decimals = 4) {
   if (n == null || typeof n !== "number") return "N/A";
   if (!isFinite(n)) return String(n);
-  return n.toFixed(decimals);
+  return formatDecimal(n, decimals);
 }
 
 function formatSig(n, sigFigs = 3) {
@@ -3450,15 +3452,15 @@ function renderOverviewDashboard() {
   if (el.overviewMetrics) {
     el.overviewMetrics.innerHTML = `
       <dt>Neurons</dt>
-      <dd>${breakdown.total.toLocaleString()}</dd>
+      <dd>${formatInteger(breakdown.total)}</dd>
       <dt>Breakdown</dt>
       <dd>${breakdown.input} input · ${breakdown.hidden} hidden · ${breakdown.output} output${
       breakdown.constant > 0 ? ` · ${breakdown.constant} constant` : ""
     }</dd>
       <dt>Synapses</dt>
-      <dd>${synStats.total.toLocaleString()}</dd>
+      <dd>${formatInteger(synStats.total)}</dd>
       <dt>Avg connectivity</dt>
-      <dd>${synStats.avgPerNeuron.toFixed(1)} synapses / neuron</dd>
+      <dd>${formatDecimal(synStats.avgPerNeuron, 1)} synapses / neuron</dd>
       <dt>Network depth</dt>
       <dd>${depth} layer${depth !== 1 ? "s" : ""}</dd>
     `;
