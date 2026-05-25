@@ -27,6 +27,22 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.17] - 2026-05-26
+
+### Changed
+
+- Synapse weight colour scale switched to a diverging red↔blue palette (positive
+  weights → blue hue 225°, negative → red hue 15°, near-zero → neutral grey)
+  with saturation ramping 0.10 → 0.95 for stronger end-to-end contrast (Issue
+  #244).
+- Inbound-synapses weight legend laid out as a single always-visible row on
+  desktop (wraps below 639 px); swatch width increased from 18 px to 24 px;
+  click-to-expand `<details>` removed so swatches are always visible.
+- Legend labels reordered Strong − → Strong + to match a left-negative /
+  right-positive number line.
+
+---
+
 ## [0.1.16] - 2026-05-26
 
 ### Added
