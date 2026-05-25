@@ -92,6 +92,7 @@ import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
+import { createTopoModalController } from "./shared/topo_modal.js";
 import {
   decideFiltersMode,
   decideFiltersModeByWidth,
@@ -285,6 +286,11 @@ const el = {
   overviewActivation: document.getElementById("overviewActivation"),
   overviewTopology: document.getElementById("overviewTopology"),
   overviewExploreBtn: document.getElementById("overviewExploreBtn"),
+  // Issue #241 — topology pop-out modal.
+  topoModal: document.getElementById("topoModal"),
+  topoModalBackdrop: document.querySelector(".topoModalBackdrop"),
+  topoModalClose: document.querySelector(".topoModalClose"),
+  topoModalBody: document.getElementById("topoModalBody"),
   explorerMain: document.querySelector(".explorer"),
   // Issue #184 — compact phone trace nav.
   tracePathScore: document.getElementById("tracePathScore"),
@@ -3721,15 +3727,7 @@ function renderOverviewDashboard() {
   showOverviewDashboard();
 }
 
-function renderTopologyDiagram(topology, _outputUuids) {
-  if (!el.overviewTopology || !topology?.layers?.length) {
-    if (el.overviewTopology) {
-      el.overviewTopology.innerHTML =
-        '<span style="color:var(--muted)">No topology data</span>';
-    }
-    return;
-  }
-
+function renderTopologyInto(container, topology) {
   // Delegate the SVG markup to the pure renderer so it stays testable and
   // DOM-free; we just attach event listeners and the skip-summary line.
   const { svg, skipSynapseCount, skipEdgeCount } = topologyToSvgString(
@@ -3748,16 +3746,65 @@ function renderTopologyDiagram(topology, _outputUuids) {
   // Inline legend (Issue #240) — explains the dot/link/colour encodings.
   parts.push(topologyLegendHtml());
 
-  el.overviewTopology.innerHTML = parts.join("");
+  container.innerHTML = parts.join("");
 
-  // Click to navigate into the explorer at the first neuron in that layer.
-  el.overviewTopology.querySelectorAll(".topoNode").forEach((nodeEl) => {
-    nodeEl.addEventListener("click", () => {
+  // Click a layer dot → enter the explorer at the first neuron in that layer.
+  // Stop propagation so the click does not bubble up to the diagram-background
+  // handler that opens the pop-out modal (Issue #241).
+  container.querySelectorAll(".topoNode").forEach((nodeEl) => {
+    nodeEl.addEventListener("click", (ev) => {
+      if (ev && typeof ev.stopPropagation === "function") {
+        ev.stopPropagation();
+      }
       const idx = parseInt(nodeEl.dataset.layerIndex, 10);
       const layer = topology.layers[idx];
       if (!layer?.uuids?.length) return;
+      if (_topoModalCtrl?.isOpen?.()) _topoModalCtrl.close();
       enterExplorer(layer.uuids[0]);
     });
+  });
+}
+
+/** Most-recently-rendered topology — used to refresh the modal body. */
+let _lastTopology = null;
+
+function renderTopologyDiagram(topology, _outputUuids) {
+  if (!el.overviewTopology || !topology?.layers?.length) {
+    if (el.overviewTopology) {
+      el.overviewTopology.innerHTML =
+        '<span style="color:var(--muted)">No topology data</span>';
+    }
+    _lastTopology = null;
+    return;
+  }
+
+  _lastTopology = topology;
+  renderTopologyInto(el.overviewTopology, topology);
+
+  // Issue #241 — clicking the diagram background (anywhere outside a dot)
+  // opens the landscape pop-out modal. Dot clicks stop propagation above.
+  if (_topoModalCtrl) {
+    el.overviewTopology.onclick = (ev) => {
+      _topoModalCtrl.open(el.overviewTopology);
+      // The opener element is the container itself; the controller will
+      // restore focus there on close. Mark as handled.
+      if (ev?.preventDefault) ev.preventDefault();
+    };
+  }
+}
+
+/** @type {ReturnType<typeof createTopoModalController>|null} */
+let _topoModalCtrl = null;
+
+if (el.topoModal && el.topoModalBackdrop) {
+  _topoModalCtrl = createTopoModalController({
+    modal: el.topoModal,
+    backdrop: el.topoModalBackdrop,
+    body: el.topoModalBody,
+    closeBtn: el.topoModalClose,
+    render: (body) => {
+      if (_lastTopology) renderTopologyInto(body, _lastTopology);
+    },
   });
 }
 

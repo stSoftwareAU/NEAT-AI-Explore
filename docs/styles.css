@@ -2208,6 +2208,9 @@ body {
   overflow-x: auto;
   padding: 12px 0;
   min-height: 80px;
+  /* Issue #241 — the topology background (anywhere outside a dot) opens the
+   * pop-out landscape modal, so signal it as interactive. */
+  cursor: zoom-in;
 }
 
 .topoSvg {
@@ -2216,6 +2219,87 @@ body {
 
 .topoSvg .topoNode:hover circle {
   filter: brightness(1.2);
+}
+
+/* Issue #241 — pop-out landscape modal for the topology diagram. The panel
+ * keeps a wider-than-tall (16/9) aspect-ratio with a sensible viewport cap;
+ * the body scrolls vertically if the SVG is taller than the panel. */
+.topoModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 1400px);
+  aspect-ratio: 16 / 9;
+  max-height: 80vh;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 18px;
+  overflow: hidden;
+}
+
+.topoModal[hidden] {
+  display: none;
+}
+
+.topoModalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+}
+
+.topoModalBackdrop[hidden] {
+  display: none;
+}
+
+.topoModalClose {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.topoModalClose:hover,
+.topoModalClose:focus-visible {
+  background: var(--surfaceSoft, rgba(127, 127, 127, 0.15));
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#topoModalTitle {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#topoModalBody {
+  flex: 1 1 auto;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+#topoModalBody .topoSvg {
+  width: 100%;
+  max-width: 100% !important;
+  height: auto;
 }
 
 .topoSkipSummary {
