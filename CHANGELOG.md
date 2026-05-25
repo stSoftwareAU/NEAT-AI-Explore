@@ -27,6 +27,24 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.14] - 2026-05-26
+
+### Added
+
+- Inline legend below the topology diagram explaining dot size (log-scaled
+  neuron count), link thickness (log-scaled synapse count), and link colour
+  (diverging weight-sum red↔blue) with matching mini-swatches (Issue #240).
+- Richer hover tooltips: layer dots surface the layer index and pluralised
+  neuron count; inter-layer links surface the synapse count and `Σw` (two
+  decimal places, sign preserved).
+- Arrow-head polygon now shares the link's `<g class="topoLink">` tooltip group
+  so hovering the arrow shows the same tooltip text as the link body.
+- `topologyLegendHtml`, `formatDotTooltip`, `formatLinkTooltip`, and `pluralise`
+  pure helpers in `docs/shared/topology_diagram.js` — DOM-free and reusable by
+  the forthcoming pop-out modal (Issue #241).
+
+---
+
 ## [0.1.13] - 2026-05-25
 
 ### Added

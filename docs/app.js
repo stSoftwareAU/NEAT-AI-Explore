@@ -55,7 +55,10 @@ import {
   synapseStaggerDelay,
 } from "./shared/transitions.js";
 import { synapseWeightColourCss } from "./shared/colour_maps.js";
-import { topologyToSvgString } from "./shared/topology_diagram.js";
+import {
+  topologyLegendHtml,
+  topologyToSvgString,
+} from "./shared/topology_diagram.js";
 import { formatDecimal, formatInteger } from "./shared/number_format.js";
 import {
   computeErrorHistogram,
@@ -3569,6 +3572,8 @@ function renderTopologyDiagram(topology, _outputUuids) {
         })</div>`,
     );
   }
+  // Inline legend (Issue #240) — explains the dot/link/colour encodings.
+  parts.push(topologyLegendHtml());
 
   el.overviewTopology.innerHTML = parts.join("");
 
