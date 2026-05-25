@@ -43,6 +43,88 @@ function escapeXml(s) {
 }
 
 /**
+ * Pluralise a noun based on count. Pure helper so callers (and tests) can
+ * share the same wording: "0 neurons", "1 neuron", "2 neurons".
+ *
+ * @param {number} count
+ * @param {string} singular
+ * @param {string} [plural=singular + "s"]
+ * @returns {string}
+ */
+export function pluralise(count, singular, plural) {
+  const p = plural ?? `${singular}s`;
+  return `${count.toLocaleString()} ${count === 1 ? singular : p}`;
+}
+
+/**
+ * Tooltip text for a layer dot: `Layer {i} ({type}) · {count} neuron(s)`.
+ *
+ * Pure so the legend/tooltip text is independently testable.
+ *
+ * @param {{ type?: string, count?: number } | null | undefined} layer
+ * @param {number} index
+ * @returns {string}
+ */
+export function formatDotTooltip(layer, index) {
+  const type = layer?.type ?? "";
+  const count = Number.isFinite(layer?.count) ? layer.count : 0;
+  return `Layer ${index} (${type}) · ${pluralise(count, "neuron")}`;
+}
+
+/**
+ * Tooltip text for an inter-layer link:
+ * `{count} synapse(s) · Σw = {weightSum.toFixed(2)}`.
+ *
+ * Pure so the legend/tooltip text is independently testable. Sign is
+ * preserved by `toFixed`; values to two decimal places per the spec.
+ *
+ * @param {{ count?: number, weightSum?: number } | null | undefined} edge
+ * @returns {string}
+ */
+export function formatLinkTooltip(edge) {
+  const count = Number.isFinite(edge?.count) ? edge.count : 0;
+  const weightSum = Number.isFinite(edge?.weightSum) ? edge.weightSum : 0;
+  return `${pluralise(count, "synapse")} · Σw = ${weightSum.toFixed(2)}`;
+}
+
+/**
+ * Build the inline legend HTML used below the topology diagram (and reused
+ * in the pop-out modal — see #241). DOM-free so the same markup ships from
+ * both call sites.
+ *
+ * The three rows match the visual encodings introduced in #239:
+ *   - dot size  → neurons per layer (log)
+ *   - link thickness → synapses between layers (log)
+ *   - link colour → sum of weights (red negative → blue positive)
+ *
+ * @returns {string}
+ */
+export function topologyLegendHtml() {
+  const dot = `<svg class="topoLegendSwatch" viewBox="0 0 24 24" ` +
+    `width="24" height="24" aria-hidden="true" focusable="false">` +
+    `<circle cx="12" cy="12" r="6" fill="var(--accent)" />` +
+    `</svg>`;
+  const line = `<svg class="topoLegendSwatch" viewBox="0 0 32 24" ` +
+    `width="32" height="24" aria-hidden="true" focusable="false">` +
+    `<line x1="2" y1="8" x2="30" y2="8" stroke="var(--muted)" ` +
+    `stroke-width="1" />` +
+    `<line x1="2" y1="17" x2="30" y2="17" stroke="var(--muted)" ` +
+    `stroke-width="5" />` +
+    `</svg>`;
+  const gradient = `<span class="topoLegendSwatch topoLegendGradient" ` +
+    `aria-hidden="true"></span>`;
+  return `<dl class="topoLegend" aria-label="Topology diagram legend">` +
+    `<div class="topoLegendRow">${dot}` +
+    `<dt>Dot size</dt><dd>neurons per layer (log)</dd></div>` +
+    `<div class="topoLegendRow">${line}` +
+    `<dt>Link thickness</dt><dd>synapses between layers (log)</dd></div>` +
+    `<div class="topoLegendRow">${gradient}` +
+    `<dt>Link colour</dt><dd>sum of weights ` +
+    `(red negative → blue positive)</dd></div>` +
+    `</dl>`;
+}
+
+/**
  * @typedef {import("./creature_overview.js").Topology} Topology
  *
  * @typedef {{
@@ -144,6 +226,10 @@ export function topologyToSvgString(topology) {
       maxAbsWeightSum,
     );
 
+    // Tooltip applies to both the line/arc and the arrow-head polygon so
+    // hovering anywhere on the link surfaces the same info (Issue #240).
+    const linkTitle = escapeXml(formatLinkTooltip(e));
+
     if (isSkip) {
       // Arc above for skip connections — anchored to the per-layer radii so
       // the arc emerges cleanly from the top of each dot.
@@ -151,27 +237,29 @@ export function topologyToSvgString(topology) {
       const midX = (x1 + x2) / 2;
       const cpY = cy - maxR - arcH;
       parts.push(
-        `<path d="M${x1},${cy - fromR} Q${midX},${cpY} ${x2},${cy - toR}" ` +
+        `<g class="topoLink topoLinkSkip">` +
+          `<title>${linkTitle}</title>` +
+          `<path d="M${x1},${cy - fromR} Q${midX},${cpY} ${x2},${cy - toR}" ` +
           `fill="none" stroke="${colour}" stroke-width="${strokeW}" ` +
-          `stroke-opacity="${opacity}" stroke-dasharray="4 3" />`,
-      );
-      parts.push(
-        `<polygon points="${x2},${cy - toR} ${x2 - 4},${cy - toR - 7} ${
-          x2 + 4
-        },${cy - toR - 7}" ` +
-          `fill="${colour}" opacity="${opacity}" />`,
+          `stroke-opacity="${opacity}" stroke-dasharray="4 3" />` +
+          `<polygon points="${x2},${cy - toR} ${x2 - 4},${cy - toR - 7} ${
+            x2 + 4
+          },${cy - toR - 7}" ` +
+          `fill="${colour}" opacity="${opacity}" />` +
+          `</g>`,
       );
     } else {
       parts.push(
-        `<line x1="${x1 + fromR}" y1="${cy}" x2="${x2 - toR}" y2="${cy}" ` +
+        `<g class="topoLink topoLinkAdjacent">` +
+          `<title>${linkTitle}</title>` +
+          `<line x1="${x1 + fromR}" y1="${cy}" x2="${x2 - toR}" y2="${cy}" ` +
           `stroke="${colour}" stroke-width="${strokeW}" ` +
-          `stroke-opacity="${opacity}" />`,
-      );
-      parts.push(
-        `<polygon points="${x2 - toR},${cy} ${x2 - toR - 7},${cy - 4} ${
-          x2 - toR - 7
-        },${cy + 4}" ` +
-          `fill="${colour}" opacity="${opacity}" />`,
+          `stroke-opacity="${opacity}" />` +
+          `<polygon points="${x2 - toR},${cy} ${x2 - toR - 7},${cy - 4} ${
+            x2 - toR - 7
+          },${cy + 4}" ` +
+          `fill="${colour}" opacity="${opacity}" />` +
+          `</g>`,
       );
     }
   }
@@ -183,9 +271,9 @@ export function topologyToSvgString(topology) {
     const r = radii[i];
     const fill = TYPE_COLOUR[layer?.type] ?? "var(--muted)";
     const label = layer?.type === "hidden" ? `hidden ${i}` : layer?.type ?? "";
-    const title = `${layer?.count ?? 0} ${layer?.type ?? ""} neuron${
-      (layer?.count ?? 0) !== 1 ? "s" : ""
-    }`;
+    // Richer hover tooltip (Issue #240): includes layer index, type, and
+    // pluralised neuron count.
+    const title = formatDotTooltip(layer, i);
 
     parts.push(
       `<g class="topoNode" data-layer-index="${i}" style="cursor:pointer">` +

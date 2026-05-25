@@ -2184,6 +2184,59 @@ body {
   text-align: center;
 }
 
+/* Issue #240 — inline legend explaining the topology encodings. */
+.topoLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border, var(--muted));
+  width: 100%;
+  max-width: 480px;
+}
+
+.topoLegendRow {
+  display: grid;
+  grid-template-columns: 36px auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.topoLegendRow dt {
+  font-weight: 600;
+  color: var(--text, inherit);
+  margin: 0;
+}
+
+.topoLegendRow dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.topoLegendSwatch {
+  display: inline-block;
+  width: 32px;
+  height: 16px;
+  vertical-align: middle;
+}
+
+.topoLegendGradient {
+  height: 12px;
+  border-radius: 6px;
+  /* Mirrors divergingWeightSumColourCss: red (hue 15°) → neutral → blue (hue
+   * 225°). Lightness 0.55 matches the swatch the renderer uses for links so
+   * the legend reads the same in light and dark themes. */
+  background: linear-gradient(
+    to right,
+    hsl(15, 85%, 55%),
+    hsl(0, 0%, 55%),
+    hsl(225, 85%, 55%)
+  );
+}
+
 /* Overview actions */
 .overviewActions {
   text-align: center;
