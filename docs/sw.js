@@ -65,6 +65,7 @@ const STATIC_FILES = [
   "./shared/observation_contributions.js",
   "./shared/synapse_render.js",
   "./shared/pwa_recovery.js",
+  "./shared/number_format.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
