@@ -92,6 +92,10 @@ import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
+import {
+  decideFiltersMode,
+  decideFiltersModeByWidth,
+} from "./shared/filter_layout.js";
 // Aliased on import: `trace_score.js` also exports a `formatTraceScore`
 // (a different function — see Issue #200) so we rename this one locally.
 import { formatTraceScore as formatPathAllocationScore } from "./shared/trace_header.js";
@@ -271,6 +275,11 @@ const el = {
   synapseMinAlloc: document.getElementById("synapseMinAlloc"),
   synapseTopK: document.getElementById("synapseTopK"),
   synapseListContainer: document.getElementById("synapseListContainer"),
+  // Issue #245 — inline filters / collapsed popover.
+  synapseHeader: document.querySelector(".synapseHeader"),
+  synapseTools: document.querySelector(".synapseList .synapseTools"),
+  synapseFiltersToggle: document.getElementById("synapseFiltersToggle"),
+  synapseFilterPanel: document.getElementById("synapseFilterPanel"),
   overviewDashboard: document.getElementById("overviewDashboard"),
   overviewMetrics: document.getElementById("overviewMetrics"),
   overviewActivation: document.getElementById("overviewActivation"),
@@ -2821,6 +2830,170 @@ if (el.synapsePanelToggle) {
 }
 
 // ============================================================================
+// Inbound filters: inline ↔ collapsed popover layout (#245)
+// ============================================================================
+
+/**
+ * Set the layout mode on the synapse header. Mirrors the popover state via
+ * the `isOpen` class on the filter panel so CSS can show/hide accordingly.
+ */
+function setFiltersMode(mode) {
+  const header = el.synapseHeader;
+  if (!header) return;
+  const current = header.getAttribute("data-filters-mode");
+  if (current === mode) return;
+  header.setAttribute("data-filters-mode", mode);
+  // Switching back to inline closes any open popover and resets aria.
+  if (mode === "inline" && el.synapseFilterPanel) {
+    el.synapseFilterPanel.classList.remove("isOpen");
+    if (el.synapseFiltersToggle) {
+      el.synapseFiltersToggle.setAttribute("aria-expanded", "false");
+    }
+  }
+}
+
+/**
+ * Measure whether the inline controls fit in the available panel width and
+ * toggle `data-filters-mode` accordingly. Falls back to the MOBILE_MAX
+ * heuristic when the controls width cannot be measured (e.g. during the
+ * initial 0×0 layout pass).
+ */
+function syncFiltersModeFromMeasurement() {
+  const header = el.synapseHeader;
+  const tools = el.synapseTools;
+  if (!header) return;
+  const panelWidth = header.getBoundingClientRect().width;
+  if (!tools) {
+    setFiltersMode(decideFiltersModeByWidth(panelWidth));
+    return;
+  }
+  // Measure the natural width the inline controls need by temporarily
+  // forcing inline mode — scrollWidth then reflects the un-collapsed size.
+  const previousMode = header.getAttribute("data-filters-mode") || "inline";
+  if (previousMode !== "inline") {
+    header.setAttribute("data-filters-mode", "inline");
+  }
+  const controlsWidth = tools.scrollWidth;
+  // Heading + sticky padding compete for the same row — subtract the heading
+  // width from the panel so the comparison reflects what's actually available
+  // to .synapseTools.
+  const heading = header.querySelector("h2");
+  const headingWidth = heading ? heading.getBoundingClientRect().width : 0;
+  const available = Math.max(0, panelWidth - headingWidth - 24); // 24px gap+padding
+  let mode = decideFiltersMode(available, controlsWidth);
+  if (!Number.isFinite(controlsWidth) || controlsWidth <= 0) {
+    mode = decideFiltersModeByWidth(panelWidth);
+  }
+  // Restore previous mode first so setFiltersMode's diff check works.
+  if (previousMode !== "inline") {
+    header.setAttribute("data-filters-mode", previousMode);
+  }
+  setFiltersMode(mode);
+}
+
+function closeFiltersPopover() {
+  const panel = el.synapseFilterPanel;
+  const toggle = el.synapseFiltersToggle;
+  if (!panel || !toggle) return;
+  panel.classList.remove("isOpen");
+  toggle.setAttribute("aria-expanded", "false");
+  if (_filterPopoverFocusCleanup) {
+    _filterPopoverFocusCleanup();
+    _filterPopoverFocusCleanup = null;
+  }
+  if (_filterPopoverKeydown) {
+    document.removeEventListener("keydown", _filterPopoverKeydown);
+    _filterPopoverKeydown = null;
+  }
+  if (_filterPopoverClickAway) {
+    document.removeEventListener("mousedown", _filterPopoverClickAway);
+    _filterPopoverClickAway = null;
+  }
+  // Return focus to the trigger (WCAG SC 2.4.3).
+  try {
+    toggle.focus();
+  } catch (_e) { /* JSDOM stubs may not implement focus */ }
+}
+
+/** @type {(() => void)|null} */
+let _filterPopoverFocusCleanup = null;
+/** @type {((e: KeyboardEvent) => void)|null} */
+let _filterPopoverKeydown = null;
+/** @type {((e: MouseEvent) => void)|null} */
+let _filterPopoverClickAway = null;
+
+function openFiltersPopover() {
+  const panel = el.synapseFilterPanel;
+  const toggle = el.synapseFiltersToggle;
+  if (!panel || !toggle) return;
+  panel.classList.add("isOpen");
+  toggle.setAttribute("aria-expanded", "true");
+  // Focus the first input for keyboard users.
+  const target = getInitialFocusTarget(panel);
+  if (target && typeof target.focus === "function") {
+    try {
+      target.focus();
+    } catch (_e) { /* ignore */ }
+  }
+  _filterPopoverFocusCleanup = installFocusTrap(panel);
+  _filterPopoverKeydown = (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      closeFiltersPopover();
+    }
+  };
+  document.addEventListener("keydown", _filterPopoverKeydown);
+  _filterPopoverClickAway = (e) => {
+    const target = e.target;
+    if (!(target instanceof Node)) return;
+    if (panel.contains(target) || toggle.contains(target)) return;
+    closeFiltersPopover();
+  };
+  document.addEventListener("mousedown", _filterPopoverClickAway);
+}
+
+function initInlineFiltersLayout() {
+  if (!el.synapseHeader) return;
+  // Initial measurement after first layout pass.
+  syncFiltersModeFromMeasurement();
+
+  // Prefer ResizeObserver — it fires whenever the panel width changes for
+  // any reason (window resize, side-panel collapse, font load, etc.).
+  if (typeof ResizeObserver === "function") {
+    try {
+      const ro = new ResizeObserver(() => {
+        syncFiltersModeFromMeasurement();
+      });
+      ro.observe(el.synapseHeader);
+    } catch (_e) {
+      // Fall through to the matchMedia fallback below.
+    }
+  }
+
+  // Always also listen to MOBILE_MAX so the fallback still fires when
+  // ResizeObserver is unavailable or throws.
+  try {
+    const mql = window.matchMedia?.("(max-width: 639px)");
+    mql?.addEventListener?.("change", () => {
+      syncFiltersModeFromMeasurement();
+    });
+  } catch (_e) { /* matchMedia unavailable */ }
+
+  // Wire the Filters toggle button (only visible in collapsed mode).
+  if (el.synapseFiltersToggle) {
+    el.synapseFiltersToggle.addEventListener("click", () => {
+      const panel = el.synapseFilterPanel;
+      if (!panel) return;
+      if (panel.classList.contains("isOpen")) {
+        closeFiltersPopover();
+      } else {
+        openFiltersPopover();
+      }
+    });
+  }
+}
+
+// ============================================================================
 // Mobile: bottom tab bar (#108)
 // ============================================================================
 
@@ -3690,6 +3863,7 @@ initThemeMode({ toggleButtonId: "themeToggle" });
 initTraceOverflowMenu();
 initTouchTooltips();
 initInboundFilters();
+initInlineFiltersLayout();
 initCompactTraceNav();
 
 // Provide an easy on-ramp to the 3D graph explorer, carrying the current query
