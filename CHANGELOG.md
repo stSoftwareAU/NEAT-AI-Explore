@@ -27,6 +27,23 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.10] - 2026-05-25
+
+### Added
+
+- `docs/shared/number_format.js` shared module exporting `formatInteger`,
+  `formatDecimal`, `formatLarge`, and `formatSigned` helpers, all using the
+  `en-AU` locale for digit grouping and returning `"—"` for missing or
+  non-finite inputs (Issue #242).
+- Routed ad-hoc `toFixed` / `toLocaleString` call sites in `docs/app.js`,
+  `docs/shared/trace_score.js`, and `docs/graph/graph.js` through the new
+  helpers, homogenising numeric output across all browser locales.
+- `tests/number_format_test.ts` — 19 unit tests covering the happy path, edge
+  cases (0, negative, NaN, null, undefined, Infinity, large values), and locale
+  grouping for each of the four helpers.
+
+---
+
 ## [0.1.9] - 2026-05-25
 
 ### Added
