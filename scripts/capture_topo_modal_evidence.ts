@@ -31,11 +31,7 @@ async function openModalAndShoot(
   // Click the diagram background (not a dot) to open the pop-out modal. The
   // container reliably hosts a background click region.
   console.log("Clicking the diagram background to open the modal");
-  await page.evaluate(() => {
-    const el = document.getElementById("overviewTopology") as HTMLElement;
-    if (!el) throw new Error("#overviewTopology not found");
-    el.click();
-  });
+  await page.click("#overviewTopology");
 
   await page.waitForSelector("#topoModal:not([hidden])", { timeout: 5_000 });
   await page.waitForTimeout(400);

@@ -27,6 +27,21 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.16] - 2026-05-26
+
+### Added
+
+- Network-topology diagram is now click-to-pop-out: clicking the diagram
+  background opens a landscape (16∶9) modal that re-renders the topology at a
+  larger size, with focus trap, scroll lock, and focus restoration on close
+  (Issue #241).
+- New `docs/shared/topo_modal.js` controller (`createTopoModalController`) wires
+  open/close/Escape/backdrop with the existing `modal_focus.js` helpers.
+- `docs/index.html` gains the `.topoModalBackdrop` / `#topoModal` scaffold;
+  `docs/styles.css` adds landscape sizing and `cursor: zoom-in` hint.
+
+---
+
 ## [0.1.15] - 2026-05-26
 
 ### Added
