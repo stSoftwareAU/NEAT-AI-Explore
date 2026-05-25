@@ -27,6 +27,21 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.11] - 2026-05-25
+
+### Added
+
+- `weightSum` aggregate added to every `TopologyEdge` returned by
+  `computeLayerTopology`, computed alongside the existing `count` (Issue #238).
+- `docs/shared/scale.js` exporting
+  `logScalePixels(value, maxValue, minPx, maxPx)` for log-compressed pixel
+  sizing of topology edges.
+- `divergingWeightSumColourCss(weightSum, maxAbsWeightSum)` export in
+  `docs/shared/colour_maps.js` — a symmetric red ↔ grey ↔ blue palette with WCAG
+  AA contrast on both light and dark theme backgrounds.
+
+---
+
 ## [0.1.10] - 2026-05-25
 
 ### Added

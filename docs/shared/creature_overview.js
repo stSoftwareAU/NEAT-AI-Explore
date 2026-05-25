@@ -136,7 +136,7 @@ export function computeActivationDistribution(neurons) {
 
 /**
  * @typedef {{ type: string, count: number, uuids: string[] }} Layer
- * @typedef {{ from: number, to: number, count: number }} TopologyEdge
+ * @typedef {{ from: number, to: number, count: number, weightSum: number }} TopologyEdge
  * @typedef {{ layers: Layer[], edges: TopologyEdge[] }} Topology
  */
 
@@ -240,9 +240,9 @@ export function computeLayerTopology(neurons, synapses) {
     }
   }
 
-  // Count inter-layer edges (including skip connections).
-  /** @type {Map<string, number>} key = "fromLayer→toLayer" */
-  const edgeCounts = new Map();
+  // Count inter-layer edges (including skip connections) and sum weights.
+  /** @type {Map<string, { count: number, weightSum: number }>} key = "fromLayer→toLayer" */
+  const edgeAggregates = new Map();
   for (const s of sArr) {
     const f = s?.fromUuid;
     const t = s?.toUuid;
@@ -252,14 +252,26 @@ export function computeLayerTopology(neurons, synapses) {
     if (fLayer === undefined || tLayer === undefined) continue;
     if (fLayer === tLayer) continue; // intra-layer, skip
     const key = `${fLayer}→${tLayer}`;
-    edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
+    const existing = edgeAggregates.get(key);
+    const w = Number.isFinite(s?.weight) ? Number(s.weight) : 0;
+    if (existing) {
+      existing.count += 1;
+      existing.weightSum += w;
+    } else {
+      edgeAggregates.set(key, { count: 1, weightSum: w });
+    }
   }
 
   /** @type {TopologyEdge[]} */
   const edges = [];
-  for (const [key, count] of edgeCounts) {
+  for (const [key, agg] of edgeAggregates) {
     const [fromStr, toStr] = key.split("→");
-    edges.push({ from: Number(fromStr), to: Number(toStr), count });
+    edges.push({
+      from: Number(fromStr),
+      to: Number(toStr),
+      count: agg.count,
+      weightSum: agg.weightSum,
+    });
   }
   // Sort for deterministic output: by from, then by to.
   edges.sort((a, b) => a.from - b.from || a.to - b.to);
