@@ -61,6 +61,7 @@ const STATIC_FILES = [
   "./shared/diagnostics_scan.js",
   "./shared/ui_helpers.js",
   "./shared/modal_focus.js",
+  "./shared/filter_layout.js",
   "./shared/trace_header.js",
   "./shared/observation_contributions.js",
   "./shared/observation_contributions_storage.js",

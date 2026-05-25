@@ -1167,16 +1167,14 @@ body {
 
 .synapseHeader {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-}
-
-.synapseHeader {
-  /* Keep controls reachable when the inbound list is long. On mobile we scroll
-     the whole explorer surface, so sticky headers make a big difference. */
+  /* Anchor the absolutely-positioned popover in collapsed mode. */
   position: sticky;
   top: 0;
   z-index: 10;
@@ -1186,24 +1184,67 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  /* The popover positions itself off this container in collapsed mode. */
+  position: relative;
 }
 
-.filterDetails summary {
-  list-style: none;
-}
+/* ---------- Inline / collapsed filter modes (Issue #245) ---------- */
 
-.filterDetails summary::-webkit-details-marker {
+/*
+ * The same #synapseFilterPanel element is used in both modes — the inputs
+ * keep their IDs so the JS wiring continues to drive the inbound list.
+ *
+ * Inline mode (default): the panel renders as plain flex children on the
+ * header row, the "Filters" toggle is hidden.
+ *
+ * Collapsed mode: the panel is hidden by default and the toggle is shown.
+ * When the toggle is pressed (aria-expanded="true") the panel reappears as
+ * a popover anchored to the toggle.
+ */
+.synapseFiltersToggle {
   display: none;
 }
 
-.filterPanel {
-  margin-top: 8px;
+.synapseHeader[data-filters-mode="inline"] #synapseFilterPanel {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.synapseHeader[data-filters-mode="collapsed"] .synapseFiltersToggle {
+  display: inline-flex;
+}
+
+.synapseHeader[data-filters-mode="collapsed"] #synapseFilterPanel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  margin-top: 0;
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--surfaceSofter);
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.synapseHeader[data-filters-mode="collapsed"] #synapseFilterPanel.isOpen {
+  display: flex;
+}
+
+/* Shared base styling for the panel (applied by both modes). */
+.filterPanel {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
