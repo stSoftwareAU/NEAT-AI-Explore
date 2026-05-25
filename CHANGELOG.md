@@ -27,6 +27,31 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.15] - 2026-05-26
+
+### Added
+
+- Inbound-synapses filter controls (Min alloc imp, Top K) are now displayed
+  inline on the same header row as the heading, count badge, and Sort select on
+  roomy viewports (≥640 px), replacing the previous `<details>` disclosure
+  widget (Issue #245).
+- A `ResizeObserver`-driven `syncFiltersModeFromMeasurement` helper in
+  `docs/shared/filter_layout.js` switches the panel between
+  `data-filters-mode="inline"` and `data-filters-mode="collapsed"` based on
+  actual measured fit rather than a hard-coded breakpoint; falls back to the 639
+  px `MOBILE_MAX` heuristic when `ResizeObserver` is unavailable.
+- A "Filters" popover button (`#synapseFiltersToggle`) appears in collapsed mode
+  and opens a focus-trapped popover with `aria-expanded` state, keyboard
+  (Escape) and click-outside dismiss, and focus return to the trigger on close.
+
+### Changed
+
+- `#synapseFilterPanel` is reused in both inline and collapsed modes; input IDs
+  (`#synapseMinAlloc`, `#synapseTopK`) are unchanged so existing wiring in
+  `docs/app.js` continues to drive the inbound list without modification.
+
+---
+
 ## [0.1.14] - 2026-05-26
 
 ### Added
