@@ -344,3 +344,81 @@ Deno.test("computeLayerTopology edges empty for no synapses", () => {
     "no edges for empty network",
   );
 });
+
+// ---------------------------------------------------------------------------
+// computeLayerTopology — weightSum aggregates (issue #238)
+// ---------------------------------------------------------------------------
+
+Deno.test("computeLayerTopology edges include weightSum", () => {
+  // Two synapses input→hidden with weights 0.5 and -0.2, plus hidden→output 1.0.
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("input-1", "input"),
+    makeNeuron("hidden-a", "hidden"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    makeSynapse("input-0", "hidden-a", 0.5),
+    makeSynapse("input-1", "hidden-a", -0.2),
+    makeSynapse("hidden-a", "output-0", 1.0),
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  const inputToHidden = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 0 && e.to === 1
+  );
+  assert(inputToHidden, "should have input→hidden edge");
+  assertEquals(inputToHidden.count, 2);
+  approx(inputToHidden.weightSum, 0.3, 1e-9);
+
+  const hiddenToOutput = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 1 && e.to === 2
+  );
+  assert(hiddenToOutput, "should have hidden→output edge");
+  approx(hiddenToOutput.weightSum, 1.0, 1e-9);
+});
+
+Deno.test("computeLayerTopology weightSum is algebraic (cancels signs)", () => {
+  // Two equal-and-opposite weights on the same inter-layer edge → sum ≈ 0,
+  // but count remains 2.
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("input-1", "input"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    makeSynapse("input-0", "output-0", 0.7),
+    makeSynapse("input-1", "output-0", -0.7),
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  const edge = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 0 && e.to === 1
+  );
+  assert(edge, "should have input→output edge");
+  assertEquals(edge.count, 2);
+  approx(edge.weightSum, 0, 1e-9);
+});
+
+Deno.test("computeLayerTopology weightSum tolerates missing/non-finite weight", () => {
+  // A synapse with no weight should contribute 0 to the sum, not NaN.
+  const neurons = [
+    makeNeuron("input-0", "input"),
+    makeNeuron("output-0", "output"),
+  ];
+  const synapses = [
+    { fromUuid: "input-0", toUuid: "output-0" }, // no weight
+    makeSynapse("input-0", "output-0", 0.4),
+    // deno-lint-ignore no-explicit-any
+    { fromUuid: "input-0", toUuid: "output-0", weight: NaN } as any,
+  ];
+  const topo = computeLayerTopology(neurons, synapses);
+
+  const edge = topo.edges.find((e: { from: number; to: number }) =>
+    e.from === 0 && e.to === 1
+  );
+  assert(edge, "should have input→output edge");
+  assertEquals(edge.count, 3);
+  assert(Number.isFinite(edge.weightSum), "weightSum must be finite");
+  approx(edge.weightSum, 0.4, 1e-9);
+});

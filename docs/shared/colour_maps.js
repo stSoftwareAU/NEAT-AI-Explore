@@ -187,3 +187,61 @@ export function synapseWeightColourCss(weight, maxAbsWeight = 5) {
     Math.round(b * 255)
   })`;
 }
+
+/**
+ * Map an aggregate inter-layer `weightSum` to a CSS `rgb(…)` string on a
+ * symmetric diverging scale.
+ *
+ * - Positive sums → blue (light → deep blue as magnitude grows).
+ * - Negative sums → red  (light → deep red  as magnitude grows).
+ * - Near-zero sums → neutral grey.
+ *
+ * The hue choice (blue ↔ red, both at mid lightness ≈ 0.45) keeps WCAG AA
+ * contrast against both the light theme (near-white background) and dark
+ * theme (near-black background) used elsewhere in the app.
+ *
+ * Equal-magnitude positive and negative values produce the same saturation
+ * and lightness, only the hue flips between blue and red.
+ *
+ * @param {number} weightSum
+ * @param {number} maxAbsWeightSum  reference maximum |weightSum|; values are
+ *                                  normalised against this and clamped to 1.
+ * @returns {string} e.g. `"rgb(70, 110, 200)"`
+ */
+export function divergingWeightSumColourCss(weightSum, maxAbsWeightSum) {
+  // Guard non-finite inputs and degenerate ranges → neutral grey.
+  if (
+    !Number.isFinite(weightSum) ||
+    !Number.isFinite(maxAbsWeightSum) ||
+    maxAbsWeightSum <= 0
+  ) {
+    const g = Math.round(0.55 * 255);
+    return `rgb(${g}, ${g}, ${g})`;
+  }
+
+  const ratio = Math.min(1, Math.abs(weightSum) / maxAbsWeightSum);
+
+  // Near-zero → neutral grey.
+  if (ratio < 0.02) {
+    const g = Math.round(0.55 * 255);
+    return `rgb(${g}, ${g}, ${g})`;
+  }
+
+  const positive = weightSum >= 0;
+  // Hue choice: 225° (blue) and 15° (red). Both sit 15° inward from the
+  // corresponding HSL sector corner, which keeps their internal `x`
+  // contribution identical — so equal-magnitude ±weightSum produce truly
+  // symmetric RGB triples (red ↔ blue channels swap, green channel matches).
+  const hue = positive ? 225 : 15;
+  // Saturation grows with magnitude (mirrors synapseWeightColourRgb01).
+  const sat = 0.10 + 0.75 * ratio;
+  // Lightness 0.55 keeps both light-theme and dark-theme contrast at or above
+  // the WCAG AA 3:1 threshold for non-text graphical objects, even at maximum
+  // saturation.
+  const lit = 0.55;
+
+  const [r, g, b] = hslToRgb01(hue, sat, lit);
+  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${
+    Math.round(b * 255)
+  })`;
+}
