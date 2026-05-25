@@ -844,6 +844,50 @@ body {
   max-width: 140px;
 }
 
+/*
+ * Top-N visual emphasis for the Observation contributions panel (Issue #243).
+ * A subtle accent-coloured left-border and a faint background tint keeps the
+ * top influencers visible without overwhelming the panel.
+ */
+.observationContributionsRow.top-influencer {
+  border-left: 3px solid var(--accent);
+  background: rgba(96, 165, 250, 0.06);
+  padding-left: 6px;
+}
+
+/*
+ * Top-N stepper sits inline in the panel summary (Issue #243). The summary
+ * already uses flex (impactBreakdownHeader), so the stepper is right-aligned
+ * by virtue of `justify-content: space-between` on its parent.
+ */
+.observationContributionsTopNInput {
+  width: 4.5em;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surfaceSoft);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: right;
+}
+
+.observationContributionsTopNInput:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* On narrow phone viewports the stepper drops onto its own line inside the
+   summary so the title doesn't get squashed. */
+@media (max-width: 520px) {
+  .observationContributionsSummary {
+    flex-wrap: wrap;
+  }
+  .observationContributionsTopNInput {
+    margin-left: auto;
+  }
+}
+
 .impactBreakdownStats {
   display: flex;
   flex-wrap: wrap;

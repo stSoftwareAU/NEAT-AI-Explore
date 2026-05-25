@@ -17,6 +17,36 @@ import { escapeHtml } from "./ui_helpers.js";
 /** Maximum number of rows the panel renders inline. */
 export const MAX_OBSERVATION_ROWS = 50;
 
+/** Default top-N highlight count (Issue #243). */
+export const DEFAULT_TOP_N = 10;
+
+/** Maximum allowed top-N highlight count (Issue #243). */
+export const MAX_TOP_N = 100;
+
+/**
+ * Clamp a top-N stepper value into the supported range.
+ *
+ * Pure helper shared between the panel render path and the stepper UI in
+ * docs/app.js so both agree on the same rounding/clamping rules:
+ *   - non-finite / non-numeric inputs fall back to {@link DEFAULT_TOP_N};
+ *   - decimals are floored;
+ *   - values below 1 clamp to 1; values above {@link MAX_TOP_N} clamp to
+ *     MAX_TOP_N.
+ *
+ * @param {unknown} value
+ * @returns {number} integer in [1, MAX_TOP_N]
+ */
+export function clampTopN(value) {
+  // Numeric strings (input.value) are coerced; everything else that can't
+  // become a finite number falls back to the default.
+  const n = typeof value === "string" ? Number(value) : value;
+  if (typeof n !== "number" || !Number.isFinite(n)) return DEFAULT_TOP_N;
+  const floored = Math.floor(n);
+  if (floored < 1) return 1;
+  if (floored > MAX_TOP_N) return MAX_TOP_N;
+  return floored;
+}
+
 /**
  * @typedef {object} ObservationContribution
  * @property {string} uuid — observation neuron UUID (typically `input-N`).
@@ -73,7 +103,7 @@ export function formatSharePercent(share, sigFigs = 4) {
  * @returns {string}
  */
 export function buildObservationContributionsRow(row, lookups = {}) {
-  const { getAlias, getGroup } = lookups;
+  const { getAlias, getGroup, isTopInfluencer = false } = lookups;
   const uuid = String(row?.uuid ?? "");
   const alias = typeof getAlias === "function" ? getAlias(uuid) : null;
   const group = typeof getGroup === "function" ? getGroup(uuid) : null;
@@ -84,10 +114,16 @@ export function buildObservationContributionsRow(row, lookups = {}) {
     ? `<div class="observationContributionsGroup">${escapeHtml(group)}</div>`
     : "";
 
+  // Top-N visual emphasis hook (Issue #243). Both the class and the
+  // data-attribute are emitted so CSS rules and any future JS hooks can pick
+  // whichever is more convenient.
+  const topClass = isTopInfluencer ? " top-influencer" : "";
+  const topAttr = isTopInfluencer ? ` data-top-influencer="true"` : "";
+
   return `
-      <div class="impactBreakdownRow observationContributionsRow" data-uuid="${
+      <div class="impactBreakdownRow observationContributionsRow${topClass}" data-uuid="${
     escapeHtml(uuid)
-  }">
+  }"${topAttr}>
         <div class="observationContributionsLabelWrap">
           <div class="impactBreakdownOut">${escapeHtml(label)}</div>
           ${subtitle}
@@ -137,10 +173,15 @@ export function isObservationContributionsOpen(opts = {}) {
  * @param {object} params
  * @param {string} params.uuid — focused output neuron UUID.
  * @param {string|null|undefined} params.neuronType — focused neuron's `n.type`.
- * @param {ObservationContribution[]} params.inputs — already-sorted descending by share.
+ * @param {ObservationContribution[]} params.inputs — observations to render.
+ *   The panel sorts defensively by `|score|` descending so callers may pass
+ *   pre-sorted or unsorted input (Issue #243).
  * @param {(uuid: string) => (string | null)} [params.getAlias]
  * @param {(uuid: string) => (string | null)} [params.getGroup]
  * @param {number} [params.max=MAX_OBSERVATION_ROWS]
+ * @param {number} [params.topN=DEFAULT_TOP_N] — number of leading rows to mark
+ *   with the `top-influencer` class for visual emphasis (Issue #243). Clamped
+ *   to `[1, MAX_TOP_N]`; invalid values fall back to `DEFAULT_TOP_N`.
  * @param {boolean} [params.isPhone=false] — viewport matches the phone breakpoint.
  * @param {("open"|"closed"|null)} [params.userToggle=null] — session-scoped
  *   user override; wins over the viewport default.
@@ -154,6 +195,7 @@ export function buildObservationContributionsHtml(params) {
     getAlias,
     getGroup,
     max = MAX_OBSERVATION_ROWS,
+    topN,
     isPhone = false,
     userToggle = null,
   } = params ?? {};
@@ -161,8 +203,18 @@ export function buildObservationContributionsHtml(params) {
   if (!shouldRenderObservationContributions(uuid, neuronType)) return "";
 
   const safeInputs = Array.isArray(inputs) ? inputs : [];
-  const top = safeInputs.slice(0, max);
+  // Defensive sort by |score| descending (#243). Caller may pass pre-sorted
+  // inputs; sorting again is O(n log n) on a small list and keeps the panel
+  // self-contained.
+  const sorted = safeInputs.slice().sort((a, b) => {
+    const aAbs = Math.abs(Number(a?.score) || 0);
+    const bAbs = Math.abs(Number(b?.score) || 0);
+    return bAbs - aAbs;
+  });
+  const top = sorted.slice(0, max);
   if (top.length === 0) return "";
+
+  const clampedTopN = clampTopN(topN);
 
   const title = "Observation contributions";
   const note =
@@ -170,14 +222,33 @@ export function buildObservationContributionsHtml(params) {
     "Each row shows the observation's group as a subtitle when available.";
 
   // Summary shows enough context when collapsed: title + (count) so a phone
-  // user can scan without expanding (#187).
-  const summaryLabel = `${title} (top ${top.length})`;
+  // user can scan without expanding (#187). The number reflects how many rows
+  // are visually emphasised — capped by the number of rendered rows so the
+  // label never overstates what the user can see (#243).
+  const summaryCount = Math.min(clampedTopN, top.length);
+  const summaryLabel = `${title} (top ${summaryCount})`;
   const open = isObservationContributionsOpen({ isPhone, userToggle });
   const openAttr = open ? " open" : "";
 
   const rows = top
-    .map((row) => buildObservationContributionsRow(row, { getAlias, getGroup }))
+    .map((row, idx) =>
+      buildObservationContributionsRow(row, {
+        getAlias,
+        getGroup,
+        isTopInfluencer: idx < clampedTopN,
+      })
+    )
     .join("");
+
+  // Stepper input (Issue #243). The handler in docs/app.js debounces the
+  // change, clamps via clampTopN, persists to localStorage and re-renders.
+  // Click/keydown propagation is stopped from the wiring side so interacting
+  // with the input doesn't toggle the surrounding <details>.
+  const stepperHtml =
+    `<input type="number" class="observationContributionsTopNInput"` +
+    ` min="1" max="${MAX_TOP_N}" step="1" value="${clampedTopN}"` +
+    ` aria-label="Number of top influencers to highlight"` +
+    ` data-role="observation-topn-stepper" />`;
 
   return `
     <details class="observationContributionsDetails" data-uuid="${
@@ -185,6 +256,7 @@ export function buildObservationContributionsHtml(params) {
   }"${openAttr}>
       <summary class="impactBreakdownHeader observationContributionsSummary">
         <span class="impactBreakdownTitle">${escapeHtml(summaryLabel)}</span>
+        ${stepperHtml}
       </summary>
       <div class="impactBreakdownNote">${escapeHtml(note)}</div>
       <div class="impactBreakdownList observationContributionsList">${rows}</div>

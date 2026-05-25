@@ -63,6 +63,7 @@ const STATIC_FILES = [
   "./shared/modal_focus.js",
   "./shared/trace_header.js",
   "./shared/observation_contributions.js",
+  "./shared/observation_contributions_storage.js",
   "./shared/synapse_render.js",
   "./shared/pwa_recovery.js",
   "./shared/number_format.js",
