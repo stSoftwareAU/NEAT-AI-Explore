@@ -27,6 +27,24 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.13] - 2026-05-25
+
+### Added
+
+- Topology diagram dot radii now scale logarithmically with neuron count per
+  layer; link thicknesses scale logarithmically with synapse count (Issue #239).
+- Link colour, arrow heads, and skip arcs use `divergingWeightSumColourCss` —
+  red for negative weight sums, neutral near zero, blue for positive.
+- `topologyToSvgString` pure helper in `docs/shared/topology_diagram.js` —
+  DOM-free and fully unit-testable; `renderTopologyDiagram` is now a thin
+  DOM/event wrapper around it.
+- SVG layout (`cy`, `svgH`, `padX`, `nodeSpacing`, label position, arc
+  clearance) recomputed against the variable max radius so the largest dot is
+  never clipped.
+- `tests/topology_diagram_test.ts` — unit tests covering `topologyToSvgString`.
+
+---
+
 ## [0.1.12] - 2026-05-25
 
 ### Added
