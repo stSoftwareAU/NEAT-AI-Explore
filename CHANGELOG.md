@@ -27,6 +27,31 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.12] - 2026-05-25
+
+### Added
+
+- Observation contributions panel now ranks rows by `|score|` descending so the
+  highest-impact inputs always appear first, regardless of caller-supplied order
+  (Issue #243).
+- `clampTopN(value)` pure helper — floors decimals, clamps to `[1, MAX_TOP_N]`,
+  falls back to `DEFAULT_TOP_N` (10) for `NaN`/non-numeric input.
+- `docs/shared/observation_contributions_storage.js` wraps `localStorage`
+  get/set with try/catch so private-mode or quota-exceeded failures cannot break
+  the panel.
+- Top-N stepper (range 1–100, default 10) added to the Observation Contributions
+  panel header; choice persists across reloads via `localStorage` under the key
+  `obs-contrib.topN`.
+- CSS accent-coloured left-border + tint for
+  `.observationContributionsRow.top-influencer` rows, with a phone-viewport rule
+  that wraps the stepper onto its own line.
+- `docs/sw.js` updated to cache `observation_contributions_storage.js` so the
+  panel stays functional offline.
+- `tests/observation_contributions_test.ts` — unit tests covering `clampTopN`
+  and `buildObservationContributionsHtml` sort order.
+
+---
+
 ## [0.1.11] - 2026-05-25
 
 ### Added
