@@ -77,7 +77,12 @@ import { formatTraceScore } from "./shared/trace_score.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
   buildObservationContributionsHtml,
+  clampTopN,
 } from "./shared/observation_contributions.js";
+import {
+  loadObservationTopN,
+  saveObservationTopN,
+} from "./shared/observation_contributions_storage.js";
 import { buildSynapseFromCellHtml } from "./shared/synapse_render.js";
 import {
   getInitialFocusTarget,
@@ -1840,6 +1845,36 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
 const OBSERVATION_CONTRIBUTIONS_TOGGLE = new Map();
 
 /**
+ * Current top-N value for the Observation contributions stepper (#243).
+ * Initialised lazily from localStorage on first render so the panel still
+ * renders if storage is unavailable.
+ *
+ * @type {number | null}
+ */
+let OBSERVATION_TOP_N = null;
+
+function getObservationTopN() {
+  if (OBSERVATION_TOP_N == null) {
+    OBSERVATION_TOP_N = loadObservationTopN();
+  }
+  return OBSERVATION_TOP_N;
+}
+
+function setObservationTopN(value) {
+  OBSERVATION_TOP_N = clampTopN(value);
+  saveObservationTopN(OBSERVATION_TOP_N);
+  return OBSERVATION_TOP_N;
+}
+
+/**
+ * Debounced re-render trigger for stepper changes (#243). Kept module-scoped
+ * so successive keystrokes coalesce into one re-render.
+ */
+const _observationTopNDebounce = createDebounce((uuid, neuronType) => {
+  renderObservationContributions(uuid, neuronType);
+}, 150);
+
+/**
  * Observation contributions panel (Issue #186).
  *
  * Renders the top 50 input observations ranked by their multi-hop share of
@@ -1885,6 +1920,7 @@ function renderObservationContributions(uuid, neuronType) {
     getGroup: getInputGroup,
     isPhone: isNarrowMobile(),
     userToggle: OBSERVATION_CONTRIBUTIONS_TOGGLE.get(uuid) ?? null,
+    topN: getObservationTopN(),
   });
 
   // Track user toggles so the panel state survives re-renders in the same
@@ -1898,6 +1934,28 @@ function renderObservationContributions(uuid, neuronType) {
         uuid,
         details.open ? "open" : "closed",
       );
+    });
+  }
+
+  // Wire the top-N stepper (#243). The stepper lives inside the <summary>;
+  // we stop click/keydown propagation so interacting with it doesn't toggle
+  // the surrounding <details>.
+  const stepper = panel.querySelector(
+    `input[data-role="observation-topn-stepper"]`,
+  );
+  if (stepper) {
+    const stop = (ev) => ev.stopPropagation();
+    stepper.addEventListener("click", stop);
+    stepper.addEventListener("keydown", stop);
+    stepper.addEventListener("input", () => {
+      setObservationTopN(stepper.value);
+      _observationTopNDebounce.call(uuid, neuronType);
+    });
+    // On blur, normalise the visible value to the clamped/persisted value so
+    // out-of-range input collapses immediately rather than waiting for the
+    // next render.
+    stepper.addEventListener("blur", () => {
+      stepper.value = String(getObservationTopN());
     });
   }
 }

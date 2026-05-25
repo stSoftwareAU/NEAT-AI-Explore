@@ -18,9 +18,12 @@ import { assert, assertEquals } from "./test_helpers.ts";
 import {
   buildObservationContributionsHtml,
   buildObservationContributionsRow,
+  clampTopN,
+  DEFAULT_TOP_N,
   formatSharePercent,
   isObservationContributionsOpen,
   MAX_OBSERVATION_ROWS,
+  MAX_TOP_N,
   shouldRenderObservationContributions,
 } from "../docs/shared/observation_contributions.js";
 
@@ -323,6 +326,210 @@ Deno.test("buildObservationContributionsHtml: user 'closed' override persists ac
   assert(
     !/<details[^>]*\sopen[\s>]/.test(secondRender),
     "user 'closed' toggle must persist across re-render on desktop viewports",
+  );
+});
+
+// ============================================================================
+// Top-N ranking, stepper helpers and absolute-impact sort (Issue #243).
+// ============================================================================
+
+Deno.test("clampTopN: clamps to [1, MAX_TOP_N]", () => {
+  assertEquals(clampTopN(0), 1);
+  assertEquals(clampTopN(-5), 1);
+  assertEquals(clampTopN(1), 1);
+  assertEquals(clampTopN(10), 10);
+  assertEquals(clampTopN(MAX_TOP_N), MAX_TOP_N);
+  assertEquals(clampTopN(MAX_TOP_N + 1), MAX_TOP_N);
+  assertEquals(clampTopN(99999), MAX_TOP_N);
+});
+
+Deno.test("clampTopN: floors decimals", () => {
+  assertEquals(clampTopN(3.9), 3);
+  assertEquals(clampTopN(10.1), 10);
+  assertEquals(clampTopN(1.999), 1);
+});
+
+Deno.test("clampTopN: rejects NaN, null, undefined, non-numeric strings", () => {
+  assertEquals(clampTopN(NaN), DEFAULT_TOP_N);
+  assertEquals(clampTopN(null), DEFAULT_TOP_N);
+  assertEquals(clampTopN(undefined), DEFAULT_TOP_N);
+  assertEquals(clampTopN("abc"), DEFAULT_TOP_N);
+  assertEquals(clampTopN({}), DEFAULT_TOP_N);
+});
+
+Deno.test("clampTopN: parses numeric strings (stepper input.value)", () => {
+  assertEquals(clampTopN("12"), 12);
+  assertEquals(clampTopN("0"), 1);
+  assertEquals(clampTopN("250"), MAX_TOP_N);
+});
+
+Deno.test("DEFAULT_TOP_N and MAX_TOP_N: contract", () => {
+  assertEquals(DEFAULT_TOP_N, 10);
+  assertEquals(MAX_TOP_N, 100);
+});
+
+Deno.test("buildObservationContributionsHtml: sorts by |score| desc when input is unsorted", () => {
+  // Caller passes rows in arbitrary order — the panel must sort defensively.
+  const rows: Row[] = [
+    { uuid: "input-small", score: 0.05 },
+    { uuid: "input-large", score: 0.5 },
+    { uuid: "input-mid", score: 0.2 },
+  ];
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+  });
+  const idxLarge = html.indexOf("input-large");
+  const idxMid = html.indexOf("input-mid");
+  const idxSmall = html.indexOf("input-small");
+  assert(idxLarge < idxMid, "largest |score| renders first");
+  assert(idxMid < idxSmall, "second-largest |score| renders next");
+});
+
+Deno.test("buildObservationContributionsHtml: sorts by absolute value, not raw value", () => {
+  // Negative scores must rank by |score|.
+  const rows: Row[] = [
+    { uuid: "input-neg-large", score: -0.8 },
+    { uuid: "input-pos-small", score: 0.1 },
+    { uuid: "input-neg-mid", score: -0.4 },
+  ];
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+  });
+  const idxNegLarge = html.indexOf("input-neg-large");
+  const idxNegMid = html.indexOf("input-neg-mid");
+  const idxPosSmall = html.indexOf("input-pos-small");
+  assert(
+    idxNegLarge < idxNegMid && idxNegMid < idxPosSmall,
+    "rows must be ranked by |score| descending regardless of sign",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: default topN is 10", () => {
+  const rows = makeRows(20);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+  });
+  // Count rows marked as top-influencer — default should be 10.
+  const marked = html.match(/data-top-influencer="true"/g) ?? [];
+  assertEquals(marked.length, 10);
+});
+
+Deno.test("buildObservationContributionsHtml: topN=3 marks exactly first 3 rows", () => {
+  const rows = makeRows(10);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 3,
+  });
+  const marked = html.match(/data-top-influencer="true"/g) ?? [];
+  assertEquals(marked.length, 3);
+  // The first three rows (input-0..input-2 — highest scores) must carry the
+  // marker and the fourth must not.
+  const firstThree = html.slice(0, html.indexOf(`data-uuid="input-3"`));
+  assertEquals(
+    (firstThree.match(/data-top-influencer="true"/g) ?? []).length,
+    3,
+    "all three top-influencer markers appear before the fourth row",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: topN greater than rendered rows marks all rendered rows", () => {
+  const rows = makeRows(5);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 50,
+  });
+  const marked = html.match(/data-top-influencer="true"/g) ?? [];
+  assertEquals(marked.length, 5);
+});
+
+Deno.test("buildObservationContributionsHtml: invalid topN falls back to default", () => {
+  const rows = makeRows(20);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: NaN,
+  });
+  const marked = html.match(/data-top-influencer="true"/g) ?? [];
+  assertEquals(marked.length, DEFAULT_TOP_N);
+});
+
+Deno.test("buildObservationContributionsHtml: topN clamped to MAX_TOP_N", () => {
+  const rows = makeRows(MAX_OBSERVATION_ROWS);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 9999,
+  });
+  const marked = html.match(/data-top-influencer="true"/g) ?? [];
+  // MAX_TOP_N is 100; only MAX_OBSERVATION_ROWS (50) rows render, so all are
+  // marked.
+  assertEquals(marked.length, MAX_OBSERVATION_ROWS);
+});
+
+Deno.test("buildObservationContributionsHtml: renders a numeric stepper carrying the current topN", () => {
+  const rows = makeRows(20);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 7,
+  });
+  // The stepper is rendered with min=1, max=100, step=1 and the current value.
+  assert(
+    html.includes(`data-role="observation-topn-stepper"`),
+    "stepper must carry a data-role hook for the app.js wiring",
+  );
+  assert(
+    /min="1"[^>]*max="100"[^>]*step="1"/.test(html) ||
+      /min="1"[^>]*step="1"[^>]*max="100"/.test(html),
+    "stepper must constrain min=1, max=100, step=1",
+  );
+  assert(
+    html.includes(`value="7"`),
+    "stepper value must reflect the current topN",
+  );
+  assert(
+    html.includes(`type="number"`),
+    "stepper must use a native number input for accessibility / mobile keypads",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: stepper falls back to default when topN invalid", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(20),
+    topN: "not-a-number" as unknown as number,
+  });
+  assert(
+    html.includes(`value="${DEFAULT_TOP_N}"`),
+    "invalid topN renders the stepper with the default value",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: summary reflects topN label", () => {
+  const rows = makeRows(20);
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 5,
+  });
+  assert(
+    html.includes("Observation contributions (top 5)"),
+    "summary must reflect the currently chosen topN",
   );
 });
 
