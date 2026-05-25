@@ -405,6 +405,33 @@
       </div>
     </div>
 
+    <!--
+      Topology pop-out modal (Issue #241). Landscape (wider-than-tall) modal
+      that shows the upgraded topology diagram + legend at a larger size when
+      the user clicks the in-place diagram. Backdrop is a full-viewport
+      sibling so the .topoModal panel can carry the landscape aspect-ratio
+      sizing directly.
+    -->
+    <div class="topoModalBackdrop" hidden></div>
+    <div
+      id="topoModal"
+      class="topoModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="topoModalTitle"
+      hidden
+    >
+      <button
+        type="button"
+        class="topoModalClose"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <h2 id="topoModalTitle">Network topology</h2>
+      <div id="topoModalBody"></div>
+    </div>
+
     <!-- Observations dashboard modal (unused inputs, redundancy, reachability). -->
     <div id="obsModal" class="modal" aria-hidden="true">
       <div id="obsModalBackdrop" class="modalBackdrop"></div>
