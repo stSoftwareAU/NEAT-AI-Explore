@@ -11,7 +11,11 @@ jobs:
   semgrep:
     runs-on: ubuntu-latest
     container:
-      image: semgrep/semgrep
+      # Pinned to semgrep/semgrep 1.163.0 (Issue #256). The multi-arch
+      # manifest digest below is immutable; an unpinned tag resolves at
+      # runtime and exposes SEMGREP_APP_TOKEN to whatever the Semgrep
+      # Docker Hub account last pushed. Rotate via bump-deps automation.
+      image: semgrep/semgrep@sha256:7cad2bc2d1e44f87f0bf4be6d1fa23aa90fb72015bebc89fb91385d813987a03
     steps:
       # actions/checkout@v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
