@@ -27,6 +27,17 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.18] - 2026-05-26
+
+### Removed
+
+- Dead `#tracePathScore` / `#tracePathScoreValue` plumbing from `docs/app.js`
+  (element IDs that never existed in `docs/index.html`); the
+  `updateTracePathScoreUI` function and its three call sites were silent no-ops
+  in production (Issue #247).
+
+---
+
 ## [0.1.17] - 2026-05-26
 
 ### Changed
