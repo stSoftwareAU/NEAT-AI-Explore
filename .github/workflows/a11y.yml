@@ -40,8 +40,16 @@ jobs:
       - name: Install pa11y-ci and http-server
         run: npm install -g pa11y-ci http-server
 
-      - name: Install Chrome for Puppeteer
-        run: npx puppeteer browsers install chrome
+      - name: Install system Chrome
+        # Use google-chrome-stable from apt so pa11y-ci's puppeteer-core gets a
+        # stable, version-independent executable path. Avoids the version-coupling
+        # problem where pa11y-ci's bundled puppeteer-core expects a specific
+        # Chrome revision that differs from what `npx puppeteer browsers install`
+        # downloads (e.g. 148 vs 149).
+        run: |
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update -qq && sudo apt-get install -y google-chrome-stable
 
       - name: Serve docs/ in the background
         run: |
@@ -59,4 +67,8 @@ jobs:
           exit 1
 
       - name: Run pa11y-ci against served docs
+        env:
+          # Point pa11y-ci's puppeteer-core to the system Chrome installed above,
+          # decoupling it from any bundled revision expectations.
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
         run: pa11y-ci --config pa11yci.json
