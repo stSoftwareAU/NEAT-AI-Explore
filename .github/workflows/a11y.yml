@@ -40,6 +40,9 @@ jobs:
       - name: Install pa11y-ci and http-server
         run: npm install -g pa11y-ci http-server
 
+      - name: Install Chrome for Puppeteer
+        run: npx puppeteer browsers install chrome
+
       - name: Serve docs/ in the background
         run: |
           set -Eeuo pipefail
