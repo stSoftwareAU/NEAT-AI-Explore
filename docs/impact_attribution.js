@@ -258,9 +258,29 @@ export function computeImpactBreakdownToOutputs(input) {
  * - Allocate the neuron's impact across inbound synapses proportionally:
  *     allocatedImpact_i = neuronImpact * score_i / Σ score
  *
+ * Squash-aware cap (issue #270)
+ * -----------------------------
+ * A neuron's activation cannot exceed what its squash function can emit
+ * (TANH: ±1, SIGMOID: 0..1, etc). When `toNeuronSquash` is supplied, the
+ * allocation rescales the per-synapse `allocatedImpact` such that the sum
+ * never exceeds the squash emit ceiling. Concretely, when the raw Σ score
+ * would saturate the receiving neuron, each synapse's allocated influence
+ * collapses to a fair share of the ceiling: ten synapses each feeding 10
+ * into a TANH neuron contribute ~0.1 each, summing to ≤ 1.0.
+ *
+ * For unbounded squashes (RELU/IDENTITY) callers may pass
+ * `recordedActivationMax` to provide an observed envelope; otherwise the
+ * helper falls back to current behaviour (no cap).
+ *
+ * Unknown or missing squash strings fall back gracefully — no console
+ * output, the cap is simply skipped.
+ *
  * This creates an explainable breakdown where the allocated impacts sum to the
- * neuron's impact (within rounding), without claiming it's ground-truth.
+ * neuron's impact (within rounding) and are bounded by what the receiving
+ * neuron can actually emit, without claiming it's ground-truth.
  */
+
+import { squashEmitCeiling } from "./shared/squash_bounds.js";
 
 /**
  * @typedef {{
@@ -276,6 +296,7 @@ export function computeImpactBreakdownToOutputs(input) {
  *   toUuid: string,
  *   neuronImpact: number | null,
  *   totalScore: number,
+ *   emitCeiling: number,
  *   synapses: Array<InboundSynapseWithStats & {
  *     score: number,
  *     share: number,
@@ -288,17 +309,26 @@ export function computeImpactBreakdownToOutputs(input) {
  * @param {{
  *   toUuid: string,
  *   neuronImpact?: number | null,
- *   inboundSynapses: InboundSynapseWithStats[]
+ *   inboundSynapses: InboundSynapseWithStats[],
+ *   toNeuronSquash?: string | null,
+ *   recordedActivationMax?: number | null
  * }} input
  * @returns {InboundAllocationResult}
  */
 export function computeInboundSynapseImpactAllocation(input) {
-  const { toUuid, neuronImpact = null, inboundSynapses } = input ?? {};
+  const {
+    toUuid,
+    neuronImpact = null,
+    inboundSynapses,
+    toNeuronSquash = null,
+    recordedActivationMax = null,
+  } = input ?? {};
   if (!toUuid || !Array.isArray(inboundSynapses)) {
     return {
       toUuid: toUuid ?? "",
       neuronImpact: neuronImpact ?? null,
       totalScore: 0,
+      emitCeiling: Number.POSITIVE_INFINITY,
       synapses: [],
     };
   }
@@ -321,17 +351,44 @@ export function computeInboundSynapseImpactAllocation(input) {
     0,
   );
 
+  const emitCeiling = squashEmitCeiling(
+    toNeuronSquash,
+    typeof recordedActivationMax === "number" ? recordedActivationMax : null,
+  );
+  const haveFiniteCeiling = isFinite(emitCeiling) && emitCeiling > 0;
+
   const synapses = rows.map((r) => {
     const share = totalScore > 0 ? r.score / totalScore : 0;
-    const allocatedImpact =
+
+    let allocatedImpact = null;
+    if (
       typeof neuronImpact === "number" && isFinite(neuronImpact) &&
-        totalScore > 0
-        ? neuronImpact * share
-        : null;
+      totalScore > 0
+    ) {
+      // Preserve the sign of neuronImpact, but cap its magnitude at the
+      // squash emit ceiling so the sum can never exceed what the neuron can
+      // actually output.
+      const mag = Math.abs(neuronImpact);
+      const cappedMag = haveFiniteCeiling ? Math.min(mag, emitCeiling) : mag;
+      const sign = neuronImpact < 0 ? -1 : 1;
+      allocatedImpact = sign * cappedMag * share;
+    } else if (haveFiniteCeiling && totalScore > 0) {
+      // No neuronImpact provided, but we know the receiving neuron's emit
+      // ceiling: report each synapse's bounded influence (fair-share rescaled
+      // when the raw Σ score would saturate the neuron).
+      allocatedImpact = Math.min(totalScore, emitCeiling) * share;
+    }
+
     return { ...r, share, allocatedImpact };
   }).sort((a, b) =>
     (b.allocatedImpact ?? b.score) - (a.allocatedImpact ?? a.score)
   );
 
-  return { toUuid, neuronImpact: neuronImpact ?? null, totalScore, synapses };
+  return {
+    toUuid,
+    neuronImpact: neuronImpact ?? null,
+    totalScore,
+    emitCeiling,
+    synapses,
+  };
 }

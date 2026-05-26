@@ -305,3 +305,98 @@ Deno.test("observation contributions: default behaviour is unchanged for non-out
   const total = res.inputs.reduce((acc, r) => acc + r.score, 0);
   approx(total, 1, 1e-9);
 });
+
+Deno.test("observation contributions: squash-aware walk threads toNeuronSquash without changing normalised shares", () => {
+  // Threading getNeuronSquash through the walk should leave normalised shares
+  // unchanged (the share is already a per-neuron fraction). The cap only
+  // bounds reported allocatedImpact magnitudes inside the allocation step;
+  // the walk's accumulated shares still sum to 1.
+  const inbound: Record<string, Edge[]> = {
+    "output-0": [
+      {
+        fromUuid: "hidden-A",
+        toUuid: "output-0",
+        weight: 1,
+        meanContribution: 10,
+      },
+      {
+        fromUuid: "hidden-B",
+        toUuid: "output-0",
+        weight: 1,
+        meanContribution: 10,
+      },
+    ],
+    "hidden-A": [{
+      fromUuid: "input-0",
+      toUuid: "hidden-A",
+      weight: 1,
+      meanContribution: 5,
+    }],
+    "hidden-B": [{
+      fromUuid: "input-1",
+      toUuid: "hidden-B",
+      weight: 1,
+      meanContribution: 5,
+    }],
+  };
+
+  const squashByUuid: Record<string, string> = {
+    "output-0": "TANH",
+    "hidden-A": "TANH",
+    "hidden-B": "SIGMOID",
+  };
+
+  const res = computeTopContributingInputs({
+    focusUuid: "output-0",
+    getInboundEdges: inboundLookup(inbound),
+    getNeuronSquash: (uuid) => squashByUuid[uuid] ?? null,
+    exhaustive: true,
+  });
+
+  assert(!res.truncated);
+  assertEquals(res.inputs.length, 2);
+  const total = res.inputs.reduce((acc, r) => acc + r.score, 0);
+  approx(total, 1, 1e-9, "normalised shares still sum to 1");
+  for (const r of res.inputs) {
+    approx(r.score, 0.5, 1e-9, `${r.uuid} should hold half`);
+  }
+});
+
+Deno.test("observation contributions: unknown squash callback returns null and walk falls back gracefully", () => {
+  // If the squash callback returns null/undefined, the cap is skipped and the
+  // walk produces the same result as without the callback.
+  const inbound: Record<string, Edge[]> = {
+    "output-0": [
+      {
+        fromUuid: "input-0",
+        toUuid: "output-0",
+        weight: 1,
+        meanContribution: 1,
+      },
+      {
+        fromUuid: "input-1",
+        toUuid: "output-0",
+        weight: 1,
+        meanContribution: 1,
+      },
+    ],
+  };
+
+  const baseline = computeTopContributingInputs({
+    focusUuid: "output-0",
+    getInboundEdges: inboundLookup(inbound),
+    exhaustive: true,
+  });
+  const withCallback = computeTopContributingInputs({
+    focusUuid: "output-0",
+    getInboundEdges: inboundLookup(inbound),
+    getNeuronSquash: () => null,
+    exhaustive: true,
+  });
+
+  assertEquals(
+    JSON.stringify(withCallback.inputs),
+    JSON.stringify(baseline.inputs),
+    "null squash callback must not change walk output",
+  );
+});
