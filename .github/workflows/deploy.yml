@@ -22,6 +22,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged Pages deploy cannot hold the runner for the
+    # GitHub default of 360 minutes (#257).
+    timeout-minutes: 15
     steps:
       - name: Checkout
         # actions/checkout@v4.2.2

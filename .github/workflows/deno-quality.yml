@@ -10,6 +10,9 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged deno test / coverage upload cannot hold the
+    # runner for the GitHub default of 360 minutes (#257).
+    timeout-minutes: 20
     steps:
       # actions/checkout@v5.0.1
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

@@ -18,6 +18,9 @@ permissions:
 jobs:
   a11y:
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged http-server / pa11y-ci page load cannot hold
+    # the runner for the GitHub default of 360 minutes (#257).
+    timeout-minutes: 15
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
