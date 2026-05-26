@@ -27,6 +27,17 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.20] - 2026-05-27
+
+### Changed
+
+- `buildObservationContributionsHtml` now caps rendered rows to
+  `min(topN, MAX_OBSERVATION_ROWS, inputs.length)` so the top-N stepper actually
+  limits the number of visible rows rather than only toggling a CSS highlight
+  (Issue #275).
+
+---
+
 ## [0.1.19] - 2026-05-26
 
 ### Added

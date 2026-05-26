@@ -178,10 +178,14 @@ export function isObservationContributionsOpen(opts = {}) {
  *   pre-sorted or unsorted input (Issue #243).
  * @param {(uuid: string) => (string | null)} [params.getAlias]
  * @param {(uuid: string) => (string | null)} [params.getGroup]
- * @param {number} [params.max=MAX_OBSERVATION_ROWS]
- * @param {number} [params.topN=DEFAULT_TOP_N] — number of leading rows to mark
- *   with the `top-influencer` class for visual emphasis (Issue #243). Clamped
- *   to `[1, MAX_TOP_N]`; invalid values fall back to `DEFAULT_TOP_N`.
+ * @param {number} [params.max=MAX_OBSERVATION_ROWS] — hard safety ceiling on
+ *   the number of rendered rows. The effective render count is
+ *   `min(clampedTopN, max, inputs.length)`.
+ * @param {number} [params.topN=DEFAULT_TOP_N] — caps the number of rendered
+ *   rows and marks each rendered row with the `top-influencer` class for
+ *   visual emphasis (Issue #275 / #243). Clamped to `[1, MAX_TOP_N]`;
+ *   invalid values fall back to `DEFAULT_TOP_N`. When fewer than `topN`
+ *   inputs exist, all of them render.
  * @param {boolean} [params.isPhone=false] — viewport matches the phone breakpoint.
  * @param {("open"|"closed"|null)} [params.userToggle=null] — session-scoped
  *   user override; wins over the viewport default.
@@ -211,10 +215,13 @@ export function buildObservationContributionsHtml(params) {
     const bAbs = Math.abs(Number(b?.score) || 0);
     return bAbs - aAbs;
   });
-  const top = sorted.slice(0, max);
-  if (top.length === 0) return "";
 
   const clampedTopN = clampTopN(topN);
+  // Cap rendered rows by topN (Issue #275). MAX_OBSERVATION_ROWS remains a
+  // hard safety ceiling so callers can't force unbounded rendering.
+  const renderLimit = Math.min(clampedTopN, max);
+  const top = sorted.slice(0, renderLimit);
+  if (top.length === 0) return "";
 
   const title = "Observation contributions";
   const note =
