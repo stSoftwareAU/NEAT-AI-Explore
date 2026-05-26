@@ -27,6 +27,27 @@ themselves; minor and major bumps are made manually when warranted.
 
 ---
 
+## [0.1.19] - 2026-05-26
+
+### Added
+
+- `shouldCollapseTraceOverflow({ barWidth, childrenWidth, padding })` pure
+  helper in `docs/shared/trace_header.js`; the overflow decision is now
+  measurement-based rather than a hard-coded `(max-width: 639px)` media query,
+  making it verifiable in unit tests without a DOM (Issue #246).
+- `ResizeObserver` on `.traceBar` in `docs/app.js` (60 ms debounce,
+  `window.resize` fallback) that sets
+  `data-overflow-mode="inline" | "collapsed"` on `.traceOverflow` based on real
+  child-width measurement (Issue #246).
+
+### Changed
+
+- `docs/styles.css` overflow wrapper now driven by `data-overflow-mode`
+  attribute instead of a media query; popover behaviour, focus handling, and
+  keyboard navigation in collapsed mode are unchanged (Issue #246).
+
+---
+
 ## [0.1.18] - 2026-05-26
 
 ### Removed
