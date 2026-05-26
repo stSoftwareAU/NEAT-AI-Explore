@@ -63,3 +63,41 @@ export function shouldUseCompactHeader(width) {
 export function nextOverflowState(isOpen) {
   return !isOpen;
 }
+
+/**
+ * Issue #246 — decide whether the Trace Explorer overflow controls should
+ * collapse behind the "⋯" popover or render inline. The previous behaviour
+ * collapsed on every viewport narrower than `MOBILE_MAX` (a hard-coded
+ * media query) which hid the buttons even when the trace bar had plenty of
+ * room left.
+ *
+ * Pure helper so the threshold can be unit-tested without a DOM:
+ *  - When the trace bar's flex children fit inside the bar's content width
+ *    (`childrenWidth <= barWidth - padding`), keep them inline.
+ *  - When they overflow, collapse behind the popover.
+ *  - Edge case: `childrenWidth === barWidth` (with zero padding) ⇒ inline
+ *    because the row exactly fits.
+ *
+ * Invalid or missing measurements fall back to `false` (inline) so the
+ * controls stay reachable while the first layout pass settles.
+ *
+ * @param {{ barWidth?: number, childrenWidth?: number, padding?: number }} m
+ * @returns {boolean} `true` when the controls should collapse.
+ */
+export function shouldCollapseTraceOverflow(m) {
+  if (!m || typeof m !== "object") return false;
+  const barWidth = /** @type {number} */ (m.barWidth);
+  const childrenWidth = /** @type {number} */ (m.childrenWidth);
+  const padding = typeof m.padding === "number" && Number.isFinite(m.padding)
+    ? Math.max(0, m.padding)
+    : 0;
+  if (
+    typeof barWidth !== "number" || !Number.isFinite(barWidth) ||
+    typeof childrenWidth !== "number" || !Number.isFinite(childrenWidth)
+  ) {
+    return false;
+  }
+  if (barWidth <= 0 || childrenWidth <= 0) return false;
+  const available = Math.max(0, barWidth - padding);
+  return childrenWidth > available;
+}

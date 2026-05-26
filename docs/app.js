@@ -78,6 +78,7 @@ import {
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
 import { formatTraceScore } from "./shared/trace_score.js";
+import { shouldCollapseTraceOverflow } from "./shared/trace_header.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
   buildObservationContributionsHtml,
@@ -295,6 +296,7 @@ const el = {
   themeToggle: document.getElementById("themeToggle"),
   appHeaderControls: document.querySelector(".headerControls"),
   traceButtons: document.querySelector(".traceButtons"),
+  traceBar: document.querySelector(".traceBar"),
 };
 
 // ============================================================================
@@ -329,11 +331,154 @@ function syncThemeTogglePlacement() {
 function initCompactTraceNav() {
   initTraceOverflowMenu();
   syncThemeTogglePlacement();
+  initTraceOverflowMeasurement();
   try {
     const mql = window.matchMedia?.("(max-width: 639px)");
     mql?.addEventListener?.("change", syncThemeTogglePlacement);
   } catch (_e) {
     // No-op — matchMedia unavailable.
+  }
+}
+
+// ============================================================================
+// Issue #246 — measurement-based trace overflow collapse
+// ============================================================================
+
+/**
+ * Measure the trace bar's children against its content width and toggle
+ * `data-overflow-mode` on `.traceOverflow` accordingly. Inline whenever
+ * the children fit, collapsed only when they actually overflow.
+ *
+ * The previous behaviour hard-coded `(max-width: 639px)` which hid
+ * Observations / 🧠 / Synapses on viewports that still had spare width.
+ */
+/**
+ * Sum the natural width of a flex container's direct children, descending
+ * into `display: contents` wrappers (which appear as flex items of their
+ * parent). The breadcrumb is excluded because it claims `flex: 1` and
+ * scrolls horizontally — counting its full content would never let the
+ * row look like it fits.
+ */
+function sumTraceBarChildrenWidth(bar) {
+  if (!(bar instanceof HTMLElement)) return 0;
+  const win = typeof window !== "undefined" ? window : null;
+  let total = 0;
+  const visit = (node) => {
+    for (const child of node.children) {
+      if (!(child instanceof HTMLElement)) continue;
+      // Skip the scrollable breadcrumb — its intrinsic width can exceed
+      // the bar and it is allowed to scroll inside its flex track.
+      if (child.classList.contains("breadcrumb")) {
+        const r = child.getBoundingClientRect();
+        total += r.width; // count its rendered (clamped) width only
+        continue;
+      }
+      const style = win?.getComputedStyle?.(child);
+      if (style && style.display === "contents") {
+        visit(child);
+        continue;
+      }
+      if (style && style.display === "none") continue;
+      total += child.getBoundingClientRect().width;
+    }
+  };
+  visit(bar);
+  return total;
+}
+
+function syncTraceOverflowMode() {
+  const bar = el.traceBar;
+  const wrapper = document.querySelector(".traceOverflow");
+  if (!(bar instanceof HTMLElement) || !(wrapper instanceof HTMLElement)) {
+    return;
+  }
+  const currentMode = wrapper.getAttribute("data-overflow-mode") || "inline";
+  // Measure the natural width the bar wants in inline mode. Force inline
+  // first so collapsed-mode styles don't skew the measurement, then
+  // restore at the end before any paint.
+  if (currentMode !== "inline") {
+    wrapper.setAttribute("data-overflow-mode", "inline");
+  }
+  const cs = (typeof window !== "undefined" && window.getComputedStyle)
+    ? window.getComputedStyle(bar)
+    : null;
+  const padLeft = cs ? parseFloat(cs.paddingLeft) || 0 : 0;
+  const padRight = cs ? parseFloat(cs.paddingRight) || 0 : 0;
+  const gap = cs ? parseFloat(cs.columnGap || cs.gap) || 0 : 0;
+  const barWidth = bar.clientWidth;
+  const childrenWidth = sumTraceBarChildrenWidth(bar);
+  // Account for inter-item gaps — every direct flex item adds one gap
+  // except the last. Count only top-level rendered items.
+  const itemCount = countTopLevelFlexItems(bar);
+  const gapTotal = Math.max(0, itemCount - 1) * gap;
+  const collapse = shouldCollapseTraceOverflow({
+    barWidth,
+    childrenWidth: childrenWidth + gapTotal,
+    padding: padLeft + padRight,
+  });
+  const nextMode = collapse ? "collapsed" : "inline";
+  if (nextMode !== currentMode) {
+    wrapper.setAttribute("data-overflow-mode", nextMode);
+    // Closing the popover keeps focus/aria in a sane state when the
+    // controls swap back into the inline row.
+    if (nextMode === "inline") {
+      wrapper.setAttribute("data-overflow-open", "false");
+      const summary = wrapper.querySelector(".traceOverflowSummary");
+      if (summary instanceof HTMLElement) {
+        summary.setAttribute("aria-expanded", "false");
+      }
+    }
+  } else if (currentMode !== "inline") {
+    // Restore the previous mode the measurement pass clobbered.
+    wrapper.setAttribute("data-overflow-mode", currentMode);
+  }
+}
+
+function countTopLevelFlexItems(bar) {
+  if (!(bar instanceof HTMLElement)) return 0;
+  const win = typeof window !== "undefined" ? window : null;
+  let count = 0;
+  const visit = (node) => {
+    for (const child of node.children) {
+      if (!(child instanceof HTMLElement)) continue;
+      const style = win?.getComputedStyle?.(child);
+      if (style && style.display === "contents") {
+        visit(child);
+        continue;
+      }
+      if (style && style.display === "none") continue;
+      count += 1;
+    }
+  };
+  visit(bar);
+  return count;
+}
+
+function initTraceOverflowMeasurement() {
+  const bar = el.traceBar;
+  const wrapper = document.querySelector(".traceOverflow");
+  if (!(bar instanceof HTMLElement) || !(wrapper instanceof HTMLElement)) {
+    return;
+  }
+  // Ensure the attribute exists from first paint so CSS has a target.
+  if (!wrapper.hasAttribute("data-overflow-mode")) {
+    wrapper.setAttribute("data-overflow-mode", "inline");
+  }
+  // Debounce to avoid layout thrash when many resize events fire in quick
+  // succession (e.g. window drag, font swap, side-panel collapse).
+  const debounced = createDebounce(syncTraceOverflowMode, 60);
+  // Initial pass after first layout settles.
+  syncTraceOverflowMode();
+  if (typeof ResizeObserver === "function") {
+    try {
+      const ro = new ResizeObserver(() => debounced.call());
+      ro.observe(bar);
+    } catch (_e) {
+      // Fall through to the window resize fallback below.
+    }
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("resize", () => debounced.call());
   }
 }
 
