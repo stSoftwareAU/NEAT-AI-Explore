@@ -1969,6 +1969,20 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
         meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
       }));
     },
+    // Issue #270: propagate the squash cap at each hop so accumulated
+    // upstream contribution cannot exceed any intermediate neuron's emit
+    // ceiling.
+    getNeuronSquash: (uuid) => neuronsByUuid.get(uuid)?.squash ?? null,
+    getRecordedActivationMax: (uuid) => {
+      const stats = getNeuronStats(uuid);
+      if (typeof stats?.activationMax !== "number") return null;
+      return Math.max(
+        Math.abs(stats.activationMax),
+        typeof stats?.activationMin === "number"
+          ? Math.abs(stats.activationMin)
+          : 0,
+      );
+    },
   });
 }
 
@@ -2186,6 +2200,16 @@ function renderImpactBreakdown(uuid, neuronImpact) {
     return;
   }
 
+  const toNeuron = neuronsByUuid.get(uuid) ?? null;
+  const toStats = getNeuronStats(uuid);
+  const recordedActMax = typeof toStats?.activationMax === "number"
+    ? Math.max(
+      Math.abs(toStats.activationMax),
+      typeof toStats?.activationMin === "number"
+        ? Math.abs(toStats.activationMin)
+        : 0,
+    )
+    : null;
   const allocation = computeInboundSynapseImpactAllocation({
     toUuid: uuid,
     neuronImpact: neuronImpact ?? null,
@@ -2195,6 +2219,8 @@ function renderImpactBreakdown(uuid, neuronImpact) {
       weight: s.weight,
       meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
     })),
+    toNeuronSquash: toNeuron?.squash ?? null,
+    recordedActivationMax: recordedActMax,
   });
 
   lastInboundAllocation = allocation;
@@ -2423,6 +2449,16 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
   }
 
   const currentImpact = getNeuronImpact(toUuid);
+  const toNeuron = neuronsByUuid.get(toUuid) ?? null;
+  const toStats = getNeuronStats(toUuid);
+  const recordedActMax = typeof toStats?.activationMax === "number"
+    ? Math.max(
+      Math.abs(toStats.activationMax),
+      typeof toStats?.activationMin === "number"
+        ? Math.abs(toStats.activationMin)
+        : 0,
+    )
+    : null;
   const allocation = computeInboundSynapseImpactAllocation({
     toUuid,
     neuronImpact: currentImpact ?? null,
@@ -2432,6 +2468,8 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
       weight: s.weight,
       meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
     })),
+    toNeuronSquash: toNeuron?.squash ?? null,
+    recordedActivationMax: recordedActMax,
   });
   const allocByFrom = new Map(allocation.synapses.map((r) => [r.fromUuid, r]));
 

@@ -4,10 +4,25 @@
  * These are intentionally DOM-free so they can be unit-tested with Deno and
  * reused across views.
  *
+ * Squash-aware upstream attribution (issue #270)
+ * ----------------------------------------------
+ * Per-synapse contributions are bounded by what the receiving neuron's squash
+ * can emit. The multi-hop walk in `computeTopContributingInputs` propagates
+ * this cap by passing each intermediate neuron's squash (and optional
+ * recorded activation envelope) to `computeInboundSynapseImpactAllocation`.
+ * The allocation rescales contributions to:
+ *
+ *     bounded_i = share_i · min(Σ score, emitCeiling)
+ *
+ * where `emitCeiling = squashEmitCeiling(squash, recordedActivationMax)`. The
+ * walk then propagates upstream using `share` (unchanged for normalised
+ * traversal), and the accumulated contribution at any intermediate neuron can
+ * never exceed that neuron's emit ceiling.
+ *
  * Australian English note:
  * - Prefer spellings like \"behaviour\" and \"organisation\".
  *
- * Last updated: 20251230
+ * Last updated: 20260527
  */
 
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
@@ -118,6 +133,8 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
  *   maxWork?: number,
  *   maxInboundPerNode?: number,
  *   exhaustive?: boolean,
+ *   getNeuronSquash?: (uuid: string) => (string | null | undefined),
+ *   getRecordedActivationMax?: (uuid: string) => (number | null | undefined),
  * }} input
  * @returns {{
  *   focusUuid: string,
@@ -128,6 +145,13 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
 export function computeTopContributingInputs(input) {
   const focusUuid = input?.focusUuid ?? "";
   const getInboundEdges = input?.getInboundEdges;
+  const getNeuronSquash = typeof input?.getNeuronSquash === "function"
+    ? input.getNeuronSquash
+    : null;
+  const getRecordedActivationMax =
+    typeof input?.getRecordedActivationMax === "function"
+      ? input.getRecordedActivationMax
+      : null;
   const exhaustive = input?.exhaustive === true;
   const maxDepth = Math.max(
     1,
@@ -202,6 +226,10 @@ export function computeTopContributingInputs(input) {
     const inbound = getInboundEdges(uuid) ?? [];
     if (!Array.isArray(inbound) || inbound.length === 0) continue;
 
+    const toNeuronSquash = getNeuronSquash ? getNeuronSquash(uuid) : null;
+    const recordedActivationMax = getRecordedActivationMax
+      ? getRecordedActivationMax(uuid)
+      : null;
     const allocation = computeInboundSynapseImpactAllocation({
       toUuid: uuid,
       neuronImpact: null,
@@ -211,6 +239,10 @@ export function computeTopContributingInputs(input) {
         weight: e.weight,
         meanContribution: e.meanContribution ?? null,
       })),
+      toNeuronSquash: toNeuronSquash ?? null,
+      recordedActivationMax: typeof recordedActivationMax === "number"
+        ? recordedActivationMax
+        : null,
     });
 
     const steps = (allocation?.synapses ?? [])

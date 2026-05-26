@@ -2,7 +2,10 @@ import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 type Synapse = { fromUuid: string; toUuid: string; weight: number };
 
-import { computeImpactBreakdownToOutputs } from "../docs/impact_attribution.js";
+import {
+  computeImpactBreakdownToOutputs,
+  computeInboundSynapseImpactAllocation,
+} from "../docs/impact_attribution.js";
 
 Deno.test("computeImpactBreakdownToOutputs splits impact across outputs and paths", () => {
   // Graph:
@@ -139,6 +142,21 @@ Deno.test("computeImpactBreakdownToOutputs sets truncated when maxPaths exceeded
   });
 
   assertEquals(res.truncated, true);
+});
+
+Deno.test("computeImpactBreakdownToOutputs threads through to allocation: squash cap composes (TANH)", () => {
+  // Combined check: when the allocation step is called for a TANH receiver
+  // with a strong inbound signal, the cap is honoured. This guards the
+  // wiring used by the impact-attribution panel and graph_analysis walk.
+  const res = computeInboundSynapseImpactAllocation({
+    toUuid: "hidden-tanh",
+    inboundSynapses: [
+      { fromUuid: "in", toUuid: "hidden-tanh", weight: 1, meanContribution: 7 },
+    ],
+    toNeuronSquash: "TANH",
+  });
+  approx(res.emitCeiling, 1);
+  approx(res.synapses[0]?.allocatedImpact ?? 0, 1, 1e-9);
 });
 
 Deno.test("computeImpactBreakdownToOutputs collectPaths stores all paths", () => {
