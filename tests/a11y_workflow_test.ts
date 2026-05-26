@@ -115,6 +115,30 @@ Deno.test("a11y workflow pins third-party actions to commit SHAs", async () => {
   }
 });
 
+Deno.test("a11y workflow http-server readiness loop uses strict bash flags (#260)", async () => {
+  const wf = await loadWorkflow();
+  const job = wf.jobs?.a11y;
+  const steps = job?.steps ?? [];
+
+  const serveStep = steps.find((s) =>
+    (s.run ?? "").includes("http-server") &&
+    (s.run ?? "").includes("127.0.0.1:8080")
+  );
+  assert(
+    serveStep,
+    "workflow must declare a step that backgrounds http-server on 127.0.0.1:8080",
+  );
+
+  const run = serveStep!.run ?? "";
+  // Match the semver-bump.yml convention (`set -Eeuo pipefail`) but accept the
+  // suggested `set -euo pipefail` too — both close the failure modes the audit
+  // flagged (typo'd ${VAR} expansions, swallowed pipeline failures).
+  assert(
+    /^\s*set\s+-E?euo\s+pipefail\b/m.test(run),
+    "Serve docs/ step must begin its bash with `set -euo pipefail` (or `-Eeuo`) before backgrounding http-server",
+  );
+});
+
 Deno.test("pa11y-ci config exists and is valid JSON", async () => {
   const text = await Deno.readTextFile(CONFIG_PATH);
   const parsed = JSON.parse(text);
