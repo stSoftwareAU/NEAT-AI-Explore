@@ -97,10 +97,6 @@ import {
   decideFiltersMode,
   decideFiltersModeByWidth,
 } from "./shared/filter_layout.js";
-// Aliased on import: `trace_score.js` also exports a `formatTraceScore`
-// (a different function — see Issue #200) so we rename this one locally.
-import { formatTraceScore as formatPathAllocationScore } from "./shared/trace_header.js";
-
 /** @type {Element|null} Element that triggered the currently open modal. */
 let _modalTrigger = null;
 /** @type {(() => void)|null} Cleanup function for the current focus trap. */
@@ -293,8 +289,6 @@ const el = {
   topoModalBody: document.getElementById("topoModalBody"),
   explorerMain: document.querySelector(".explorer"),
   // Issue #184 — compact phone trace nav.
-  tracePathScore: document.getElementById("tracePathScore"),
-  tracePathScoreValue: document.getElementById("tracePathScoreValue"),
   traceOverflow: document.getElementById("traceOverflow"),
   traceOverflowToggle: document.getElementById("traceOverflowToggle"),
   traceOverflowMenu: document.getElementById("traceOverflowMenu"),
@@ -306,24 +300,6 @@ const el = {
 // ============================================================================
 // Issue #184 — compact phone trace nav
 // ============================================================================
-
-/**
- * Update the "Score: …" indicator beside Path on the breadcrumb line.
- * Pass `null` (or an allocation without a finite totalScore) to hide it.
- */
-function updateTracePathScoreUI(allocation) {
-  const wrap = el.tracePathScore;
-  const valueEl = el.tracePathScoreValue;
-  if (!wrap || !valueEl) return;
-  const text = formatPathAllocationScore(allocation);
-  if (text == null) {
-    wrap.setAttribute("hidden", "");
-    valueEl.textContent = "—";
-  } else {
-    wrap.removeAttribute("hidden");
-    valueEl.textContent = text;
-  }
-}
 
 /**
  * On phone viewports the theme `A` toggle moves down from the app header
@@ -1293,8 +1269,6 @@ function clearTrace() {
   }
   // Issue #53/#116: Show URL/Fetch/Browse controls again.
   document.body.classList.remove("snapshotLoaded");
-  // Issue #184 — hide the inline path-score badge when leaving exploration.
-  updateTracePathScoreUI(null);
 }
 
 // ============================================================================
@@ -2064,8 +2038,6 @@ function renderImpactBreakdown(uuid, neuronImpact) {
   const inbound = getInboundSynapses(uuid);
   if (inbound.length === 0 || neuronImpact == null) {
     el.impactBreakdown.innerHTML = "";
-    // Issue #184 — no allocation to display alongside the path.
-    updateTracePathScoreUI(null);
     return;
   }
 
@@ -2083,8 +2055,6 @@ function renderImpactBreakdown(uuid, neuronImpact) {
   lastInboundAllocation = allocation;
   lastInboundToUuid = uuid;
   lastInboundPage = 0;
-  // Issue #184 — surface the Σ score beside Path on the breadcrumb line.
-  updateTracePathScoreUI(allocation);
 
   const title = "Impact ← inbound synapses";
   const note =
