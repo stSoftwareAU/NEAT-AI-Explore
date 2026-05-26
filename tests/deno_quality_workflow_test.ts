@@ -27,6 +27,7 @@ interface DenoQualityWorkflow {
   on?: Record<string, unknown> | string;
   permissions?: Record<string, string>;
   jobs?: Record<string, {
+    name?: string;
     "runs-on"?: string;
     steps?: WorkflowStep[];
   }>;
@@ -162,6 +163,37 @@ Deno.test("deno-quality workflow generates lcov coverage and uploads to Codecov"
     (s.uses ?? "").startsWith("codecov/codecov-action@")
   );
   assert(codecov, "workflow must upload coverage via codecov-action");
+});
+
+// Issue #259 — after consolidating ci.yml into deno-quality.yml, the job
+// must keep the display name "Quality Gate" so any required-status-check
+// rule referencing that label continues to resolve.
+Deno.test("deno-quality 'quality' job is named 'Quality Gate' (Issue #259)", async () => {
+  const wf = await loadWorkflow();
+  const job = wf.jobs?.quality;
+  assert(job, "expected a 'quality' job");
+  assertEquals(job!.name, "Quality Gate");
+});
+
+// Issue #259 — the duplicate ci.yml workflow must stay removed. Both
+// workflows ran the same four checks on every Develop PR; deno-quality.yml
+// is the superset (it adds coverage + Codecov), so ci.yml was deleted.
+Deno.test("legacy ci.yml workflow has been removed (Issue #259)", async () => {
+  const ciYmlPath = new URL(
+    "../.github/workflows/ci.yml",
+    import.meta.url,
+  );
+  let exists = false;
+  try {
+    await Deno.stat(ciYmlPath);
+    exists = true;
+  } catch (err) {
+    if (!(err instanceof Deno.errors.NotFound)) throw err;
+  }
+  assert(
+    !exists,
+    "ci.yml must remain deleted — its checks are now covered by deno-quality.yml",
+  );
 });
 
 Deno.test("deno-quality workflow pins third-party actions to commit SHAs", async () => {
