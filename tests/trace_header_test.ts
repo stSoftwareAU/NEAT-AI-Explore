@@ -2,6 +2,7 @@ import { assertEquals } from "./test_helpers.ts";
 import {
   formatTraceScore,
   nextOverflowState,
+  shouldCollapseTraceOverflow,
   shouldUseCompactHeader,
 } from "../docs/shared/trace_header.js";
 
@@ -97,4 +98,70 @@ Deno.test("shouldUseCompactHeader returns false for invalid inputs", () => {
 Deno.test("nextOverflowState flips boolean state", () => {
   assertEquals(nextOverflowState(false), true);
   assertEquals(nextOverflowState(true), false);
+});
+
+// ---------------------------------------------------------------------------
+// shouldCollapseTraceOverflow — Issue #246
+// ---------------------------------------------------------------------------
+
+Deno.test("shouldCollapseTraceOverflow inline when children fit", () => {
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 800, childrenWidth: 400 }),
+    false,
+  );
+});
+
+Deno.test("shouldCollapseTraceOverflow collapsed when children overflow", () => {
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 320, childrenWidth: 600 }),
+    true,
+  );
+});
+
+Deno.test("shouldCollapseTraceOverflow inline when widths are equal", () => {
+  // Edge case: childrenWidth === barWidth ⇒ inline (the row exactly fits).
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 500, childrenWidth: 500 }),
+    false,
+  );
+});
+
+Deno.test("shouldCollapseTraceOverflow respects padding", () => {
+  // 500 - 40 padding = 460 available; children at 480 overflow.
+  assertEquals(
+    shouldCollapseTraceOverflow({
+      barWidth: 500,
+      childrenWidth: 480,
+      padding: 40,
+    }),
+    true,
+  );
+  // With no padding the same children would fit.
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 500, childrenWidth: 480 }),
+    false,
+  );
+});
+
+Deno.test("shouldCollapseTraceOverflow returns false for invalid input", () => {
+  assertEquals(shouldCollapseTraceOverflow(null as never), false);
+  assertEquals(shouldCollapseTraceOverflow(undefined as never), false);
+  assertEquals(shouldCollapseTraceOverflow({}), false);
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: NaN, childrenWidth: 100 }),
+    false,
+  );
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 100, childrenWidth: NaN }),
+    false,
+  );
+  // Zero/negative widths fall back to inline (first paint pass).
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 0, childrenWidth: 200 }),
+    false,
+  );
+  assertEquals(
+    shouldCollapseTraceOverflow({ barWidth: 500, childrenWidth: 0 }),
+    false,
+  );
 });

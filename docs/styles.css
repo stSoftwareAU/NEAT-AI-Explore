@@ -374,23 +374,73 @@ body {
 }
 
 /*
- * Issue #184: trace nav overflow menu.
+ * Issue #184 / Issue #246: trace nav overflow menu.
  *
- * On desktop and tablet the wrapper is transparent (display: contents) so
- * the secondary action buttons flow inline alongside Back/Clear. The
- * summary trigger and the wrapper's menu styling are only activated on
- * phone viewports below.
+ * The mode is driven by `data-overflow-mode` on the wrapper, set by
+ * `syncTraceOverflowMode()` in app.js based on a real measurement of the
+ * trace bar's children vs its content width (no media-query breakpoint).
+ *
+ *   inline    — wrapper is transparent (`display: contents`), menu items
+ *               flow alongside Back/Clear, and the "⋯" summary is hidden.
+ *   collapsed — the "⋯" summary shows and the menu becomes a popover (see
+ *               the phone-specific block lower in this file).
+ *
+ * The attribute defaults to `inline` so the first paint matches the
+ * desktop layout while JS catches up.
  */
-.traceOverflow {
+.traceOverflow,
+.traceOverflow[data-overflow-mode="inline"] {
   display: contents;
 }
 
-.traceOverflowMenu {
+.traceOverflow[data-overflow-mode="inline"] .traceOverflowMenu {
   display: contents;
 }
 
-.traceOverflowSummary {
+.traceOverflow[data-overflow-mode="inline"] .traceOverflowSummary {
   display: none;
+}
+
+/* Collapsed mode — popover behaviour available at any viewport width. */
+.traceOverflow[data-overflow-mode="collapsed"] {
+  display: inline-flex;
+  position: relative;
+}
+
+.traceOverflow[data-overflow-mode="collapsed"] .traceOverflowSummary {
+  display: inline-flex;
+  min-height: 32px;
+  min-width: 32px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.traceOverflow[data-overflow-mode="collapsed"] .traceOverflowMenu {
+  display: none;
+}
+
+.traceOverflow[data-overflow-mode="collapsed"][data-overflow-open="true"]
+  .traceOverflowMenu {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  gap: 4px;
+  z-index: 60;
+  min-width: 200px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.traceOverflow[data-overflow-mode="collapsed"][data-overflow-open="true"]
+  .traceOverflowMenu
+  .button {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 /*
@@ -1840,46 +1890,18 @@ body {
   }
 
   /*
-   * Issue #184: on phone viewports collapse secondary trace actions into
-   * a popup menu so Back/Clear/Theme stay always visible and the row
-   * does not wrap onto a second line for narrow widths.
+   * Issue #184 / Issue #246: on phone viewports the overflow controls
+   * generally collapse into a popover (the measurement decides; this
+   * media query only bumps the touch-target sizes when they do).
    */
-  .traceOverflow {
-    display: inline-flex;
-    position: relative;
-  }
-
-  .traceOverflowSummary {
-    display: inline-flex;
+  .traceOverflow[data-overflow-mode="collapsed"] .traceOverflowSummary {
     min-height: 44px;
     min-width: 44px;
-    font-size: 18px;
-    line-height: 1;
   }
 
-  .traceOverflow .traceOverflowMenu {
-    display: none;
-  }
-
-  .traceOverflow[data-overflow-open="true"] .traceOverflowMenu {
-    display: flex;
-    flex-direction: column;
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px;
-    gap: 4px;
-    z-index: 60;
-    min-width: 200px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-  }
-
-  .traceOverflow[data-overflow-open="true"] .traceOverflowMenu .button {
-    width: 100%;
-    justify-content: flex-start;
+  .traceOverflow[data-overflow-mode="collapsed"][data-overflow-open="true"]
+    .traceOverflowMenu
+    .button {
     min-height: 44px;
   }
 
