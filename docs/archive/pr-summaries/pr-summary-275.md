@@ -3,19 +3,20 @@
 Made the Observation contributions top-N stepper actually cap the number of
 rendered rows. Previously the stepper only toggled a CSS highlight while up to
 50 rows always rendered. After this change, setting `topN: N` in
-`buildObservationContributionsHtml` renders exactly `min(N, MAX_OBSERVATION_ROWS, inputs.length)`
-rows. `MAX_OBSERVATION_ROWS` remains a hard safety ceiling. Closes #275.
+`buildObservationContributionsHtml` renders exactly
+`min(N, MAX_OBSERVATION_ROWS, inputs.length)` rows. `MAX_OBSERVATION_ROWS`
+remains a hard safety ceiling. Closes #275.
 
-The fix is a one-line change in `docs/shared/observation_contributions.js`:
-move `clampTopN` above the slice and use
-`Math.min(clampedTopN, max)` as the slice limit. The `top-influencer` CSS
-class and `data-top-influencer` attribute remain on every rendered row, so
-the existing CSS hook at `docs/styles.css:852` is backwards-compatible.
+The fix is a one-line change in `docs/shared/observation_contributions.js`: move
+`clampTopN` above the slice and use `Math.min(clampedTopN, max)` as the slice
+limit. The `top-influencer` CSS class and `data-top-influencer` attribute remain
+on every rendered row, so the existing CSS hook at `docs/styles.css:852` is
+backwards-compatible.
 
 ## Evidence
 
-This is a pure-JS render-logic change in a DOM-free module. Verified via
-deno tests (no browser screenshot needed for the rendering contract).
+This is a pure-JS render-logic change in a DOM-free module. Verified via deno
+tests (no browser screenshot needed for the rendering contract).
 
 ```mermaid
 flowchart LR
