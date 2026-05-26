@@ -111,20 +111,14 @@ Deno.test("observation contributions: cycles are finite and deterministic", () =
     ],
   };
 
-  const start = performance.now();
+  // Termination is enforced by the Deno test runner's own timeout — a real
+  // infinite loop would never reach the assertions below. Wall-clock timing
+  // budgets belong in a benchmark, not in a unit test (see issue #264).
   const res = computeTopContributingInputs({
     focusUuid: "output-0",
     getInboundEdges: inboundLookup(inbound),
     exhaustive: true,
   });
-  const elapsedMs = performance.now() - start;
-
-  // Termination: well below any sane unit-test budget. A real infinite loop
-  // would never get here, but this guards against accidental slowdowns too.
-  assert(
-    elapsedMs < 2000,
-    `walk on a cycle should be fast; took ${elapsedMs.toFixed(1)}ms`,
-  );
 
   // Only input-0 is reachable; hidden-B is a dead-end cycle that loops back
   // through hidden-A (a node already on the path) so it contributes 0.
