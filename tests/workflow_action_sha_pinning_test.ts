@@ -7,9 +7,11 @@
  * malicious commit — the canonical supply-chain attack vector for GitHub
  * Actions. Pinning to a SHA forecloses that path.
  *
- * The human-readable tag should be kept as a YAML comment immediately above
- * the `uses:` line so dependabot/renovate can still propose upgrades and
- * humans can read what version is in use at a glance.
+ * This file deliberately consolidates the SHA-pin check into a single
+ * parser-walk across every workflow (Issue #263). Per-workflow grep-style
+ * substring assertions on `run:` blocks are gone; the workflow either runs
+ * in CI with a pinned action or it doesn't, and one parser-walk catches the
+ * whole class.
  */
 
 import { parse as parseYaml } from "@std/yaml";
@@ -79,58 +81,6 @@ Deno.test("every workflow pins every action `uses:` to a 40-char commit SHA (#19
   assert(
     failures.length === 0,
     `Unpinned actions found (must use 40-char commit SHA):\n  ${
-      failures.join("\n  ")
-    }`,
-  );
-});
-
-Deno.test("workflows that pin to a SHA also include the human-readable tag in a comment (#190)", async () => {
-  // The comment is dropped during YAML parsing, so we inspect the raw text.
-  // Each SHA-pinned `uses:` line should have a comment on the previous
-  // non-blank line that names the version (e.g. `# actions/checkout@v4.2.2`).
-  const files = await listWorkflowFiles();
-  const failures: string[] = [];
-
-  for (const file of files) {
-    const url = new URL(file, WORKFLOWS_DIR);
-    const text = await Deno.readTextFile(url);
-    const lines = text.split("\n");
-
-    for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(/uses:\s*([^\s#]+@[0-9a-f]{40})/);
-      if (!m) continue;
-      // Walk back through any preceding YAML comment lines (and optional
-      // intervening `- name:` / blank lines for steps that label themselves)
-      // and require at least one of those comments to name the action
-      // repository so reviewers and dependabot can read the human version.
-      const actionRepo = m[1].split("@")[0];
-      let mentionsRepo = false;
-      for (let j = i - 1; j >= 0; j--) {
-        const trimmed = lines[j].trim();
-        if (trimmed === "") continue;
-        // Skip the `- name:` line that often sits between the comment and
-        // the `uses:` line.
-        if (trimmed.startsWith("- name:") || trimmed.startsWith("name:")) {
-          continue;
-        }
-        if (!trimmed.startsWith("#")) break;
-        if (trimmed.includes(actionRepo)) {
-          mentionsRepo = true;
-          break;
-        }
-      }
-      if (!mentionsRepo) {
-        failures.push(
-          `${file}:${i + 1}: '${m[1]}' is SHA-pinned but the preceding ` +
-            `comment block does not name '${actionRepo}@<tag>'`,
-        );
-      }
-    }
-  }
-
-  assert(
-    failures.length === 0,
-    `Missing version-tag comments next to SHA pins:\n  ${
       failures.join("\n  ")
     }`,
   );

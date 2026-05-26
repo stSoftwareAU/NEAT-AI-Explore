@@ -1,8 +1,7 @@
 /**
  * Issue #224 — Regression guard for scripts/verify_starfield_layout.ts.
  *
- * Mirrors `tests/evidence_scripts_check_test.ts`: runs
- * `deno check scripts/verify_starfield_layout.ts` as a subprocess and
+ * Runs `deno check scripts/verify_starfield_layout.ts` as a subprocess and
  * asserts a zero exit code so any future regression in the Deno port
  * (e.g. an unresolvable playwright version, a stale npm specifier, or a
  * type mismatch against the playwright API) is caught by CI before it
@@ -10,6 +9,12 @@
  *
  * This test deliberately does NOT launch a browser — that requires a
  * working Chromium download and is out of scope for unit tests.
+ *
+ * The previous source-text grep for the `from "playwright"` specifier was
+ * removed under Issue #263 — the bare-specifier rule is enforced by the
+ * project's no-import-prefix lint rule, and `deno check` already proves
+ * the import resolves. The deno.json pin assertion remains because it is
+ * a real JSON-value check, not a source-text grep.
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -39,23 +44,6 @@ Deno.test("deno check scripts/verify_starfield_layout.ts exits cleanly", async (
   assert(
     !stderrText.includes("TS2584"),
     `unexpected TS2584 missing-DOM-lib error:\n${stderrText}`,
-  );
-});
-
-Deno.test("scripts/verify_starfield_layout.ts uses bare 'playwright' specifier", async () => {
-  const src = await Deno.readTextFile(
-    new URL("../scripts/verify_starfield_layout.ts", import.meta.url),
-  );
-  // Inline `npm:` specifiers are forbidden by the project's no-import-prefix
-  // lint rule; the playwright import must go through the deno.json `imports`
-  // map so the quarantine gate can age-check the pinned version.
-  assert(
-    !/from\s+["']npm:playwright/.test(src),
-    "verify_starfield_layout.ts must import 'playwright' via the deno.json imports map, not via an inline 'npm:' specifier",
-  );
-  assert(
-    /from\s+["']playwright["']/.test(src),
-    "verify_starfield_layout.ts must import the bare 'playwright' specifier",
   );
 });
 
