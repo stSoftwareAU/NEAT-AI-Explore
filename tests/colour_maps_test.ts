@@ -168,14 +168,16 @@ Deno.test("synapseWeightColourRgb01 returns [r,g,b] in [0,1]", () => {
   assert(b >= 0 && b <= 1, `b=${b} out of range`);
 });
 
-Deno.test("synapseWeightColourRgb01 positive weights are greenish", () => {
-  const [r, g, _b] = synapseWeightColourRgb01(3, 5);
-  assert(g > r, "Green channel should dominate for positive weights");
+Deno.test("synapseWeightColourRgb01 positive weights are blueish (#244)", () => {
+  // Diverging palette: positive → blue hue band (hue ~225°).
+  const [r, _g, b] = synapseWeightColourRgb01(3, 5);
+  assert(b > r, "Blue channel should dominate for positive weights");
 });
 
-Deno.test("synapseWeightColourRgb01 negative weights are reddish", () => {
-  const [r, g, _b] = synapseWeightColourRgb01(-3, 5);
-  assert(r > g, "Red channel should dominate for negative weights");
+Deno.test("synapseWeightColourRgb01 negative weights are reddish (#244)", () => {
+  // Diverging palette: negative → red hue band (hue ~15°).
+  const [r, _g, b] = synapseWeightColourRgb01(-3, 5);
+  assert(r > b, "Red channel should dominate for negative weights");
 });
 
 Deno.test("synapseWeightColourRgb01 near-zero weights are greyish", () => {
@@ -185,15 +187,15 @@ Deno.test("synapseWeightColourRgb01 near-zero weights are greyish", () => {
   assert(spread < 0.15, `Near-zero should be grey (spread=${spread})`);
 });
 
-Deno.test("synapseWeightColourRgb01 stronger positive is more saturated", () => {
+Deno.test("synapseWeightColourRgb01 stronger positive is more saturated (#244)", () => {
   const weak = synapseWeightColourRgb01(0.5, 5);
   const strong = synapseWeightColourRgb01(4.5, 5);
-  // Stronger positive should have more green dominance
-  const weakGreenDelta = weak[1] - weak[0];
-  const strongGreenDelta = strong[1] - strong[0];
+  // Stronger positive should show more blue dominance (b - r grows).
+  const weakBlueDelta = weak[2] - weak[0];
+  const strongBlueDelta = strong[2] - strong[0];
   assert(
-    strongGreenDelta > weakGreenDelta,
-    "Stronger positive should show more green saturation",
+    strongBlueDelta > weakBlueDelta,
+    "Stronger positive should show more blue saturation",
   );
 });
 
@@ -221,25 +223,161 @@ Deno.test("synapseWeightColourCss returns valid rgb() string", () => {
   assert(css.endsWith(")"), `Expected closing paren: ${css}`);
 });
 
-Deno.test("synapseWeightColourCss positive weight produces greenish colour", () => {
+Deno.test("synapseWeightColourCss positive weight produces blueish colour (#244)", () => {
   const css = synapseWeightColourCss(4, 5);
-  // Parse rgb values
-  const match = css.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  assert(match !== null, `Could not parse CSS: ${css}`);
-  const [, rStr, gStr] = match!;
-  const r = parseInt(rStr);
-  const g = parseInt(gStr);
-  assert(g > r, `Green (${g}) should exceed red (${r}) for positive weight`);
+  const [r, _g, b] = parseRgb(css);
+  assert(b > r, `Blue (${b}) should exceed red (${r}) for positive weight`);
 });
 
-Deno.test("synapseWeightColourCss negative weight produces reddish colour", () => {
+Deno.test("synapseWeightColourCss negative weight produces reddish colour (#244)", () => {
   const css = synapseWeightColourCss(-4, 5);
-  const match = css.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  assert(match !== null, `Could not parse CSS: ${css}`);
-  const [, rStr, gStr] = match!;
-  const r = parseInt(rStr);
-  const g = parseInt(gStr);
-  assert(r > g, `Red (${r}) should exceed green (${g}) for negative weight`);
+  const [r, _g, b] = parseRgb(css);
+  assert(r > b, `Red (${r}) should exceed blue (${b}) for negative weight`);
+});
+
+// --- synapseWeightColourRgb01 — diverging palette (#244) ---
+
+// HSL hue extraction (max-min based) so tests can assert on hue ranges rather
+// than exact RGB tuples.
+function rgbHue([r, g, b]: [number, number, number]): number {
+  const r1 = r / 255, g1 = g / 255, b1 = b / 255;
+  const mx = Math.max(r1, g1, b1);
+  const mn = Math.min(r1, g1, b1);
+  const d = mx - mn;
+  if (d === 0) return 0;
+  let h: number;
+  if (mx === r1) h = ((g1 - b1) / d) % 6;
+  else if (mx === g1) h = (b1 - r1) / d + 2;
+  else h = (r1 - g1) / d + 4;
+  h = h * 60;
+  if (h < 0) h += 360;
+  return h;
+}
+
+// Convert rgb 0..1 → rounded 0..255 triple (mirrors synapseWeightColourCss).
+function toRgb255(
+  [r, g, b]: [number, number, number],
+): [number, number, number] {
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+Deno.test("synapseWeightColourRgb01 at weight=0 lands in the neutral-grey band (#244)", () => {
+  // Sweep several maxAbsWeight values; weight=0 must always be near-grey
+  // (channels within a few units of each other, mid lightness).
+  for (const mx of [0.5, 1, 5, 10, 100]) {
+    const rgb255 = toRgb255(synapseWeightColourRgb01(0, mx));
+    const spread = Math.max(...rgb255) - Math.min(...rgb255);
+    assert(
+      spread < 5,
+      `weight=0 (maxAbs=${mx}) should be neutral grey, got spread=${spread}`,
+    );
+    // Mid lightness — average channel sits well clear of pure black/white.
+    const avg = (rgb255[0] + rgb255[1] + rgb255[2]) / 3;
+    assert(
+      avg > 80 && avg < 200,
+      `weight=0 should be mid-grey, got avg=${avg}`,
+    );
+  }
+});
+
+Deno.test("synapseWeightColourRgb01 symmetric ±k fall in opposite blue/red hue bands (#244)", () => {
+  for (const k of [0.5, 1.5, 3, 4.5]) {
+    const pos = toRgb255(synapseWeightColourRgb01(k, 5));
+    const neg = toRgb255(synapseWeightColourRgb01(-k, 5));
+    const hPos = rgbHue(pos);
+    const hNeg = rgbHue(neg);
+    // Positive → blue band roughly 200°–250°.
+    assert(
+      hPos >= 200 && hPos <= 250,
+      `+${k} hue should be in blue band 200–250°, got ${hPos.toFixed(1)}°`,
+    );
+    // Negative → red band roughly 0°–40° (or wraps to 350°–360°).
+    const inRedBand = (hNeg >= 0 && hNeg <= 40) ||
+      (hNeg >= 350 && hNeg <= 360);
+    assert(
+      inRedBand,
+      `-${k} hue should be in red band 0–40°, got ${hNeg.toFixed(1)}°`,
+    );
+  }
+});
+
+Deno.test("synapseWeightColourRgb01 strong ends have higher saturation + contrast than old green/red baseline (#244)", () => {
+  // Regression baseline: the previous green-positive / red-negative palette
+  // (captured at the +/-maxAbsWeight extremes with the old function shape:
+  // hue=140/0, sat=0.85, lit=0.42). Stored as rgb 0..255 so the baseline
+  // survives any future refactors of the helper.
+  const OLD_POSITIVE: [number, number, number] = [16, 198, 92]; // green
+  const OLD_NEGATIVE: [number, number, number] = [198, 16, 16]; // red
+
+  const newPos = toRgb255(synapseWeightColourRgb01(5, 5));
+  const newNeg = toRgb255(synapseWeightColourRgb01(-5, 5));
+
+  // 1. Strong-end saturation: max-min channel spread is the simplest proxy
+  //    for HSL saturation at fixed lightness.
+  const sat = (rgb: [number, number, number]) =>
+    Math.max(...rgb) - Math.min(...rgb);
+  const oldSat = (sat(OLD_POSITIVE) + sat(OLD_NEGATIVE)) / 2;
+  const newSat = (sat(newPos) + sat(newNeg)) / 2;
+  assert(
+    newSat > oldSat,
+    `Strong-end saturation should grow vs old (old=${oldSat}, new=${newSat})`,
+  );
+
+  // 2. End-to-end contrast: Euclidean distance between the two strong
+  //    swatches in RGB space — combines saturation and luminance differences.
+  const dist = (
+    a: [number, number, number],
+    b: [number, number, number],
+  ) =>
+    Math.sqrt(
+      (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2,
+    );
+  const oldContrast = dist(OLD_POSITIVE, OLD_NEGATIVE);
+  const newContrast = dist(newPos, newNeg);
+  assert(
+    newContrast > oldContrast,
+    `Strong-end contrast should grow vs old (old=${
+      oldContrast.toFixed(1)
+    }, new=${newContrast.toFixed(1)})`,
+  );
+});
+
+Deno.test("synapseWeightColourCss is deterministic for the same inputs (#244)", () => {
+  const samples = [-5, -3, -0.5, 0, 0.5, 3, 5];
+  for (const w of samples) {
+    const a = synapseWeightColourCss(w, 5);
+    const b = synapseWeightColourCss(w, 5);
+    assertEquals(
+      a,
+      b,
+      `synapseWeightColourCss(${w}, 5) should be deterministic`,
+    );
+    assert(
+      /^rgb\(\d+,\s*\d+,\s*\d+\)$/.test(a),
+      `expected canonical rgb(...) string, got: ${a}`,
+    );
+  }
+});
+
+Deno.test("synapseWeightColourCss meets WCAG AA on light + dark themes (#244)", () => {
+  // Same WCAG check used for divergingWeightSumColourCss — the strong-end
+  // colours must clear the 3:1 non-text threshold against both backgrounds.
+  const lightBg: [number, number, number] = [248, 249, 250];
+  const darkBg: [number, number, number] = [18, 18, 20];
+  const samples = [-5, -3, -1, 1, 3, 5];
+  for (const w of samples) {
+    const rgb = parseRgb(synapseWeightColourCss(w, 5));
+    const cLight = contrastRatio(rgb, lightBg);
+    const cDark = contrastRatio(rgb, darkBg);
+    assert(
+      cLight >= 3,
+      `weight=${w} contrast on light bg too low: ${cLight.toFixed(2)}`,
+    );
+    assert(
+      cDark >= 3,
+      `weight=${w} contrast on dark bg too low: ${cDark.toFixed(2)}`,
+    );
+  }
 });
 
 // --- divergingWeightSumColourCss (issue #238) ---

@@ -141,13 +141,21 @@ export function synapseWeightStrength01(weight, maxAbsWeight = 5) {
 }
 
 /**
- * Map a synapse weight to an RGB colour (0..1).
+ * Map a synapse weight to an RGB colour (0..1) on a diverging red↔blue scale
+ * centred on zero (see #235 for the palette decision and #244 for the legend
+ * update that aligned the inbound-synapses panel with it).
  *
- * - Positive weights → green (light→deep as strength increases)
- * - Negative weights → red   (light→deep as strength increases)
- * - Near-zero weights → grey/muted
+ * - Positive weights → blue  (light → deep as strength increases)
+ * - Negative weights → red   (light → deep as strength increases)
+ * - Near-zero weights → neutral grey
  *
- * Designed for WCAG AA contrast in both light and dark themes.
+ * Hue choice (225° blue / 15° red) matches {@link divergingWeightSumColourCss}
+ * so the topology diagram, observations-impact panel and synapse legend stay
+ * visually consistent. The end-colour saturation is pushed higher (and the
+ * lightness slightly lower) than the old green/red palette so the strong-±
+ * swatches are noticeably more contrasting while still clearing WCAG AA
+ * (3:1 for non-text graphical objects) against both the light and dark theme
+ * backgrounds used by the app.
  *
  * @param {number} weight
  * @param {number} [maxAbsWeight=5]
@@ -156,18 +164,23 @@ export function synapseWeightStrength01(weight, maxAbsWeight = 5) {
 export function synapseWeightColourRgb01(weight, maxAbsWeight = 5) {
   const s = synapseWeightStrength01(weight, maxAbsWeight);
 
-  // Near-zero → neutral grey
+  // Near-zero → neutral grey (matches divergingWeightSumColourCss).
   if (s < 0.02) {
     return hslToRgb01(0, 0, 0.55);
   }
 
   const positive = weight >= 0;
-  // Hue: green (140) for positive, red (0) for negative
-  const hue = positive ? 140 : 0;
-  // Saturation ramps from 0.08 (very weak) to 0.85 (strong)
-  const sat = 0.08 + 0.77 * s;
-  // Lightness: moderate range for readability (0.42 at strong → 0.58 at weak)
-  const lit = 0.58 - 0.16 * s;
+  // Hue: 225° (blue) for positive, 15° (red) for negative.
+  const hue = positive ? 225 : 15;
+  // Saturation ramps from 0.10 (very weak) to 0.95 (strong) — higher end
+  // saturation than the old palette (0.85) so the strong-± swatches stand out.
+  const sat = 0.10 + 0.85 * s;
+  // Lightness is held at 0.55 — matching {@link divergingWeightSumColourCss} —
+  // because pushing it lower at the extremes (which would deepen the colour
+  // further) drops the dark-theme contrast ratio below WCAG AA. The higher
+  // end saturation alone produces the stronger visual contrast called for in
+  // #244 while keeping both light- and dark-theme contrast ≥ 3:1.
+  const lit = 0.55;
 
   return hslToRgb01(hue, sat, lit);
 }

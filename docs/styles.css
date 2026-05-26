@@ -1410,35 +1410,36 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
-/* Synapse colour legend (#105) */
+/* Synapse colour legend (#105, #244) — diverging red↔blue palette, inline on
+   desktop. Defaults to a single horizontal row that wraps only on narrow
+   viewports (≤639px). */
 .synapseLegend {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 6px 12px;
   font-size: 11px;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
 
-.synapseLegend summary {
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 11px;
-  color: var(--muted);
-}
-
 .synapseLegend .legendItems {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding-top: 4px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.synapseLegend .legendItems span {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .synapseLegend .legendSwatch {
   display: inline-block;
-  width: 18px;
+  width: 24px;
   height: 10px;
   border-radius: 2px;
   margin-right: 4px;
@@ -1448,7 +1449,11 @@ body {
 
 @media (max-width: 639px) {
   .synapseLegend {
+    flex-wrap: wrap;
     padding: 4px 8px;
+  }
+  .synapseLegend .legendItems {
+    flex-wrap: wrap;
   }
 }
 

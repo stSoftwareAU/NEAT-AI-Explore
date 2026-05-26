@@ -2397,27 +2397,29 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     1,
   );
 
-  // Colour legend for synapse weight scale (#105).
-  const legend = document.createElement("details");
+  // Colour legend for synapse weight scale (#105, #244).
+  // Inline single-line layout on desktop — no <details>/<summary> collapse;
+  // the swatches are always visible so users do not have to click to reveal.
+  const legend = document.createElement("div");
   legend.className = "synapseLegend";
-  legend.open = true;
-  legend.innerHTML = `<summary>Weight colour scale</summary>
-    <div class="legendItems">
-      <span><span class="legendSwatch" style="background:${
-    synapseWeightColourCss(maxAbsWeight, maxAbsWeight)
-  }"></span>Strong +ve</span>
-      <span><span class="legendSwatch" style="background:${
-    synapseWeightColourCss(maxAbsWeight * 0.3, maxAbsWeight)
-  }"></span>Weak +ve</span>
-      <span><span class="legendSwatch" style="background:${
-    synapseWeightColourCss(0, maxAbsWeight)
-  }"></span>Near zero</span>
-      <span><span class="legendSwatch" style="background:${
-    synapseWeightColourCss(-maxAbsWeight * 0.3, maxAbsWeight)
-  }"></span>Weak −ve</span>
+  legend.title =
+    "Synapse weight colour scale: red for negative, blue for positive, grey near zero (signed weight).";
+  legend.innerHTML = `<div class="legendItems">
       <span><span class="legendSwatch" style="background:${
     synapseWeightColourCss(-maxAbsWeight, maxAbsWeight)
-  }"></span>Strong −ve</span>
+  }"></span>Strong −</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(-maxAbsWeight * 0.3, maxAbsWeight)
+  }"></span>Weak −</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(0, maxAbsWeight)
+  }"></span>≈ 0</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(maxAbsWeight * 0.3, maxAbsWeight)
+  }"></span>Weak +</span>
+      <span><span class="legendSwatch" style="background:${
+    synapseWeightColourCss(maxAbsWeight, maxAbsWeight)
+  }"></span>Strong +</span>
     </div>`;
   el.synapseListContainer.appendChild(legend);
 
