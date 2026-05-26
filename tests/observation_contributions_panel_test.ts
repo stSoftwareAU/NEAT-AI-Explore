@@ -82,11 +82,15 @@ Deno.test("buildObservationContributionsHtml: renders for output neurons", () =>
   assertEquals(countRows(html), 3);
 });
 
-Deno.test("buildObservationContributionsHtml: caps at 50 rows", () => {
+Deno.test("buildObservationContributionsHtml: caps at MAX_OBSERVATION_ROWS when topN allows it", () => {
+  // Explicit topN >= MAX_OBSERVATION_ROWS exercises the hard safety ceiling.
+  // After #275, topN also caps rendered rows, so we pass topN=MAX_TOP_N to
+  // keep the original cap-at-50 intent.
   const html = buildObservationContributionsHtml({
     uuid: "output-0",
     neuronType: "output",
     inputs: makeRows(120),
+    topN: MAX_TOP_N,
   });
   assertEquals(countRows(html), MAX_OBSERVATION_ROWS);
   assertEquals(countRows(html), 50);
@@ -420,7 +424,7 @@ Deno.test("buildObservationContributionsHtml: default topN is 10", () => {
   assertEquals(marked.length, 10);
 });
 
-Deno.test("buildObservationContributionsHtml: topN=3 marks exactly first 3 rows", () => {
+Deno.test("buildObservationContributionsHtml: topN=3 renders and marks exactly 3 rows", () => {
   const rows = makeRows(10);
   const html = buildObservationContributionsHtml({
     uuid: "output-0",
@@ -428,16 +432,11 @@ Deno.test("buildObservationContributionsHtml: topN=3 marks exactly first 3 rows"
     inputs: rows,
     topN: 3,
   });
+  // After #275, topN caps rendered rows — only 3 rows render and all 3
+  // carry the top-influencer marker.
+  assertEquals(countRows(html), 3);
   const marked = html.match(/data-top-influencer="true"/g) ?? [];
   assertEquals(marked.length, 3);
-  // The first three rows (input-0..input-2 — highest scores) must carry the
-  // marker and the fourth must not.
-  const firstThree = html.slice(0, html.indexOf(`data-uuid="input-3"`));
-  assertEquals(
-    (firstThree.match(/data-top-influencer="true"/g) ?? []).length,
-    3,
-    "all three top-influencer markers appear before the fourth row",
-  );
 });
 
 Deno.test("buildObservationContributionsHtml: topN greater than rendered rows marks all rendered rows", () => {
@@ -531,6 +530,39 @@ Deno.test("buildObservationContributionsHtml: summary reflects topN label", () =
     html.includes("Observation contributions (top 5)"),
     "summary must reflect the currently chosen topN",
   );
+});
+
+// ============================================================================
+// Issue #275 — topN caps the number of rendered rows (not just highlights).
+// ============================================================================
+
+Deno.test("buildObservationContributionsHtml (#275): topN=5 with 20 inputs renders exactly 5 rows", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(20),
+    topN: 5,
+  });
+  assertEquals(countRows(html), 5);
+});
+
+Deno.test("buildObservationContributionsHtml (#275): topN=10 with 3 inputs renders all 3 rows", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(3),
+    topN: 10,
+  });
+  assertEquals(countRows(html), 3);
+});
+
+Deno.test("buildObservationContributionsHtml (#275): default topN renders DEFAULT_TOP_N rows when more inputs are available", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(20),
+  });
+  assertEquals(countRows(html), DEFAULT_TOP_N);
 });
 
 Deno.test("buildObservationContributionsHtml: data-uuid is set on the <details> element", () => {
