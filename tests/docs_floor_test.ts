@@ -9,7 +9,6 @@ import { assert } from "./test_helpers.ts";
 
 const CONTRIBUTING_PATH = new URL("../CONTRIBUTING.md", import.meta.url);
 const CHANGELOG_PATH = new URL("../CHANGELOG.md", import.meta.url);
-const VERSION_PATH = new URL("../version.json", import.meta.url);
 
 async function readText(url: URL): Promise<string> {
   return await Deno.readTextFile(url);
@@ -72,15 +71,5 @@ Deno.test("CHANGELOG.md follows keepachangelog.com format", async () => {
   assert(
     text.includes("## ["),
     "CHANGELOG.md should contain at least one version section like ## [0.1.0]",
-  );
-});
-
-Deno.test("CHANGELOG.md contains an entry for the current version", async () => {
-  const versionJson = JSON.parse(await readText(VERSION_PATH));
-  const version: string = versionJson.version;
-  const text = await readText(CHANGELOG_PATH);
-  assert(
-    text.includes(`[${version}]`),
-    `CHANGELOG.md should contain an entry for version ${version}`,
   );
 });

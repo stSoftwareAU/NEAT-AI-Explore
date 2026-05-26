@@ -4,12 +4,25 @@ on:
   pull_request:
     branches: ["*"]
 
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   quality:
+    # Preserve the previous required-status-check display name after
+    # consolidating ci.yml into this workflow (Issue #259).
+    name: Quality Gate
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged deno test / coverage upload cannot hold the
+    # runner for the GitHub default of 360 minutes (#257).
+    timeout-minutes: 20
     steps:
       # actions/checkout@v5.0.1
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

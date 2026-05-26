@@ -6,12 +6,23 @@ on:
   push:
     branches: [main, master, Develop]
 
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258). The group keys on workflow + ref so PR and branch-push runs do not
+# cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   markdownlint:
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged markdownlint scan cannot hold the runner
+    # for the GitHub default of 360 minutes (#257).
+    timeout-minutes: 5
     steps:
       # actions/checkout@v4
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5

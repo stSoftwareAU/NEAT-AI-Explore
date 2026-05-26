@@ -1,14 +1,19 @@
 /**
  * Issue #226 — Regression guard for scripts/capture_transition_evidence.ts.
  *
- * Mirrors `tests/verify_theme_layout_check_test.ts`: runs
- * `deno check scripts/capture_transition_evidence.ts` as a subprocess and
- * asserts a zero exit code so any future regression in the Deno port (e.g.
- * an unresolvable playwright version, a stale npm specifier, or a type
- * mismatch against the playwright API) is caught by CI before it lands.
+ * Runs `deno check scripts/capture_transition_evidence.ts` as a subprocess
+ * and asserts a zero exit code so any future regression in the Deno port
+ * (e.g. an unresolvable playwright version, a stale npm specifier, or a
+ * type mismatch against the playwright API) is caught by CI before it
+ * lands.
  *
  * This test deliberately does NOT launch a browser — that requires a
  * working Chromium download and is out of scope for unit tests.
+ *
+ * The previous source-text grep for the `from "playwright"` specifier was
+ * removed under Issue #263 — the bare-specifier rule is enforced by the
+ * project's no-import-prefix lint rule, and `deno check` already proves
+ * the import resolves.
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -38,23 +43,6 @@ Deno.test("deno check scripts/capture_transition_evidence.ts exits cleanly", asy
   assert(
     !stderrText.includes("TS2584"),
     `unexpected TS2584 missing-DOM-lib error:\n${stderrText}`,
-  );
-});
-
-Deno.test("scripts/capture_transition_evidence.ts uses bare 'playwright' specifier", async () => {
-  const src = await Deno.readTextFile(
-    new URL("../scripts/capture_transition_evidence.ts", import.meta.url),
-  );
-  // Inline `npm:` specifiers are forbidden by the project's no-import-prefix
-  // lint rule; the playwright import must go through the deno.json `imports`
-  // map so the quarantine gate can age-check the pinned version.
-  assert(
-    !/from\s+["']npm:playwright/.test(src),
-    "capture_transition_evidence.ts must import 'playwright' via the deno.json imports map, not via an inline 'npm:' specifier",
-  );
-  assert(
-    /from\s+["']playwright["']/.test(src),
-    "capture_transition_evidence.ts must import the bare 'playwright' specifier",
   );
 });
 
