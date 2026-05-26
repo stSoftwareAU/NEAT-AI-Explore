@@ -70,10 +70,30 @@ Deno.test("semgrep workflow runs in the semgrep container", async () => {
 
   const container = job!.container;
   const image = typeof container === "string" ? container : container?.image;
-  assertEquals(
-    image,
-    "semgrep/semgrep",
+  assert(
+    typeof image === "string" && image.startsWith("semgrep/semgrep"),
     "job must run inside the semgrep/semgrep container image",
+  );
+});
+
+Deno.test("semgrep container image is pinned to a sha256 digest (#256)", async () => {
+  // An unpinned `image: semgrep/semgrep` resolves to whatever the maintainers
+  // (or anyone who hijacks the Docker Hub account) last pushed at runtime,
+  // exposing SEMGREP_APP_TOKEN to malicious code. Pin to an immutable
+  // multi-arch manifest digest so the resolved image is locked in.
+  const wf = await loadWorkflow();
+  const job = wf.jobs?.semgrep;
+  assert(job, "expected a 'semgrep' job");
+
+  const container = job!.container;
+  const image = typeof container === "string" ? container : container?.image;
+  assert(typeof image === "string", "container.image must be a string");
+
+  const match = image!.match(/^semgrep\/semgrep@sha256:([0-9a-f]{64})$/);
+  assert(
+    match !== null,
+    `container.image must be pinned as 'semgrep/semgrep@sha256:<64-hex>' ` +
+      `but got '${image}'`,
   );
 });
 
