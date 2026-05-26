@@ -6,6 +6,13 @@ on:
     branches:
       - Develop
 
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update-version:
     runs-on: ubuntu-latest

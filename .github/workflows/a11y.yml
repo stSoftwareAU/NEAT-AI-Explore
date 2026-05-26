@@ -12,6 +12,14 @@ on:
   push:
     branches: [Develop]
 
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258). The group keys on workflow + ref so PR and Develop runs do not
+# cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
