@@ -10,6 +10,9 @@ permissions:
 jobs:
   semgrep:
     runs-on: ubuntu-latest
+    # Cap the runner so a wedged semgrep scan cannot hold the runner for the
+    # GitHub default of 360 minutes (#257).
+    timeout-minutes: 15
     container:
       # Pinned to semgrep/semgrep 1.163.0 (Issue #256). The multi-arch
       # manifest digest below is immutable; an unpinned tag resolves at
