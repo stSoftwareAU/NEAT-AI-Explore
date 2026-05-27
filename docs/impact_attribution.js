@@ -281,6 +281,7 @@ export function computeImpactBreakdownToOutputs(input) {
  */
 
 import { squashEmitCeiling } from "./shared/squash_bounds.js";
+import { computeInputActiveFraction } from "./shared/consumer_contract.js";
 
 /**
  * @typedef {{
@@ -300,6 +301,8 @@ import { squashEmitCeiling } from "./shared/squash_bounds.js";
  *   synapses: Array<InboundSynapseWithStats & {
  *     score: number,
  *     share: number,
+ *     effectiveShare: number,
+ *     gateMaskedFraction: number,
  *     allocatedImpact: number | null
  *   }>
  * }} InboundAllocationResult
@@ -311,7 +314,8 @@ import { squashEmitCeiling } from "./shared/squash_bounds.js";
  *   neuronImpact?: number | null,
  *   inboundSynapses: InboundSynapseWithStats[],
  *   toNeuronSquash?: string | null,
- *   recordedActivationMax?: number | null
+ *   recordedActivationMax?: number | null,
+ *   consumerContract?: (import("./shared/consumer_contract.js").ConsumerContract | null)
  * }} input
  * @returns {InboundAllocationResult}
  */
@@ -322,6 +326,7 @@ export function computeInboundSynapseImpactAllocation(input) {
     inboundSynapses,
     toNeuronSquash = null,
     recordedActivationMax = null,
+    consumerContract = null,
   } = input ?? {};
   if (!toUuid || !Array.isArray(inboundSynapses)) {
     return {
@@ -379,7 +384,23 @@ export function computeInboundSynapseImpactAllocation(input) {
       allocatedImpact = Math.min(totalScore, emitCeiling) * share;
     }
 
-    return { ...r, share, allocatedImpact };
+    // Issue #272 — downstream `min(...)` gate awareness. When the inbound
+    // synapse comes from an input-* neuron that participates in a consumer
+    // gate, credit influence only on the samples where this input is
+    // actually the min. The pre-gate `share` and `allocatedImpact` are
+    // unchanged for backward compat; the new `effectiveShare` and
+    // `gateMaskedFraction` fields surface the gate decision.
+    let activeFraction = 1;
+    if (
+      consumerContract && typeof r.fromUuid === "string" &&
+      r.fromUuid.startsWith("input-")
+    ) {
+      activeFraction = computeInputActiveFraction(consumerContract, r.fromUuid);
+    }
+    const effectiveShare = share * activeFraction;
+    const gateMaskedFraction = 1 - activeFraction;
+
+    return { ...r, share, effectiveShare, gateMaskedFraction, allocatedImpact };
   }).sort((a, b) =>
     (b.allocatedImpact ?? b.score) - (a.allocatedImpact ?? a.score)
   );

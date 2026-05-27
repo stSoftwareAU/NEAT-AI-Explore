@@ -26,6 +26,7 @@
  */
 
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
+import { computeInputActiveFraction } from "./consumer_contract.js";
 
 /**
  * @typedef {{ fromUuid: string, toUuid: string, weight: number, meanContribution?: number|null }} Edge
@@ -135,10 +136,11 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
  *   exhaustive?: boolean,
  *   getNeuronSquash?: (uuid: string) => (string | null | undefined),
  *   getRecordedActivationMax?: (uuid: string) => (number | null | undefined),
+ *   consumerContract?: (import("./consumer_contract.js").ConsumerContract | null),
  * }} input
  * @returns {{
  *   focusUuid: string,
- *   inputs: Array<{ uuid: string, score: number, path: string[] }>,
+ *   inputs: Array<{ uuid: string, score: number, path: string[], gateMaskedFraction?: number }>,
  *   truncated: boolean,
  * }}
  */
@@ -152,6 +154,7 @@ export function computeTopContributingInputs(input) {
     typeof input?.getRecordedActivationMax === "function"
       ? input.getRecordedActivationMax
       : null;
+  const consumerContract = input?.consumerContract ?? null;
   const exhaustive = input?.exhaustive === true;
   const maxDepth = Math.max(
     1,
@@ -173,9 +176,17 @@ export function computeTopContributingInputs(input) {
     return { focusUuid: focusUuid ?? "", inputs: [], truncated: false };
   }
   if (String(focusUuid).startsWith("input-")) {
+    const af = consumerContract
+      ? computeInputActiveFraction(consumerContract, focusUuid)
+      : 1;
     return {
       focusUuid,
-      inputs: [{ uuid: focusUuid, score: 1, path: [focusUuid] }],
+      inputs: [{
+        uuid: focusUuid,
+        score: af,
+        path: [focusUuid],
+        gateMaskedFraction: 1 - af,
+      }],
       truncated: false,
     };
   }
@@ -186,6 +197,8 @@ export function computeTopContributingInputs(input) {
   const bestPathByInput = new Map();
   /** @type {Map<string, number>} */
   const bestScoreByInput = new Map();
+  /** @type {Map<string, number>} */
+  const gateMaskedByInput = new Map();
 
   /** @type {{ uuid: string, score: number, depth: number, path: string[] }[]} */
   const queue = [{ uuid: focusUuid, score: 1, depth: 0, path: [focusUuid] }];
@@ -213,11 +226,19 @@ export function computeTopContributingInputs(input) {
 
     const uuid = cur.uuid;
     if (String(uuid).startsWith("input-")) {
-      const nextScore = (scoreByInput.get(uuid) ?? 0) + cur.score;
+      // Issue #272 — apply downstream min-gate masking at the input boundary.
+      // Inputs that only drive the output in a narrow regime contribute the
+      // gated fraction of the walk's incoming score.
+      const af = consumerContract
+        ? computeInputActiveFraction(consumerContract, uuid)
+        : 1;
+      const credited = cur.score * af;
+      const nextScore = (scoreByInput.get(uuid) ?? 0) + credited;
       scoreByInput.set(uuid, nextScore);
+      gateMaskedByInput.set(uuid, 1 - af);
       const best = bestScoreByInput.get(uuid) ?? 0;
-      if (cur.score > best) {
-        bestScoreByInput.set(uuid, cur.score);
+      if (credited > best) {
+        bestScoreByInput.set(uuid, credited);
         bestPathByInput.set(uuid, cur.path);
       }
       continue;
@@ -274,6 +295,7 @@ export function computeTopContributingInputs(input) {
       uuid,
       score,
       path: bestPathByInput.get(uuid) ?? [uuid],
+      gateMaskedFraction: gateMaskedByInput.get(uuid) ?? 0,
     }))
     .sort((a, b) => b.score - a.score);
 
