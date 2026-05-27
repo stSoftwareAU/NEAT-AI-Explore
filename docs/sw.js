@@ -66,6 +66,8 @@ const STATIC_FILES = [
   "./shared/observation_contributions.js",
   "./shared/observation_contributions_storage.js",
   "./shared/synapse_render.js",
+  "./shared/consumer_contract.js",
+  "./shared/gate_chip.js",
   "./shared/pwa_recovery.js",
   "./shared/number_format.js",
   "./shared/scale.js",

@@ -1460,6 +1460,52 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+/* Issue #273 — pre-gate badge on observation rows and inbound synapse rows.
+   Renders as a small chip next to the primary stat with a subdued amber
+   tint so users can spot gating at a glance without it dominating the row. */
+.preGateBadge {
+  background: rgba(217, 119, 6, 0.12);
+  color: #92400e;
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+[data-theme="dark"] .preGateBadge {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+/* Issue #273 — Gate indicator chip on the neuron card title. Subtle pill
+   that signals downstream min(...) gating without distracting from the
+   card content. */
+.gateChip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(217, 119, 6, 0.15);
+  color: #92400e;
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  border-radius: 10px;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.gateChip:hover {
+  background: rgba(217, 119, 6, 0.25);
+}
+
+[data-theme="dark"] .gateChip {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.55);
+}
+
 /* Synapse colour legend (#105, #244) — diverging red↔blue palette, inline on
    desktop. Defaults to a single horizontal row that wraps only on narrow
    viewports (≤639px). */

@@ -27,7 +27,13 @@ import {
   shouldRenderObservationContributions,
 } from "../docs/shared/observation_contributions.js";
 
-type Row = { uuid: string; score: number };
+type Row = {
+  uuid: string;
+  score: number;
+  effectiveShare?: number;
+  gateMaskedFraction?: number;
+  preGateShare?: number;
+};
 
 function makeRows(n: number): Row[] {
   const rows: Row[] = [];
@@ -577,5 +583,151 @@ Deno.test("buildObservationContributionsHtml: data-uuid is set on the <details> 
   assert(
     html.includes(`data-uuid="output-7"`),
     "<details> must carry data-uuid for the toggle wiring in docs/app.js",
+  );
+});
+
+// ============================================================================
+// Issue #273 — gate-aware display (effectiveShare + pre-gate badge).
+// ============================================================================
+
+Deno.test("buildObservationContributionsHtml (#273): renders effectiveShare as the primary percent", () => {
+  // When effectiveShare is supplied it must drive the primary number, not
+  // the raw `score` field. The caller may pass `score` equal to the pre-gate
+  // value and `effectiveShare` equal to the post-gate value.
+  const rows: Row[] = [
+    {
+      uuid: "input-gated",
+      score: 0.8,
+      effectiveShare: 0.2,
+      gateMaskedFraction: 0.75,
+    },
+  ];
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+  });
+  // Effective share is 20% — the primary stat must reflect it.
+  assert(
+    html.includes("20.00%"),
+    "primary stat must render effectiveShare (20%) when supplied",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml (#273): pre-gate badge only renders when gateMaskedFraction > 0", () => {
+  // Ungated row: no pre-gate badge.
+  const ungatedHtml = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: [{ uuid: "input-a", score: 0.5 }],
+  });
+  assert(
+    !ungatedHtml.includes("preGateBadge"),
+    "ungated row must not render the pre-gate badge",
+  );
+  assert(
+    !ungatedHtml.includes("pre-gate:"),
+    "ungated row must not render the pre-gate label",
+  );
+
+  // Gated row: badge renders with tooltip.
+  const gatedHtml = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: [{
+      uuid: "input-b",
+      score: 0.5,
+      effectiveShare: 0.1,
+      gateMaskedFraction: 0.8,
+      preGateShare: 0.5,
+    }],
+  });
+  assert(
+    gatedHtml.includes("preGateBadge"),
+    "gated row must render the pre-gate badge",
+  );
+  assert(
+    gatedHtml.includes("pre-gate:"),
+    "gated row must label the badge as pre-gate",
+  );
+  assert(
+    gatedHtml.includes("Pre-gate share"),
+    "badge tooltip must explain the pre-gate semantics",
+  );
+  assert(
+    /masked by downstream min\(\.\.\.\) gate in [^"]+% of samples/.test(
+      gatedHtml,
+    ),
+    "tooltip must report the masked sample fraction",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml (#273): zero gateMaskedFraction does not render the badge", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: [{
+      uuid: "input-c",
+      score: 0.4,
+      effectiveShare: 0.4,
+      gateMaskedFraction: 0,
+    }],
+  });
+  assert(
+    !html.includes("preGateBadge"),
+    "gateMaskedFraction === 0 must suppress the badge",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml (#273): existing layout/order is preserved with gated rows", () => {
+  // Layout invariants from #243 / #186 must still hold once gating is on.
+  const rows: Row[] = [
+    {
+      uuid: "input-large",
+      score: 0.5,
+      effectiveShare: 0.5,
+      gateMaskedFraction: 0,
+    },
+    {
+      uuid: "input-mid",
+      score: 0.3,
+      effectiveShare: 0.1,
+      gateMaskedFraction: 0.66,
+    },
+    {
+      uuid: "input-small",
+      score: 0.05,
+      effectiveShare: 0.05,
+      gateMaskedFraction: 0,
+    },
+  ];
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: rows,
+    topN: 5,
+  });
+  // Sort is by |score| desc — large then mid then small.
+  const idxLarge = html.indexOf("input-large");
+  const idxMid = html.indexOf("input-mid");
+  const idxSmall = html.indexOf("input-small");
+  assert(idxLarge < idxMid && idxMid < idxSmall, "descending sort preserved");
+  // Still wrapped in <details>/<summary> and carries data-uuid.
+  assert(html.includes("<details"), "still rendered inside <details>");
+  assert(html.includes('data-uuid="output-0"'), "data-uuid still present");
+  // All three rows render even though one is gated.
+  const rowMatches = html.match(/observationContributionsRow/g) ?? [];
+  assertEquals(rowMatches.length, 3);
+});
+
+Deno.test("buildObservationContributionsHtml (#273): note text mentions the pre-gate badge", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: makeRows(3),
+  });
+  assert(
+    html.includes("pre-gate"),
+    "panel note must explain the pre-gate badge to the user",
   );
 });
