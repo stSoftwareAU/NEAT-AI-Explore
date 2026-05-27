@@ -50,7 +50,19 @@ export function clampTopN(value) {
 /**
  * @typedef {object} ObservationContribution
  * @property {string} uuid — observation neuron UUID (typically `input-N`).
- * @property {number} score — normalised share in [0, 1].
+ * @property {number} score — normalised share in [0, 1]. After Issue #273
+ *   this is the *effective* (post-gate) share when the calc layer was
+ *   supplied with a consumer contract.
+ * @property {number} [effectiveShare] — explicit post-gate share. When
+ *   supplied, takes precedence over `score` for the primary display.
+ * @property {number} [gateMaskedFraction] — fraction of samples in which
+ *   downstream `min(...)` gating masked this input out (0..1). When > 0
+ *   the renderer surfaces a "pre-gate" badge so users can see that gating
+ *   has reduced the input's effective contribution.
+ * @property {number} [preGateShare] — un-gated share for the same input.
+ *   Optional; when absent the renderer reconstructs an indicative pre-gate
+ *   value from `score / (1 - gateMaskedFraction)` so the badge still
+ *   displays a useful number.
  */
 
 /**
@@ -108,7 +120,14 @@ export function buildObservationContributionsRow(row, lookups = {}) {
   const alias = typeof getAlias === "function" ? getAlias(uuid) : null;
   const group = typeof getGroup === "function" ? getGroup(uuid) : null;
   const label = alias ? `${alias} (${uuid})` : uuid;
-  const pct = formatSharePercent(row?.score);
+  // Issue #273 — when the calc layer supplied gate-aware values we prefer
+  // `effectiveShare` for the primary number. Fall back to `score` (which
+  // is what the multi-hop walk already collapses gating into) so callers
+  // that don't yet pass `effectiveShare` keep their current display.
+  const primary = typeof row?.effectiveShare === "number"
+    ? row.effectiveShare
+    : Number(row?.score) || 0;
+  const pct = formatSharePercent(primary);
 
   const subtitle = group
     ? `<div class="observationContributionsGroup">${escapeHtml(group)}</div>`
@@ -120,6 +139,23 @@ export function buildObservationContributionsRow(row, lookups = {}) {
   const topClass = isTopInfluencer ? " top-influencer" : "";
   const topAttr = isTopInfluencer ? ` data-top-influencer="true"` : "";
 
+  // Pre-gate badge (Issue #273): only render when downstream gating
+  // actually masks samples for this input.
+  const gateMaskedFraction = Number(row?.gateMaskedFraction) || 0;
+  let preGateBadge = "";
+  if (gateMaskedFraction > 0) {
+    const preGate = typeof row?.preGateShare === "number"
+      ? row.preGateShare
+      : (gateMaskedFraction < 1 ? primary / (1 - gateMaskedFraction) : primary);
+    const maskedPct = formatSharePercent(gateMaskedFraction, 3);
+    const tooltip =
+      `Pre-gate share — masked by downstream min(...) gate in ${maskedPct} of samples`;
+    preGateBadge =
+      `<span class="stat preGateBadge" data-pre-gate="true" title="${
+        escapeHtml(tooltip)
+      }">pre-gate: ${escapeHtml(formatSharePercent(preGate))}</span>`;
+  }
+
   return `
       <div class="impactBreakdownRow observationContributionsRow${topClass}" data-uuid="${
     escapeHtml(uuid)
@@ -129,9 +165,10 @@ export function buildObservationContributionsRow(row, lookups = {}) {
           ${subtitle}
         </div>
         <div class="impactBreakdownStats">
-          <span class="stat" title="Allocated share (normalised across shown inputs)">${
+          <span class="stat" title="Effective share after downstream gating (normalised across shown inputs)">${
     escapeHtml(pct)
   }</span>
+          ${preGateBadge}
         </div>
       </div>
     `;
@@ -226,7 +263,9 @@ export function buildObservationContributionsHtml(params) {
   const title = "Observation contributions";
   const note =
     "Top input observations ranked by their multi-hop share of this output. " +
-    "Each row shows the observation's group as a subtitle when available.";
+    "Each row shows the observation's group as a subtitle when available. " +
+    "When a downstream min(...) gate masks an input in some samples, a " +
+    "'pre-gate' badge shows what the share would have been without the gate.";
 
   // Summary shows enough context when collapsed: title + (count) so a phone
   // user can scan without expanding (#187). The number reflects how many rows

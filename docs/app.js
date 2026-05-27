@@ -90,6 +90,11 @@ import {
 } from "./shared/observation_contributions_storage.js";
 import { buildSynapseFromCellHtml } from "./shared/synapse_render.js";
 import {
+  computeInputActiveFraction,
+  loadConsumerContract,
+} from "./shared/consumer_contract.js";
+import { buildGateChipHtml } from "./shared/gate_chip.js";
+import {
   getInitialFocusTarget,
   installFocusTrap,
 } from "./shared/modal_focus.js";
@@ -104,6 +109,14 @@ let _modalTrigger = null;
 let _focusTrapCleanup = null;
 
 let SNAPSHOT = null;
+/**
+ * Consumer contract resolved from the loaded snapshot (Issue #272 / #273).
+ * Threaded through every calc-layer call so inbound-synapse allocation and
+ * the multi-hop influence walk credit gate-masked samples consistently.
+ *
+ * @type {(import("./shared/consumer_contract.js").ConsumerContract | null)}
+ */
+let CONSUMER_CONTRACT = null;
 let synapses = [];
 let neuronsByUuid = new Map();
 let trace = []; // Array of neuron UUIDs
@@ -854,6 +867,9 @@ async function loadSnapshot(source, label) {
 
     SNAPSHOT = obj;
     loadInputLabelsFromSnapshot(SNAPSHOT);
+    // Issue #273 — resolve the consumer contract once per snapshot load so
+    // every calc-layer call site can pass the same value through.
+    CONSUMER_CONTRACT = loadConsumerContract(SNAPSHOT);
     const creature = normaliseCreature(obj);
     clearTopInputCache();
 
@@ -1674,6 +1690,55 @@ function renderErrorHistogramSVG(histo) {
   return svg;
 }
 
+/**
+ * Render the "Gate" indicator chip on the neuron card (Issue #273).
+ *
+ * The chip appears whenever any inbound input to the focused neuron is
+ * masked by a downstream `min(...)` consumer gate. When no gating applies
+ * the chip is removed so the card stays clean.
+ *
+ * @param {string} uuid — focused neuron UUID.
+ */
+function renderGateChip(uuid) {
+  const titleEl = el.currentNeuronTitle;
+  if (!titleEl?.parentElement) return;
+
+  // Remove any chip from a previous render so we don't accumulate.
+  const existing = titleEl.parentElement.querySelector(
+    `[data-role="gate-chip"]`,
+  );
+  if (existing) existing.remove();
+
+  if (!CONSUMER_CONTRACT) return;
+
+  const inbound = getInboundSynapses(uuid);
+  if (!inbound || inbound.length === 0) return;
+
+  // Build pre-allocation rows so we can decide whether any input is gated
+  // without paying for the full impact allocation.
+  const rows = inbound
+    .filter((s) => typeof s.fromUuid === "string")
+    .map((s) => ({
+      gateMaskedFraction: s.fromUuid.startsWith("input-")
+        ? 1 - computeInputActiveFraction(CONSUMER_CONTRACT, s.fromUuid)
+        : 0,
+    }));
+
+  const chipHtml = buildGateChipHtml({
+    rows,
+    gateUrl: "#consumer-contract",
+    label: "Gate",
+  });
+  if (!chipHtml) return;
+
+  // Render as a sibling of the title so the chip floats next to it.
+  const wrap = document.createElement("span");
+  wrap.className = "gateChipWrap";
+  wrap.innerHTML = chipHtml;
+  const node = wrap.firstElementChild;
+  if (node) titleEl.insertAdjacentElement("afterend", node);
+}
+
 function renderCurrentNeuron(uuid) {
   const n = neuronsByUuid.get(uuid) ??
     { uuid, type: "input", squash: "IDENTITY", bias: 0 };
@@ -1711,6 +1776,12 @@ function renderCurrentNeuron(uuid) {
       descEl.style.display = "none";
     }
   }
+
+  // Issue #273 — Gate indicator chip. Surfaces a small "Gate" badge on the
+  // neuron card whenever any inbound input is masked by a downstream
+  // min(...) gate. The chip links to the gate definition in the snapshot
+  // overview when a gate is found.
+  renderGateChip(uuid);
 
   const stats = getNeuronStats(uuid);
   const impact = getNeuronImpact(uuid);
@@ -1983,6 +2054,8 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
           : 0,
       );
     },
+    // Issue #272 / #273 — credit gate-masked samples downstream.
+    consumerContract: CONSUMER_CONTRACT,
   });
 }
 
@@ -2221,6 +2294,8 @@ function renderImpactBreakdown(uuid, neuronImpact) {
     })),
     toNeuronSquash: toNeuron?.squash ?? null,
     recordedActivationMax: recordedActMax,
+    // Issue #273 — surface effectiveShare + gateMaskedFraction on each row.
+    consumerContract: CONSUMER_CONTRACT,
   });
 
   lastInboundAllocation = allocation;
@@ -2470,6 +2545,8 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     })),
     toNeuronSquash: toNeuron?.squash ?? null,
     recordedActivationMax: recordedActMax,
+    // Issue #273 — surface effectiveShare + gateMaskedFraction on each row.
+    consumerContract: CONSUMER_CONTRACT,
   });
   const allocByFrom = new Map(allocation.synapses.map((r) => [r.fromUuid, r]));
 
@@ -2482,6 +2559,13 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     const allocRow = allocByFrom.get(syn.fromUuid);
     const allocImpact = allocRow?.allocatedImpact ?? null;
     const allocShare = allocRow?.share ?? null;
+    // Issue #273 — surface gate-aware values to the row renderer.
+    const effectiveShare = typeof allocRow?.effectiveShare === "number"
+      ? allocRow.effectiveShare
+      : null;
+    const gateMaskedFraction = typeof allocRow?.gateMaskedFraction === "number"
+      ? allocRow.gateMaskedFraction
+      : 0;
     return {
       ...syn,
       impact,
@@ -2491,6 +2575,8 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
       isInput,
       allocImpact,
       allocShare,
+      effectiveShare,
+      gateMaskedFraction,
     };
   });
 
@@ -2653,11 +2739,35 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
     }
 
     if (syn.allocImpact != null) {
+      // Issue #273 — when the consumer contract says this input is masked by
+      // a downstream min(...) gate in some samples, the "alloc imp" already
+      // reflects only the effective (post-gate) influence. Annotate with a
+      // pre-gate badge so users can see the masked fraction.
+      const gateMasked = Number(syn.gateMaskedFraction) || 0;
+      const isGated = gateMasked > 0;
+      const primaryTooltip = isGated
+        ? "Effective allocated impact after downstream gating (sums to current neuron's impact)"
+        : "Allocated impact into the current neuron (sums to current neuron's impact)";
       statsHtml.push(
-        `<span class="stat" title="Allocated impact into the current neuron (sums to current neuron's impact)">alloc imp: ${
+        `<span class="stat" title="${escapeHtml(primaryTooltip)}">alloc imp: ${
           formatSig(syn.allocImpact, 3)
         }</span>`,
       );
+      if (isGated) {
+        // Estimate the pre-gate allocated impact: scaled back by the active
+        // fraction. We don't have a guaranteed pre-gate field on the row, so
+        // reconstruct it from the masked fraction.
+        const active = 1 - gateMasked;
+        const preGate = active > 0 ? syn.allocImpact / active : syn.allocImpact;
+        const maskedPct = `${(gateMasked * 100).toFixed(1)}%`;
+        const tip =
+          `Pre-gate share — masked by downstream min(...) gate in ${maskedPct} of samples`;
+        statsHtml.push(
+          `<span class="stat preGateBadge" data-pre-gate="true" title="${
+            escapeHtml(tip)
+          }">pre-gate: ${escapeHtml(formatSig(preGate, 3))}</span>`,
+        );
+      }
     }
 
     if (syn.contrib != null) {

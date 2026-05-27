@@ -26,6 +26,7 @@ import {
   u32ToU01,
 } from "../shared/colour_maps.js";
 import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js";
+import { loadConsumerContract } from "../shared/consumer_contract.js";
 import { formatInteger } from "../shared/number_format.js";
 import {
   AUTO_LOAD_MAX_RETRIES,
@@ -750,10 +751,24 @@ function computeInboundAllocationForFocus(focusUuid) {
     ),
   }));
 
+  // Issue #273 — thread consumer contract + squash bounding into the calc.
+  const toNeuron = graph?.neuronsByUuid?.get(focusUuid) ?? null;
+  const recStats = SNAPSHOT?.recording?.neurons?.[focusUuid]?.stats ?? null;
+  const recordedActMax = typeof recStats?.activationMax === "number"
+    ? Math.max(
+      Math.abs(recStats.activationMax),
+      typeof recStats?.activationMin === "number"
+        ? Math.abs(recStats.activationMin)
+        : 0,
+    )
+    : null;
   const allocation = computeInboundSynapseImpactAllocation({
     toUuid: focusUuid,
     neuronImpact: typeof neuronImpact === "number" ? neuronImpact : null,
     inboundSynapses: rows,
+    toNeuronSquash: toNeuron?.squash ?? null,
+    recordedActivationMax: recordedActMax,
+    consumerContract: CONSUMER_CONTRACT,
   });
 
   // Normalise for HUD/line usage.
@@ -771,6 +786,8 @@ function computeInboundAllocationForFocus(focusUuid) {
       meanContribution: r.meanContribution ?? null,
       score: r.score ?? null,
       share: r.share ?? 0,
+      effectiveShare: r.effectiveShare ?? r.share ?? 0,
+      gateMaskedFraction: r.gateMaskedFraction ?? 0,
       allocatedImpact: r.allocatedImpact ?? null,
     })),
   };
@@ -2583,6 +2600,14 @@ class StarfieldRenderer {
 
 let renderer = null;
 let SNAPSHOT = null;
+/**
+ * Consumer contract resolved from the loaded snapshot (Issue #272 / #273).
+ * Threaded into the inbound impact allocation so the graph view's HUD
+ * and pre-gate badges agree with the Trace Explorer.
+ *
+ * @type {(import("../shared/consumer_contract.js").ConsumerContract | null)}
+ */
+let CONSUMER_CONTRACT = null;
 let graph = null;
 let points = null;
 let adjacency = null;
@@ -3477,6 +3502,7 @@ async function loadSnapshot(source, label) {
       ? await loadSnapshotFromUrl(source)
       : source;
     SNAPSHOT = obj;
+    CONSUMER_CONTRACT = loadConsumerContract(SNAPSHOT);
     graph = normaliseCreature(obj);
     impactsByUuid = getImpacts(obj);
     loadLabelsFromSnapshot(obj);
