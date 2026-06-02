@@ -43,10 +43,10 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
 - **Deploy workflow**: `.github/workflows/deploy.yml` (push to `Develop`)
 - **Workflow lint gate**: `.github/workflows/actionlint.yml` runs
   [`actionlint`](https://github.com/rhysd/actionlint) over every
-  `.github/workflows/*.yml` file on each pull request and `Develop` push, so
-  bad `${{ }}` expressions, undefined `needs:`, invalid event filters and
-  shellcheck issues in `run:` blocks fail the build instead of landing
-  silently. The linter binary is pinned to a fixed release for reproducibility.
+  `.github/workflows/*.yml` file on each pull request and `Develop` push, so bad
+  `${{ }}` expressions, undefined `needs:`, invalid event filters and shellcheck
+  issues in `run:` blocks fail the build instead of landing silently. The linter
+  binary is pinned to a fixed release for reproducibility.
 - **Accessibility workflow**: `.github/workflows/a11y.yml` runs
   [`pa11y-ci`](https://github.com/pa11y/pa11y-ci) against the Explorer, Graph
   and Starfield pages on every pull request. The configuration lives in

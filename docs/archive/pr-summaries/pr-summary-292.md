@@ -25,8 +25,10 @@ group (#258).
 
 Backend/CI change — no web interface to screenshot. Verified by:
 
-- The new workflow passes actionlint locally (`actionlint -color
-  .github/workflows/actionlint.yml` → no findings — it lints itself cleanly).
+- The new workflow passes actionlint locally
+  (`actionlint -color
+  .github/workflows/actionlint.yml` → no findings — it
+  lints itself cleanly).
 - New tests pass and all existing workflow-policy tests stay green.
 - Full quality gate passes: **713 passed | 0 failed**.
 
@@ -52,8 +54,8 @@ suite):
   invokes `actionlint`.
 - `actionlint workflow runs on pull requests (#292)` — triggered on
   `pull_request`.
-- `actionlint workflow caps its job timeout (#292)` — positive
-  `timeout-minutes` ≤ 60.
+- `actionlint workflow caps its job timeout (#292)` — positive `timeout-minutes`
+  ≤ 60.
 - `actionlint workflow declares a cancelling concurrency group (#292)` — group
   keys on `github.workflow` + `github.ref` with `cancel-in-progress: true`.
 
