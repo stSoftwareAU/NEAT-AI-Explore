@@ -9,22 +9,29 @@
  * left dead lookups, a dead update function, and call sites that risked
  * regressing into a real duplicate.
  *
- * These tests pin the canonical badge (`#traceScore`) and assert the
- * duplicate plumbing is gone. They fail against the unfixed code where
- * `tracePathScore` / `updateTracePathScoreUI` still exist in `app.js`.
+ * This test pins the user-visible contract: the trace bar markup carries
+ * exactly one score badge and no retired path-score element. It asserts on
+ * the rendered structure (element counts) rather than on the spelling of
+ * helper names inside `docs/app.js`, so a behaviour-preserving refactor of
+ * the app (renaming helpers, caching handles, inlining functions) cannot
+ * break it while a genuine duplicate badge still can — regardless of the
+ * id or helper name used to introduce it.
+ *
+ * Issue #310: a prior companion test grepped the source text of
+ * `docs/app.js` for JavaScript symbol names (`updateTracePathScoreUI`,
+ * `renderTraceScore(`, `getElementById("traceScore")`). That was a
+ * HOW-assertion over source text — it pinned implementation internals,
+ * obstructed safe refactoring, and would have let a differently-named
+ * duplicate slip through. It was removed because the structural assertions
+ * below cover the same contract behaviourally.
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
 
 const HTML_PATH = new URL("../docs/index.html", import.meta.url);
-const APP_JS_PATH = new URL("../docs/app.js", import.meta.url);
 
 async function loadHtml(): Promise<string> {
   return await Deno.readTextFile(HTML_PATH);
-}
-
-async function loadAppJs(): Promise<string> {
-  return await Deno.readTextFile(APP_JS_PATH);
 }
 
 Deno.test("index.html exposes exactly one Score badge inside the trace bar (Issue #247)", async () => {
@@ -36,12 +43,22 @@ Deno.test("index.html exposes exactly one Score badge inside the trace bar (Issu
   assert(navMatch, 'Expected <nav class="traceBar"> block in index.html');
   const traceBar = navMatch![0];
 
-  // Exactly one canonical score badge.
+  // Exactly one canonical score badge by id.
   const traceScoreCount = (traceBar.match(/id="traceScore"/g) ?? []).length;
   assertEquals(
     traceScoreCount,
     1,
     "Expected exactly one #traceScore element inside the trace bar",
+  );
+
+  // Exactly one score badge by class. Counting the class (not just the
+  // canonical id) catches a future duplicate introduced under a different
+  // id — the failure mode the retired source-grep test could not detect.
+  const scoreBadgeCount = (traceBar.match(/class="traceScore"/g) ?? []).length;
+  assertEquals(
+    scoreBadgeCount,
+    1,
+    "Expected exactly one .traceScore badge inside the trace bar",
   );
 
   // No duplicate path-score badge.
@@ -52,35 +69,5 @@ Deno.test("index.html exposes exactly one Score badge inside the trace bar (Issu
   assert(
     !/id="tracePathScoreValue"/.test(traceBar),
     "Expected no #tracePathScoreValue element inside the trace bar (Issue #247)",
-  );
-});
-
-Deno.test("docs/app.js no longer wires the retired tracePathScore badge (Issue #247)", async () => {
-  const src = await loadAppJs();
-
-  // No element lookups for the retired indicator.
-  assert(
-    !/getElementById\(["']tracePathScore["']\)/.test(src),
-    'Expected no document.getElementById("tracePathScore") lookup',
-  );
-  assert(
-    !/getElementById\(["']tracePathScoreValue["']\)/.test(src),
-    'Expected no document.getElementById("tracePathScoreValue") lookup',
-  );
-
-  // No dead update function definition or call sites.
-  assert(
-    !/\bupdateTracePathScoreUI\b/.test(src),
-    "Expected no references to updateTracePathScoreUI in docs/app.js",
-  );
-
-  // The canonical badge must still be wired.
-  assert(
-    /getElementById\(["']traceScore["']\)/.test(src),
-    "Expected docs/app.js to keep the #traceScore lookup",
-  );
-  assert(
-    /renderTraceScore\s*\(/.test(src),
-    "Expected docs/app.js to keep the renderTraceScore() call",
   );
 });
