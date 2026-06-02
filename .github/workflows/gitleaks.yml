@@ -43,8 +43,9 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: git fetch origin "$BASE_REF:$BASE_REF" || true
-      # gitleaks/gitleaks-action@v2.3.9
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+      # gitleaks/gitleaks-action@v3.0.0 (runs on the supported Node 24
+      # runtime; v2.3.9 ran on the deprecated Node 20 — Issue #298).
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Org-level Gitleaks Pro licence (Issue #1636). Required for
