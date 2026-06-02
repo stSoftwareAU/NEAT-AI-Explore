@@ -1,0 +1,59 @@
+name: actionlint
+
+# Lint every GitHub Actions workflow with actionlint (#292) so workflow
+# regressions — bad `${{ }}` expressions, undefined `needs:`, invalid event
+# filters, shellcheck issues in `run:` blocks — fail the build instead of
+# landing silently.
+#
+# actionlint has no first-party GitHub Action; the maintainer ships a Go
+# binary plus an official install script. We download a pinned release of
+# that script and a pinned binary version in a `run:` step rather than
+# depend on an unofficial third-party action, keeping the supply-chain
+# surface to repos we already trust (actions/checkout + rhysd/actionlint).
+
+on:
+  pull_request:
+    branches: ["*"]
+  push:
+    branches: [main, master, Develop]
+
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258). The group keys on workflow + ref so PR and branch-push runs do not
+# cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pin the actionlint release so CI behaviour is reproducible and a moving
+  # tag cannot silently change the linter.
+  ACTIONLINT_VERSION: "1.7.12"
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    # Cap the runner so a wedged lint cannot hold it for the GitHub default
+    # of 360 minutes (#257). actionlint scans a handful of files in seconds.
+    timeout-minutes: 5
+    steps:
+      # actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install actionlint
+        env:
+          # Pin the install script to the matching release tag (immutable in
+          # practice) rather than the moving `main` branch the upstream
+          # README suggests.
+          SCRIPT_URL: https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "$SCRIPT_URL" -o download-actionlint.bash
+          bash download-actionlint.bash "$ACTIONLINT_VERSION"
+          # The script drops the binary in the working directory; record its
+          # path for the next step.
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: Run actionlint
+        run: actionlint -color
