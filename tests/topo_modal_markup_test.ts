@@ -13,11 +13,6 @@ import { assert, assertEquals } from "./test_helpers.ts";
 import { loadDocument } from "./dom_helpers.ts";
 
 const HTML_PATH = new URL("../docs/index.html", import.meta.url);
-const CSS_PATH = new URL("../docs/styles.css", import.meta.url);
-
-async function loadCss(): Promise<string> {
-  return await Deno.readTextFile(CSS_PATH);
-}
 
 Deno.test("index.html: declares the topology pop-out modal scaffold (Issue #241)", async () => {
   const doc = await loadDocument(HTML_PATH);
@@ -61,29 +56,15 @@ Deno.test("index.html: modal contains close button, title, body, and backdrop (I
   );
 });
 
-Deno.test("styles.css: topology modal uses landscape sizing and full-viewport backdrop (Issue #241)", async () => {
-  const css = await loadCss();
-  // Landscape sizing: 16/9 aspect ratio, capped width and height.
-  assert(/\.topoModal\b/.test(css), "missing .topoModal selector");
-  assert(
-    /aspect-ratio:\s*16\s*\/\s*9/.test(css),
-    "expected landscape (16/9) aspect-ratio on the modal",
-  );
-  assert(
-    /width:\s*min\(\s*90vw\s*,\s*1400px\s*\)/.test(css),
-    "expected width: min(90vw, 1400px) on the modal",
-  );
-  assert(
-    /max-height:\s*80vh/.test(css),
-    "expected max-height: 80vh on the modal",
-  );
-  // Backdrop full-viewport.
-  assert(
-    /\.topoModalBackdrop\b/.test(css),
-    "missing .topoModalBackdrop selector",
-  );
-  assert(
-    /\.topoModalBackdrop[^{]*\{[^}]*position:\s*fixed/.test(css),
-    "backdrop must be position: fixed",
-  );
-});
+// NOTE (Issue #311): The former third test in this file —
+// "styles.css: topology modal uses landscape sizing and full-viewport backdrop" —
+// was removed. It read `docs/styles.css` as text and grepped for exact design-token
+// values (aspect-ratio 16/9, width min(90vw, 1400px), max-height 80vh, backdrop
+// position: fixed). Those are presentation measurements with no spec attached: a
+// visual restyle (e.g. capping width at 1300px or relaxing max-height to 85vh)
+// would break the assertions without changing any guarded behaviour — the hallmark
+// of a HOW-test. CSS layout is browser-only and cannot be meaningfully exercised in
+// a DOM-free Deno unit test, so the grep was deleted rather than faked. Modal
+// dimension/backdrop layout belongs in a rendered visual-regression or Playwright
+// check. The two markup-scaffold tests above assert real structural invariants and
+// remain.
