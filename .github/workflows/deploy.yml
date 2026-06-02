@@ -44,8 +44,8 @@ jobs:
 
       - name: Setup Pages
         # Keep this aligned with ../GRQ-health to avoid behavioural differences.
-        # actions/configure-pages@v4.0.0
-        uses: actions/configure-pages@1f0c5cde4bc74cd7e1254d0cb4de8d49e9068c7d
+        # actions/configure-pages@v6.0.0 (Node 24 runtime, #295)
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
 
       - name: Upload artifact
         # actions/upload-pages-artifact@v3.0.1
