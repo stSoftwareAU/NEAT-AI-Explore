@@ -8,9 +8,9 @@ the old pin would have started failing. The v6.4.0 SHA is the same trusted pin
 already used by `a11y.yml`, keeping `actions/setup-node` consistent across the
 repo. Closes #294.
 
-The action's only input used here (`node-version: "lts/*"`) is unchanged
-between v4 and v6.4.0, so behaviour is identical — only the runtime moves to a
-supported Node version.
+The action's only input used here (`node-version: "lts/*"`) is unchanged between
+v4 and v6.4.0, so behaviour is identical — only the runtime moves to a supported
+Node version.
 
 ### Deno regression avoided
 
@@ -20,8 +20,8 @@ dependency or config — only the action's runtime version was bumped.
 
 ## Evidence
 
-CI/workflow change with no web interface to screenshot. Verified via a new
-TDD unit test that parses the workflow YAML and asserts the pin currency.
+CI/workflow change with no web interface to screenshot. Verified via a new TDD
+unit test that parses the workflow YAML and asserts the pin currency.
 
 ```mermaid
 flowchart LR
@@ -36,12 +36,12 @@ Quality gate: `./quality.sh` → `725 passed | 0 failed`.
 Added `tests/workflow_setup_node_node24_test.ts` (mirrors the existing
 `workflow_*_node24_test.ts` suite):
 
-- `at least one workflow uses actions/setup-node (#294)` — guards the
-  collector against silently matching nothing.
+- `at least one workflow uses actions/setup-node (#294)` — guards the collector
+  against silently matching nothing.
 - `no workflow pins the deprecated Node 20 actions/setup-node build (#294)` —
   fails if any workflow re-introduces the v4/Node 20 SHA.
-- `every actions/setup-node reference pins the Node 24 build (#294)` —
-  fails unless every reference resolves to the v6.4.0/Node 24 SHA.
+- `every actions/setup-node reference pins the Node 24 build (#294)` — fails
+  unless every reference resolves to the v6.4.0/Node 24 SHA.
 
 Confirmed the test failed against the unfixed `markdown-lint.yml` and passes
 after the bump.
