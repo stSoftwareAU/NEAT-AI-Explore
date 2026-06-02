@@ -3,60 +3,60 @@
  *
  * The static HTML in `docs/index.html` must declare the modal scaffold so the
  * page renders the close button, title, backdrop, and body container without
- * any JS having run. These tests guard those invariants.
+ * any JS having run. The markup tests parse the HTML into a DOM and assert
+ * the structural / accessibility contract via semantic queries, so attribute
+ * reordering or class renames cannot flag a refactor as a regression
+ * (Issue #312).
  */
 
-import { assert } from "./test_helpers.ts";
+import { assert, assertEquals } from "./test_helpers.ts";
+import { loadDocument } from "./dom_helpers.ts";
 
 const HTML_PATH = new URL("../docs/index.html", import.meta.url);
 const CSS_PATH = new URL("../docs/styles.css", import.meta.url);
 
-async function loadHtml(): Promise<string> {
-  return await Deno.readTextFile(HTML_PATH);
-}
 async function loadCss(): Promise<string> {
   return await Deno.readTextFile(CSS_PATH);
 }
 
 Deno.test("index.html: declares the topology pop-out modal scaffold (Issue #241)", async () => {
-  const html = await loadHtml();
-  assert(html.includes('id="topoModal"'), "missing #topoModal");
-  assert(
-    /id="topoModal"[^>]*role="dialog"/.test(html) ||
-      /role="dialog"[^>]*id="topoModal"/.test(html),
+  const doc = await loadDocument(HTML_PATH);
+  const modal = doc.getElementById("topoModal");
+  assert(modal, "missing #topoModal");
+  assertEquals(
+    modal.getAttribute("role"),
+    "dialog",
     '#topoModal must declare role="dialog"',
   );
-  assert(
-    /id="topoModal"[^>]*aria-modal="true"/.test(html) ||
-      /aria-modal="true"[^>]*id="topoModal"/.test(html),
+  assertEquals(
+    modal.getAttribute("aria-modal"),
+    "true",
     '#topoModal must declare aria-modal="true"',
   );
-  assert(
-    /id="topoModal"[^>]*aria-labelledby="topoModalTitle"/.test(html) ||
-      /aria-labelledby="topoModalTitle"[^>]*id="topoModal"/.test(html),
+  assertEquals(
+    modal.getAttribute("aria-labelledby"),
+    "topoModalTitle",
     "#topoModal must label itself via #topoModalTitle",
   );
   assert(
-    /id="topoModal"[^>]*\bhidden\b/.test(html),
+    modal.hasAttribute("hidden"),
     "#topoModal must default to the hidden state",
   );
 });
 
 Deno.test("index.html: modal contains close button, title, body, and backdrop (Issue #241)", async () => {
-  const html = await loadHtml();
-  assert(
-    html.includes('class="topoModalClose"') ||
-      /class="[^"]*\btopoModalClose\b/.test(html),
-    "missing .topoModalClose button",
-  );
-  assert(
-    /aria-label="Close"/.test(html),
+  const doc = await loadDocument(HTML_PATH);
+  const close = doc.querySelector(".topoModalClose");
+  assert(close, "missing .topoModalClose button");
+  assertEquals(
+    close.getAttribute("aria-label"),
+    "Close",
     "close button must expose an aria-label",
   );
-  assert(html.includes('id="topoModalTitle"'), "missing #topoModalTitle h2");
-  assert(html.includes('id="topoModalBody"'), "missing #topoModalBody slot");
+  assert(doc.getElementById("topoModalTitle"), "missing #topoModalTitle h2");
+  assert(doc.getElementById("topoModalBody"), "missing #topoModalBody slot");
   assert(
-    /class="[^"]*\btopoModalBackdrop\b/.test(html),
+    doc.querySelector(".topoModalBackdrop"),
     "missing .topoModalBackdrop element",
   );
 });

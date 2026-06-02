@@ -8,43 +8,38 @@
  * letter "A" twice.
  *
  * Fix: keep a single `#themeToggle` button and let the JS placement helper
- * move it between header and trace bar. This test reads the published
- * `docs/index.html` and asserts the structural invariants of that fix.
+ * move it between header and trace bar. This test parses the published
+ * `docs/index.html` into a DOM and asserts the structural invariants of that
+ * fix via semantic queries, so reordering attributes or renaming unrelated
+ * classes cannot flag a refactor as a regression (Issue #312).
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
-
-const HTML_PATH = new URL("../docs/index.html", import.meta.url);
-
-async function loadHtml(): Promise<string> {
-  return await Deno.readTextFile(HTML_PATH);
-}
+import { loadIndexDocument } from "./dom_helpers.ts";
 
 Deno.test("docs/index.html declares exactly one theme toggle button (Issue #204)", async () => {
-  const html = await loadHtml();
-  const matches = html.match(/class="[^"]*\bthemeToggle\b[^"]*"/g) ?? [];
+  const doc = await loadIndexDocument();
   assertEquals(
-    matches.length,
+    doc.querySelectorAll(".themeToggle").length,
     1,
-    `Expected exactly one .themeToggle button, found ${matches.length}: ${
-      matches.join(" | ")
-    }`,
+    "Expected exactly one .themeToggle button in the rendered DOM",
   );
 });
 
 Deno.test("docs/index.html no longer ships #themeToggleTrace (Issue #204)", async () => {
-  const html = await loadHtml();
-  assert(
-    !html.includes('id="themeToggleTrace"'),
+  const doc = await loadIndexDocument();
+  assertEquals(
+    doc.getElementById("themeToggleTrace"),
+    null,
     "Found stale #themeToggleTrace element — should have been removed when " +
       "consolidating onto the single JS-managed #themeToggle.",
   );
 });
 
 Deno.test("docs/index.html keeps the single #themeToggle button (Issue #204)", async () => {
-  const html = await loadHtml();
+  const doc = await loadIndexDocument();
   assert(
-    html.includes('id="themeToggle"'),
+    doc.getElementById("themeToggle"),
     "The single #themeToggle button must remain — JS moves it between header " +
       "and trace bar based on viewport size.",
   );

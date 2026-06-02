@@ -1,5 +1,6 @@
 {
   "imports": {
+    "@b-fuze/deno-dom": "jsr:@b-fuze/deno-dom@^0.1.56",
     "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
     "@std/path": "jsr:@std/path@^1.0.0",
     "@std/yaml": "jsr:@std/yaml@^1.0.0",

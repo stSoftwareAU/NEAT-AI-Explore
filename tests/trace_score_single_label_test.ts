@@ -27,26 +27,19 @@
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
-
-const HTML_PATH = new URL("../docs/index.html", import.meta.url);
-
-async function loadHtml(): Promise<string> {
-  return await Deno.readTextFile(HTML_PATH);
-}
+import { loadIndexDocument } from "./dom_helpers.ts";
 
 Deno.test("index.html exposes exactly one Score badge inside the trace bar (Issue #247)", async () => {
-  const html = await loadHtml();
+  const doc = await loadIndexDocument();
 
-  // Extract the <nav class="traceBar"> ... </nav> block so we only count
-  // Score indicators that sit on the breadcrumb line.
-  const navMatch = html.match(/<nav class="traceBar"[\s\S]*?<\/nav>/);
-  assert(navMatch, 'Expected <nav class="traceBar"> block in index.html');
-  const traceBar = navMatch![0];
+  // Scope to the <nav class="traceBar"> block so we only count Score
+  // indicators that sit on the breadcrumb line.
+  const traceBar = doc.querySelector("nav.traceBar");
+  assert(traceBar, 'Expected <nav class="traceBar"> block in index.html');
 
   // Exactly one canonical score badge by id.
-  const traceScoreCount = (traceBar.match(/id="traceScore"/g) ?? []).length;
   assertEquals(
-    traceScoreCount,
+    traceBar.querySelectorAll("#traceScore").length,
     1,
     "Expected exactly one #traceScore element inside the trace bar",
   );
@@ -54,20 +47,21 @@ Deno.test("index.html exposes exactly one Score badge inside the trace bar (Issu
   // Exactly one score badge by class. Counting the class (not just the
   // canonical id) catches a future duplicate introduced under a different
   // id — the failure mode the retired source-grep test could not detect.
-  const scoreBadgeCount = (traceBar.match(/class="traceScore"/g) ?? []).length;
   assertEquals(
-    scoreBadgeCount,
+    traceBar.querySelectorAll(".traceScore").length,
     1,
     "Expected exactly one .traceScore badge inside the trace bar",
   );
 
   // No duplicate path-score badge.
-  assert(
-    !/id="tracePathScore"/.test(traceBar),
+  assertEquals(
+    traceBar.querySelector("#tracePathScore"),
+    null,
     "Expected no #tracePathScore element inside the trace bar (Issue #247)",
   );
-  assert(
-    !/id="tracePathScoreValue"/.test(traceBar),
+  assertEquals(
+    traceBar.querySelector("#tracePathScoreValue"),
+    null,
     "Expected no #tracePathScoreValue element inside the trace bar (Issue #247)",
   );
 });
