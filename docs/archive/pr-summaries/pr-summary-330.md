@@ -19,17 +19,17 @@ Closes #330.
     listener with fake navigation requests, returning the served shell path.
 
 - **`tests/pwa_test.ts`** — the four brittle tests are now behaviour tests:
-  - *"sw.js STATIC_FILES precaches starfield assets"* — asserts the parsed
+  - _"sw.js STATIC_FILES precaches starfield assets"_ — asserts the parsed
     `STATIC_FILES` array **contains** the resolved starfield paths.
-  - *"sw.js navigation handler routes each entry point to its app shell"* —
+  - _"sw.js navigation handler routes each entry point to its app shell"_ —
     replaces the meaningless `includes("starfield")` grep. Drives the SW's fetch
     handler with `/starfield/`, `/graph/` and `/` navigations and asserts the
     shell it actually serves.
-  - *"sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)"* —
+  - _"sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)"_ —
     asserts the parsed array contains the resolved `boot.js` paths (no longer
     matching the literal `${VERSION}` template syntax).
-  - *"inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#218)"* —
-    runs the real script over a temporary fixture tree and asserts the
+  - _"inject_build_id.ts substitutes **BUILD_ID** across the app shell (#218)"_
+    — runs the real script over a temporary fixture tree and asserts the
     placeholder was actually replaced in every expected output file.
 
 - **`tests/sw_static_files_test.ts`** — now imports `parseStaticFiles` from the
@@ -61,17 +61,25 @@ inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#218) ... ok
 ok | 726 passed | 0 failed
 ```
 
-`deno lint` and `deno check` pass clean. Note: `deno fmt --check` reports three
-**pre-existing** unformatted files under `docs/` (`docs/evidence/loading-fix-evidence.html`,
-`docs/starfield/index.html`, `docs/graph/index.html`) that fail on pristine
-`HEAD` and are unrelated to this change — left untouched to keep scope tight.
+`deno lint`, `deno check` and `deno fmt --check` all pass clean. Three
+**pre-existing** unformatted files under `docs/`
+(`docs/evidence/loading-fix-evidence.html`, `docs/starfield/index.html`,
+`docs/graph/index.html`) that failed the Quality Gate's format check have been
+reformatted with `deno fmt` so the gate passes.
 
 ## Test Plan
 
 - Rewrote `tests/pwa_test.ts::sw.js STATIC_FILES precaches starfield assets`
-- Added `tests/pwa_test.ts::sw.js navigation handler routes each entry point to its app shell` (replaces the deleted `includes("starfield")` assertion with a real handler test)
-- Rewrote `tests/pwa_test.ts::sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)`
-- Rewrote `tests/pwa_test.ts::inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#218)` to run the script over a fixture tree
+- Added
+  `tests/pwa_test.ts::sw.js navigation handler routes each entry point to its app shell`
+  (replaces the deleted `includes("starfield")` assertion with a real handler
+  test)
+- Rewrote
+  `tests/pwa_test.ts::sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)`
+- Rewrote
+  `tests/pwa_test.ts::inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#218)`
+  to run the script over a fixture tree
 - Added `tests/pwa_sw_harness.ts` (`parseStaticFiles`, `loadServiceWorker`)
-- Updated `tests/sw_static_files_test.ts` to import the shared `parseStaticFiles`
+- Updated `tests/sw_static_files_test.ts` to import the shared
+  `parseStaticFiles`
 - Full suite: `deno test -A` → 726 passed, 0 failed
