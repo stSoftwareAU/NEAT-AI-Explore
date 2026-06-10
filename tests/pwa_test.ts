@@ -1,4 +1,5 @@
-import { assert } from "./test_helpers.ts";
+import { assert, assertEquals } from "./test_helpers.ts";
+import { loadServiceWorker, parseStaticFiles } from "./pwa_sw_harness.ts";
 
 function repoPath(...parts: string[]): string {
   const url = new URL(import.meta.url);
@@ -69,9 +70,12 @@ Deno.test("manifest icons and screenshots exist on disk", async () => {
   }
 });
 
-Deno.test("sw.js STATIC_FILES includes starfield assets", async () => {
-  const swPath = repoPath("docs", "sw.js");
-  const swContent = await Deno.readTextFile(swPath);
+Deno.test("sw.js STATIC_FILES precaches starfield assets", async () => {
+  // Parse the STATIC_FILES array structurally and assert it contains the
+  // resolved starfield paths. This survives reordering, quote-style changes,
+  // and the `?v=${VERSION}` cache-busting suffix — unlike a raw source grep.
+  const swSource = await Deno.readTextFile(repoPath("docs", "sw.js"));
+  const staticFiles = parseStaticFiles(swSource);
   const starfieldFiles = [
     "./starfield/index.html",
     "./starfield/starfield.js",
@@ -79,59 +83,114 @@ Deno.test("sw.js STATIC_FILES includes starfield assets", async () => {
   ];
   for (const file of starfieldFiles) {
     assert(
-      swContent.includes(file),
-      `sw.js STATIC_FILES should include ${file}`,
+      staticFiles.includes(file),
+      `sw.js STATIC_FILES should precache ${file}`,
     );
   }
 });
 
-Deno.test("sw.js has starfield navigation handler", async () => {
-  const swPath = repoPath("docs", "sw.js");
-  const swContent = await Deno.readTextFile(swPath);
-  assert(
-    swContent.includes("starfield"),
-    "sw.js should contain a starfield navigation handler",
+Deno.test("sw.js navigation handler routes each entry point to its app shell", async () => {
+  // Drive the Service Worker's fetch handler with fake navigation requests and
+  // assert the shell it actually serves — proving the starfield/graph routing
+  // exists and works, rather than that the word "starfield" appears somewhere.
+  const swSource = await Deno.readTextFile(repoPath("docs", "sw.js"));
+  const sw = loadServiceWorker(swSource);
+
+  assertEquals(
+    await sw.resolveNavigation("/starfield/"),
+    "./starfield/index.html",
+    "navigating under /starfield/ should serve the starfield shell",
+  );
+  assertEquals(
+    await sw.resolveNavigation("/graph/"),
+    "./graph/index.html",
+    "navigating under /graph/ should serve the graph shell",
+  );
+  assertEquals(
+    await sw.resolveNavigation("/"),
+    "./index.html",
+    "navigating to the root should serve the explorer shell",
   );
 });
 
 Deno.test("sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)", async () => {
-  const swPath = repoPath("docs", "sw.js");
-  const swContent = await Deno.readTextFile(swPath);
   // CSP `script-src 'self'` requires the boot scripts to be fetched, never
   // inlined. They must therefore be precached so the PWA still boots offline.
+  // Parse STATIC_FILES so the `?v=${VERSION}` suffix is normalised away.
+  const swSource = await Deno.readTextFile(repoPath("docs", "sw.js"));
+  const staticFiles = parseStaticFiles(swSource);
   const bootFiles = [
-    "./boot.js?v=${VERSION}",
-    "./graph/boot.js?v=${VERSION}",
-    "./starfield/boot.js?v=${VERSION}",
+    "./boot.js",
+    "./graph/boot.js",
+    "./starfield/boot.js",
   ];
   for (const file of bootFiles) {
     assert(
-      swContent.includes(file),
-      `sw.js STATIC_FILES should include ${file}`,
+      staticFiles.includes(file),
+      `sw.js STATIC_FILES should precache ${file}`,
     );
   }
 });
 
-Deno.test("inject_build_id.ts substitutes __BUILD_ID__ in every entry HTML and boot.js (#218)", async () => {
-  const scriptPath = repoPath("scripts", "inject_build_id.ts");
-  const content = await Deno.readTextFile(scriptPath);
-  // Boot scripts contain the same __BUILD_ID__ placeholder the HTML used to
-  // hold inline. They must be on the substitution list so production deploys
-  // get a stable cache buster (not the Date.now() dev fallback).
-  const required = [
-    "./docs/index.html",
-    "./docs/boot.js",
-    "./docs/graph/index.html",
-    "./docs/graph/boot.js",
-    "./docs/starfield/index.html",
-    "./docs/starfield/boot.js",
-    "./docs/sw.js",
+Deno.test("inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#218)", async () => {
+  // Run the real script over a temporary fixture tree and assert the
+  // placeholder was actually replaced in every output file — a behaviour test,
+  // not a grep of the script's files[] array literal.
+  const buildId = "abc1234";
+  const placeholder = "__BUILD_ID__";
+  const expectedFiles = [
+    "docs/index.html",
+    "docs/boot.js",
+    "docs/graph/index.html",
+    "docs/graph/boot.js",
+    "docs/starfield/index.html",
+    "docs/starfield/boot.js",
+    "docs/sw.js",
   ];
-  for (const file of required) {
-    assert(
-      content.includes(`"${file}"`),
-      `inject_build_id.ts files[] should include "${file}"`,
+
+  const tmp = await Deno.makeTempDir({ prefix: "inject_build_id_" });
+  try {
+    // Seed each expected output file with the placeholder so the script has
+    // something real to rewrite.
+    for (const rel of expectedFiles) {
+      const abs = `${tmp}/${rel}`;
+      await Deno.mkdir(abs.slice(0, abs.lastIndexOf("/")), { recursive: true });
+      await Deno.writeTextFile(abs, `// version: ${placeholder}\n`);
+    }
+
+    const command = new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        "--allow-write",
+        repoPath("scripts", "inject_build_id.ts"),
+        buildId,
+      ],
+      cwd: tmp,
+    });
+    const { code, stderr } = await command.output();
+    assertEquals(
+      code,
+      0,
+      `inject_build_id.ts should exit 0, stderr: ${
+        new TextDecoder().decode(stderr)
+      }`,
     );
+
+    // Every expected file must have the placeholder replaced with the build ID.
+    for (const rel of expectedFiles) {
+      const after = await Deno.readTextFile(`${tmp}/${rel}`);
+      assert(
+        !after.includes(placeholder),
+        `${rel} should no longer contain ${placeholder} after injection`,
+      );
+      assert(
+        after.includes(buildId),
+        `${rel} should contain the injected build ID after injection`,
+      );
+    }
+  } finally {
+    await Deno.remove(tmp, { recursive: true });
   }
 });
 

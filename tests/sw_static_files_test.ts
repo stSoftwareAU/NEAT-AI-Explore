@@ -1,4 +1,5 @@
 import { assert } from "./test_helpers.ts";
+import { parseStaticFiles } from "./pwa_sw_harness.ts";
 
 /**
  * Issue #126: Verify that every shared JS module imported by app.js and
@@ -27,24 +28,8 @@ function extractRelativeImports(source: string): string[] {
   return imports;
 }
 
-/** Parse the STATIC_FILES array from sw.js source text. */
-function parseStaticFiles(swSource: string): string[] {
-  // Extract file paths from the STATIC_FILES array. Paths can be plain
-  // strings like "./shared/config.js" or template literals like
-  // `./app.js?v=${VERSION}`. We normalise by stripping the query suffix.
-  const paths: string[] = [];
-  const re = /["'`](\.\/.+?)(?:\?[^"'`]*)?["'`]/g;
-  // Only search within the STATIC_FILES array definition.
-  const startIdx = swSource.indexOf("const STATIC_FILES");
-  const endIdx = swSource.indexOf("];", startIdx);
-  if (startIdx < 0 || endIdx < 0) return paths;
-  const block = swSource.slice(startIdx, endIdx + 2);
-  let m;
-  while ((m = re.exec(block)) !== null) {
-    paths.push(m[1]);
-  }
-  return paths;
-}
+// parseStaticFiles lives in ./pwa_sw_harness.ts so both this suite and
+// pwa_test.ts share one structural parser (Issue #330).
 
 Deno.test("SW STATIC_FILES includes all shared modules imported by app.js", async () => {
   const appSource = await Deno.readTextFile(repoPath("docs", "app.js"));
