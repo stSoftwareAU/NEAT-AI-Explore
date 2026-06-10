@@ -9,8 +9,13 @@
  * regress in.
  *
  * It also sweeps the repo for any reintroduced Python Playwright artefacts:
- * `*.py` files under `scripts/`, `requirements*.txt`, `pyproject.toml`, and
- * `pip install ... playwright` instructions inside README/CONTRIBUTING.
+ * `*.py` files under `scripts/`, `requirements*.txt`, and `pyproject.toml`.
+ *
+ * Note (#331): a prose grep for `pip install ... playwright` instructions in
+ * README/CONTRIBUTING was removed. A forbidden free-text pattern in docs is a
+ * lint/CI policy concern, not a unit-test assertion — it broke on rewording
+ * and gave little signal. The durable artefact checks (no `*.py`, no Python
+ * project metadata) remain and cover the actual port-out regression.
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -109,24 +114,5 @@ Deno.test("no Python project metadata files remain at repo root", async () => {
     `expected no Python project metadata at repo root, found: ${
       offenders.join(", ")
     }`,
-  );
-});
-
-Deno.test("README/CONTRIBUTING contain no Python Playwright install instructions", async () => {
-  const files = ["README.md", "CONTRIBUTING.md"];
-  const offenders: string[] = [];
-  for (const file of files) {
-    const text = await Deno.readTextFile(new URL(file, REPO_ROOT));
-    // The forbidden pattern is `pip install <something> playwright` — a Python
-    // Playwright install command. Bare `python3 -m http.server` is a generic
-    // dev convenience and stays allowed.
-    if (/pip\s+install[^\n]*playwright/i.test(text)) {
-      offenders.push(file);
-    }
-  }
-  assertEquals(
-    offenders.length,
-    0,
-    `Python Playwright install instructions found in: ${offenders.join(", ")}`,
   );
 });
