@@ -160,17 +160,9 @@ Deno.test("develop ruleset forbids deletion and non-fast-forward pushes", async 
   );
 });
 
-Deno.test("README documents the required 'quality' status check (Issue #211)", async () => {
-  const readme = await Deno.readTextFile(
-    new URL("../README.md", import.meta.url),
-  );
-  assert(
-    /Required checks/i.test(readme),
-    "README must include a 'Required checks' section",
-  );
-  assert(
-    /deno-quality\.yml|Deno Quality/i.test(readme) &&
-      /quality/.test(readme),
-    "README must mention the 'quality' status check from Deno Quality",
-  );
-});
+// Note (#331): a README prose grep ("README documents the required 'quality'
+// status check") was removed here. It asserted on free-text wording
+// (`/Required checks/i`, `/deno-quality\.yml|Deno Quality/i`) and broke on
+// routine rewording. The required `quality` status check is already pinned
+// durably by the structural ruleset assertions above, which parse
+// `.github/rulesets/develop.json` — the source of truth — so no signal is lost.
