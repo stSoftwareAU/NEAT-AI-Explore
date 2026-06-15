@@ -90,7 +90,11 @@ jobs:
         # (#190).
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer the org-level PAT so GitHub fires downstream workflow
+          # triggers (CI, labels, reviewer automation) on the created PR;
+          # fall back to GITHUB_TOKEN only when ACTIONS_PUSH is unset
+          # (#1636, #344).
+          token: ${{ secrets.ACTIONS_PUSH || secrets.GITHUB_TOKEN }}
           branch: chore/upgrade-dependencies
           base: Develop
           title: "chore: upgrade Deno dependencies to latest compatible versions"
