@@ -12,6 +12,7 @@ import {
   checkAll,
   checkImportQuarantine,
   checkQuarantine,
+  fetchLatestVersion,
   fetchLatestVersionDenoLandX,
   fetchLatestVersionNpm,
   importDisplayName,
@@ -391,6 +392,109 @@ Deno.test("isInternalImport treats stSoftwareAU JSR + @stsoftwareau npm as inter
       url: "https://example.com/x",
     }),
   );
+});
+
+// `fetchLatestVersion` (the JSR fetcher) completes the symmetric trio
+// alongside `fetchLatestVersionNpm` and `fetchLatestVersionDenoLandX`. It is
+// part of the same stable, uniform public API, so it earns direct unit
+// coverage rather than being de-exported (#351).
+
+Deno.test("fetchLatestVersion returns the newest non-yanked JSR version", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/yaml/versions": {
+      body: {
+        items: [
+          {
+            version: "1.0.4",
+            yanked: false,
+            createdAt: "2026-05-10T00:00:00Z",
+          },
+          {
+            version: "1.0.5",
+            yanked: false,
+            createdAt: "2026-05-22T06:00:00Z",
+          },
+        ],
+      },
+    },
+  });
+  const v = await fetchLatestVersion({ scope: "std", name: "yaml" }, f);
+  assertEquals(v.version, "1.0.5");
+  assertEquals(v.createdAt, "2026-05-22T06:00:00Z");
+  assertEquals(v.yanked, false);
+});
+
+Deno.test("fetchLatestVersion accepts the bare-array response shape", async () => {
+  const versions: VersionRecord[] = [
+    { version: "1.0.0", yanked: false, createdAt: "2026-05-21T00:00:00Z" },
+  ];
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/path/versions": { body: versions },
+  });
+  const v = await fetchLatestVersion({ scope: "std", name: "path" }, f);
+  assertEquals(v.version, "1.0.0");
+});
+
+Deno.test("fetchLatestVersion skips yanked versions when picking the latest", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/yaml/versions": {
+      body: {
+        items: [
+          { version: "9.9.9", yanked: true, createdAt: "2026-05-22T11:00:00Z" },
+          {
+            version: "1.0.5",
+            yanked: false,
+            createdAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+      },
+    },
+  });
+  const v = await fetchLatestVersion({ scope: "std", name: "yaml" }, f);
+  assertEquals(v.version, "1.0.5");
+});
+
+Deno.test("fetchLatestVersion throws on a non-OK registry status", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/missing/versions": {
+      status: 500,
+      body: { error: "boom" },
+    },
+  });
+  let threw = false;
+  try {
+    await fetchLatestVersion({ scope: "std", name: "missing" }, f);
+  } catch (e) {
+    threw = true;
+    assert(
+      e instanceof Error && /500/.test(e.message),
+      `expected error to mention 500, got ${(e as Error).message}`,
+    );
+  }
+  assert(threw, "expected fetchLatestVersion to throw on non-OK status");
+});
+
+Deno.test("fetchLatestVersion throws when no usable (non-yanked) versions exist", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/empty/versions": {
+      body: {
+        items: [
+          { version: "0.0.1", yanked: true, createdAt: "2026-05-01T00:00:00Z" },
+        ],
+      },
+    },
+  });
+  let threw = false;
+  try {
+    await fetchLatestVersion({ scope: "std", name: "empty" }, f);
+  } catch (e) {
+    threw = true;
+    assert(
+      e instanceof Error && /no.*version/i.test(e.message),
+      `expected error to mention no versions, got ${(e as Error).message}`,
+    );
+  }
+  assert(threw, "expected fetchLatestVersion to throw with no usable versions");
 });
 
 Deno.test("fetchLatestVersionNpm reads dist-tags.latest + time map", async () => {
