@@ -50,6 +50,21 @@ Deno.test("SECURITY.md documents an emergency dependency-bump procedure", async 
   );
 });
 
+Deno.test("SECURITY.md documents a supported-versions table (#362)", async () => {
+  const text = (await Deno.readTextFile(SECURITY_PATH)).toLowerCase();
+  // A vulnerability disclosure policy must say which release line receives
+  // security fixes, so reporters know whether their version is in scope.
+  assert(
+    text.includes("supported versions"),
+    "expected SECURITY.md to include a Supported Versions section",
+  );
+  // The section is a markdown table tied to the version.json release line.
+  assert(
+    text.includes("| version") && text.includes("supported"),
+    "expected SECURITY.md to render a supported-versions table",
+  );
+});
+
 Deno.test("SECURITY.md documents the quarantine override (SCR-QUARANTINE-OVERRIDE)", async () => {
   const text = (await Deno.readTextFile(SECURITY_PATH)).toLowerCase();
   // The deliberate override lever is the repository variable read by the
