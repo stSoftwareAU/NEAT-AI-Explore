@@ -19,6 +19,10 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Added
 
+- `SECURITY.md` supply-chain readiness runbook (#356) with a private disclosure
+  contact (`security@stsoftware.com.au` / GitHub "Report a vulnerability") and
+  an emergency dependency-bump procedure, plus a `tests/security_policy_test.ts`
+  presence-and-structure check.
 - `CONTRIBUTING.md` documenting the dev environment setup, the `Develop` branch
   workflow, the `./quality.sh` quality gate (fmt + lint + type check + tests),
   and the `docs/pr-summary-NNN.md` PR convention.
