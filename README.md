@@ -61,6 +61,13 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   the job if any package is younger than `VIBE_BUMP_QUARANTINE_HOURS` (default
   24h) — closing the cron-window exposure to freshly-published malicious
   versions. `stSoftwareAU/*` scopes bypass the gate as internal.
+- **Dependency audit workflow**: `.github/workflows/dependency-audit.yml` runs
+  Deno's native `deno audit` over the resolved lockfile (`deno.lock`) on a
+  weekly schedule (Mondays 07:00 UTC, one hour ahead of the upgrade cron) and on
+  every pull request. `dependency-review.yml` only inspects the diff of an
+  incoming change, so it never re-evaluates the standing tree; this scheduled
+  scan surfaces a freshly-disclosed advisory against an already-merged (possibly
+  transitive) dependency without waiting for the next bump (#355).
 
 ---
 

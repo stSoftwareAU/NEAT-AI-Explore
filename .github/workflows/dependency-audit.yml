@@ -1,0 +1,55 @@
+name: Dependency Audit
+
+# Standing dependency vulnerability scanner (#355).
+#
+# `dependency-review.yml` gates dependency *changes* on a PR — it only
+# inspects the diff of an incoming change and never re-evaluates the standing
+# tree. A CVE disclosed against an already-merged dependency is therefore
+# invisible to CI until that dependency happens to change again. This
+# workflow closes that gap by running Deno's native `deno audit` over the
+# resolved lockfile (`deno.lock`) on a weekly schedule AND on every pull
+# request, so a freshly-published advisory against a pinned (possibly
+# transitive) dependency surfaces without waiting for the next bump.
+
+on:
+  schedule:
+    # Mondays at 07:00 UTC — one hour ahead of the upgrade cron
+    # (upgrade-dependencies.yml runs at 06:00) so the standing tree is
+    # re-scanned just before the weekly bump.
+    - cron: "0 7 * * 1"
+  pull_request:
+    branches: ["*"]
+  workflow_dispatch:
+
+# Cancel superseded runs when a PR receives a new commit so the latest push
+# gets feedback fastest and we do not waste runner minutes on stale work
+# (#258).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only: the audit only needs the checked-out lockfile, no write scopes.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    # Cap the runner so a wedged audit / registry hang cannot hold it for the
+    # GitHub default of 360 minutes (#257). The audit is a single lockfile
+    # scan that completes in seconds.
+    timeout-minutes: 10
+    steps:
+      # actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # denoland/setup-deno@v2.0.4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+        with:
+          deno-version: v2.x
+      - name: Audit resolved dependency tree
+        # `deno audit` scans the resolved lockfile against the advisory
+        # database and exits non-zero when a known vulnerability is found,
+        # failing the build. Deno-native first, per the issue's smallest
+        # concrete change.
+        run: deno audit
