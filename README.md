@@ -68,6 +68,13 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   incoming change, so it never re-evaluates the standing tree; this scheduled
   scan surfaces a freshly-disclosed advisory against an already-merged (possibly
   transitive) dependency without waiting for the next bump (#355).
+- **SBOM generation**: `.github/workflows/deploy.yml` runs
+  `scripts/generate_sbom.ts` to emit a Deno-native CycloneDX 1.5 Software Bill
+  of Materials (`sbom.cdx.json`) for the shipped PWA and uploads it as a build
+  artefact. The generator reads the resolved dependency closure from `deno.lock`
+  — one component per JSR/npm package, carrying its purl and the integrity hash
+  Deno already pinned — so a later advisory can be matched against exactly what
+  was deployed (#358).
 
 ---
 
