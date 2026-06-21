@@ -28,6 +28,19 @@ report within a few working days.
 
 ---
 
+## 📋 Supported versions
+
+Security fixes are applied to the current `0.1.x` release line, tracked in
+[`version.json`](version.json). Older lines are not maintained — if you are on
+an earlier release, upgrade to the latest `0.1.x` to receive fixes.
+
+| Version | Supported |
+| ------- | --------- |
+| 0.1.x   | ✅ yes    |
+| < 0.1   | ❌ no     |
+
+---
+
 ## 🚨 Emergency dependency bump
 
 Use this runbook when a dependency is found to ship a malicious or
