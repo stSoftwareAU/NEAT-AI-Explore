@@ -49,3 +49,25 @@ Deno.test("SECURITY.md documents an emergency dependency-bump procedure", async 
     "expected SECURITY.md to reference the upgrade command and quarantine bypass",
   );
 });
+
+Deno.test("SECURITY.md documents the quarantine override (SCR-QUARANTINE-OVERRIDE)", async () => {
+  const text = (await Deno.readTextFile(SECURITY_PATH)).toLowerCase();
+  // The deliberate override lever is the repository variable read by the
+  // upgrade workflow — name it explicitly so responders do not improvise.
+  assert(
+    text.includes("vibe_bump_quarantine_hours"),
+    "expected SECURITY.md to name the VIBE_BUMP_QUARANTINE_HOURS override variable",
+  );
+  // The documented fast-lane is to set the window to 0 and trigger the
+  // workflow manually via workflow_dispatch.
+  assert(
+    text.includes("workflow_dispatch"),
+    "expected SECURITY.md to reference the workflow_dispatch manual trigger",
+  );
+  // The override must be reversible — the default has to be restored once the
+  // emergency fix has merged.
+  assert(
+    text.includes("restore"),
+    "expected SECURITY.md to require restoring the default quarantine window",
+  );
+});
