@@ -42,6 +42,21 @@ jobs:
         run: |
           deno run --allow-read --allow-write ./scripts/inject_build_id.ts "${GITHUB_SHA::8}"
 
+      - name: Generate SBOM (CycloneDX) from deno.lock
+        # Deno-native, lockfile-aware SBOM for the shipped app (#358). Enumerates
+        # every resolved JSR + npm dependency so a later advisory can be matched
+        # against exactly what was deployed.
+        run: |
+          deno run --allow-read --allow-write ./scripts/generate_sbom.ts deno.lock sbom.cdx.json
+
+      - name: Upload SBOM artefact
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          if-no-files-found: error
+
       - name: Setup Pages
         # Keep this aligned with ../GRQ-health to avoid behavioural differences.
         # actions/configure-pages@v6.0.0 (Node 24 runtime, #295)
