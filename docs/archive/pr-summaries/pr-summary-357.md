@@ -2,7 +2,7 @@
 
 Documented the emergency **quarantine override** (fast-lane) procedure in
 `SECURITY.md`, closing the `SCR-QUARANTINE-OVERRIDE` finding. The override
-*lever* already existed — `.github/workflows/upgrade-dependencies.yml` reads the
+_lever_ already existed — `.github/workflows/upgrade-dependencies.yml` reads the
 `VIBE_BUMP_QUARANTINE_HOURS` repository variable and exposes a
 `workflow_dispatch` trigger — but no document described it as a deliberate
 emergency procedure, so responders would have had to improvise under pressure
@@ -37,11 +37,12 @@ flowchart TD
 
 ## Test Plan
 
-- Added `tests/security_policy_test.ts::SECURITY.md documents the quarantine override (SCR-QUARANTINE-OVERRIDE)`
+- Added
+  `tests/security_policy_test.ts::SECURITY.md documents the quarantine override (SCR-QUARANTINE-OVERRIDE)`
   — asserts `SECURITY.md` names the `VIBE_BUMP_QUARANTINE_HOURS` override
   variable, references the `workflow_dispatch` manual trigger, and requires
-  restoring the default window. This test failed before the `SECURITY.md`
-  change and passes after it.
+  restoring the default window. This test failed before the `SECURITY.md` change
+  and passes after it.
 - Existing `security_policy_test.ts` checks (file exists, disclosure contact,
   emergency-bump procedure) continue to pass.
 - `./quality.sh < /dev/null` — full suite green (737 passed).
