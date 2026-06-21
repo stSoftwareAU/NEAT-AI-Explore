@@ -1,0 +1,22 @@
+# CODEOWNERS — protect privileged CI paths (Issue #361).
+#
+# Files under these paths run with the repository's secrets and (for
+# deploy.yml) an OIDC id-token, so a change to them is high-impact: it could
+# exfiltrate secrets (ACTIONS_PUSH, CODECOV_TOKEN, SEMGREP_APP_TOKEN,
+# GITLEAKS_LICENSE), push to the default branch, or publish content to the
+# public GitHub Pages site. Requiring a trusted owner's review on these
+# paths is defence-in-depth on top of the generic single-review rule.
+#
+# Enforced at merge time by `require_code_owner_review: true` in
+# .github/rulesets/develop.json (a repo admin must re-apply that ruleset).
+# The @stSoftwareAU/developers team mirrors the required reviewer already
+# named in the ruleset.
+
+# Workflow definitions — run with secrets and id-token.
+/.github/workflows/   @stSoftwareAU/developers
+
+# Composite/local actions invoked by the privileged workflows.
+/.github/actions/     @stSoftwareAU/developers
+
+# Settings-as-code branch-protection ruleset — the controls themselves.
+/.github/rulesets/    @stSoftwareAU/developers

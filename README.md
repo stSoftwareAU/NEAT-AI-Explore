@@ -588,6 +588,26 @@ following status check is **required** and blocks PR merge when it fails:
 Run `./quality.sh` locally before pushing to land green on the first attempt.
 See Issue #211 for the rationale and the configuration audit trail.
 
+### Code-owner review for privileged CI paths
+
+Changes under the privileged CI paths require a review from the
+[`.github/CODEOWNERS`](.github/CODEOWNERS) reviewing team
+(`@stSoftwareAU/developers`), enforced by `"require_code_owner_review": true` in
+the `Develop` ruleset (Issue #361):
+
+- `/.github/workflows/` — run with the repository's secrets and (for
+  `deploy.yml`) an OIDC `id-token`.
+- `/.github/actions/` — composite/local actions invoked by those workflows.
+- `/.github/rulesets/` — the branch-protection controls themselves.
+
+This is defence-in-depth on top of the generic single-review rule: a single
+contributor cannot quietly alter a privileged workflow to exfiltrate secrets,
+push to **Develop**, or publish content to the public GitHub Pages site without
+a workflow owner's sign-off. Like the rest of the ruleset, the
+`require_code_owner_review` change is settings-as-code only — a repo admin must
+re-apply `.github/rulesets/develop.json` to the live ruleset for it to take
+effect.
+
 ### Unit tests vs benchmarks
 
 - **Unit tests verify correctness** — import a module, call a function with
