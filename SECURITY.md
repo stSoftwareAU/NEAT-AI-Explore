@@ -48,10 +48,8 @@ actively-exploited version and the fix cannot wait for the scheduled weekly bump
    bump path runs an external-dependency quarantine gate
    (`scripts/jsr_quarantine_check.ts`) that rejects packages published less than
    `VIBE_BUMP_QUARANTINE_HOURS` (default 24h) ago. For a confirmed incident this
-   delay is the wrong trade-off — apply the fix manually as in step 2 and open
-   the PR directly, bypassing the scheduled `upgrade-dependencies.yml` run
-   rather than waiting for the quarantine window to elapse. See the
-   `SCR-QUARANTINE-OVERRIDE` finding for the broader override policy.
+   delay is the wrong trade-off — see **Emergency quarantine bypass** below for
+   the deliberate override path.
 4. **Verify** the change locally:
 
    ```bash
@@ -63,11 +61,43 @@ actively-exploited version and the fix cannot wait for the scheduled weekly bump
 
 ---
 
+## ⏩ Emergency quarantine bypass
+
+The quarantine window is a deliberate trade-off: it blocks freshly-published
+malicious versions, but it also delays _legitimate_ freshly-published security
+fixes. During an actively-exploited supply-chain incident the team may need to
+take the fix **inside** the window. The override lever already exists — this
+section is the documented, deliberate path so responders do not have to
+improvise under pressure.
+
+`.github/workflows/upgrade-dependencies.yml` reads the quarantine window from
+the repository variable `VIBE_BUMP_QUARANTINE_HOURS` (default `24`) and exposes
+a `workflow_dispatch` trigger. To bypass the window for a confirmed,
+actively-exploited advisory:
+
+1. A repository **owner** sets the repository variable
+   `VIBE_BUMP_QUARANTINE_HOURS` to `0` (**Settings → Secrets and variables →
+   Actions → Variables**), _or_ applies the manual bump out-of-band as in steps
+   1–2 of the runbook above.
+2. Trigger **Upgrade Deno Dependencies** via `workflow_dispatch` (the **Run
+   workflow** button on the Actions tab), so the gate runs with a zero-hour
+   window and allows the fresh fix.
+3. **Record the CVE and the override decision** in the resulting PR description,
+   so the deliberate trade-off is auditable.
+4. **Restore** `VIBE_BUMP_QUARANTINE_HOURS` to its default (`24`) once the fix
+   has merged, re-arming the quarantine gate for routine bumps.
+
+This override is intended only for an actively-exploited advisory where waiting
+out the window is the greater risk. Outside an incident, leave the default
+window in place.
+
+---
+
 ## 🔗 Related
 
 - Contributor-facing supply-chain conventions live in
   [`CONTRIBUTING.md`](CONTRIBUTING.md#-security-and-supply-chain).
 - The dependency-update **quarantine window** itself is owned by the
   `security-scan` template and enforced by `scripts/jsr_quarantine_check.ts`.
-- The emergency quarantine **bypass** path is tracked separately as the
-  `SCR-QUARANTINE-OVERRIDE` finding.
+- The emergency quarantine **bypass** path (`SCR-QUARANTINE-OVERRIDE`) is
+  documented above under **Emergency quarantine bypass**.
