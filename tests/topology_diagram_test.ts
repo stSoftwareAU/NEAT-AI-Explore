@@ -19,6 +19,7 @@ import {
   topologyToSvgString,
 } from "../docs/shared/topology_diagram.js";
 import { assert, assertEquals } from "./test_helpers.ts";
+import { parseHtml } from "./dom_helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Small markup helpers.
@@ -63,6 +64,22 @@ function viewBoxHeight(svg: string): number {
   const m = svg.match(/viewBox="0 0 [\d.]+ ([\d.]+)"/);
   assert(m, "expected a viewBox attribute");
   return Number(m![1]);
+}
+
+/**
+ * Extract every (x, y) coordinate pair from an SVG path `d` string.
+ *
+ * Command letters (M/L/Q/C/...) are ignored, so this tolerates the arc being
+ * drawn as a quadratic, cubic, or polyline — we only care where the points
+ * land, not which command places them.
+ */
+function pathCoords(d: string): { x: number; y: number }[] {
+  const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) {
+    out.push({ x: nums[i], y: nums[i + 1] });
+  }
+  return out;
 }
 
 /** Parse `rgb(r, g, b)` into a triple. */
@@ -247,12 +264,23 @@ Deno.test("topologyToSvgString: viewBox accommodates largest dot and arc clearan
     cy + biggest + 16 <= h,
     `biggest dot bottom (${cy + biggest + 16}) exceeds viewBox height ${h}`,
   );
-  // Skip arc must clear the top of the canvas (control point above y=0 means
-  // the arc would have been clipped).
-  const cpYMatch = svg.match(/<path[^>]*d="M[\d.]+,[\d.]+ Q[\d.]+,(-?[\d.]+)/);
-  assert(cpYMatch, "expected a path control point");
-  const cpY = Number(cpYMatch![1]);
-  assert(cpY >= 0, `skip-arc control point cpY=${cpY} would clip at top`);
+  // Skip arc must clear the top of the canvas (no clipping). Pull the arc's
+  // path via the DOM and assert every anchor/control point stays within the
+  // vertical viewBox bounds. By the convex-hull property of Bézier/polyline
+  // curves, a curve never leaves the box bounding its defining points — so
+  // this guarantees the rendered arc itself stays on-canvas regardless of
+  // whether it is drawn as a quadratic Q, a cubic C, or a polyline.
+  const arc = parseHtml(svg).querySelector(".topoLinkSkip path");
+  assert(arc, "expected a skip-arc <path>");
+  const d = arc!.getAttribute("d") ?? "";
+  const ys = pathCoords(d).map((p) => p.y);
+  assert(ys.length > 0, `expected coordinates in path d="${d}"`);
+  for (const y of ys) {
+    assert(
+      y >= 0 && y <= h,
+      `skip-arc point y=${y} falls outside the viewBox [0, ${h}]`,
+    );
+  }
 
   // And the renderer reports the same biggest radius we just measured.
   assert(
@@ -405,21 +433,38 @@ Deno.test("topologyToSvgString: link title surfaces synapse count and Σw", () =
 });
 
 Deno.test("topologyToSvgString: arrow-head sits inside the link tooltip group", () => {
-  // When hovering the arrow polygon the browser walks up to the nearest
-  // ancestor with a <title> — so the polygon must be a sibling of <title>
-  // inside the same .topoLink group, not floating outside it.
+  // Observable contract: hovering the arrow surfaces the link tooltip. The
+  // browser walks up from the hovered element to the nearest ancestor carrying
+  // a <title>, so each link's <polygon> (arrow-head) and its <title> must live
+  // inside the same .topoLink group. Asserted via the DOM so it tolerates
+  // element reordering and self-closing-vs-paired tag syntax — only the
+  // grouping relationship matters.
   const topo = fixture(
     [
       { type: "input", count: 1 },
+      { type: "hidden", count: 2 },
       { type: "output", count: 1 },
     ],
-    [{ from: 0, to: 1, count: 2, weightSum: 1.0 }],
+    [
+      { from: 0, to: 1, count: 2, weightSum: 1.0 },
+      { from: 1, to: 2, count: 1, weightSum: -0.5 },
+      { from: 0, to: 2, count: 3, weightSum: 0.2 }, // skip arc
+    ],
   );
   const { svg } = topologyToSvgString(topo);
-  // Match: <g class="topoLink ..."> <title>...</title> <line .../> <polygon .../> </g>
-  const re =
-    /<g class="topoLink[^"]*"[^>]*>\s*<title>[^<]+<\/title>\s*<line[^>]*\/>\s*<polygon[^>]*\/>\s*<\/g>/;
-  assert(re.test(svg), `adjacent link group missing polygon sibling: ${svg}`);
+  const groups = parseHtml(svg).querySelectorAll(".topoLink");
+  assert(groups.length > 0, "expected at least one .topoLink group");
+  for (const group of groups) {
+    const cls = group.getAttribute("class");
+    const title = group.querySelector("title");
+    const polygon = group.querySelector("polygon");
+    assert(title, `link group "${cls}" missing a <title>`);
+    assert(polygon, `link group "${cls}" missing a <polygon> arrow-head`);
+    // Both are descendants of the same group — so hovering the arrow surfaces
+    // this group's tooltip.
+    assertEquals(title!.parentElement, group);
+    assertEquals(polygon!.parentElement, group);
+  }
 });
 
 Deno.test("topologyLegendHtml: three labelled rows with swatches", () => {
