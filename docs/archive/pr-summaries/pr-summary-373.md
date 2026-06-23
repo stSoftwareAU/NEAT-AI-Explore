@@ -14,19 +14,20 @@ list, which is genuine config validation, not the grep anti-pattern.
 
 ## Changes
 
-| Old grep case | Resolution |
-| --- | --- |
-| *"boot.js has error handling"* — `boot.includes("catch") && boot.includes("import(")` | **Removed.** The recovery path is exercised end-to-end against the real helper in `tests/pwa_recovery_test.ts`. |
-| *"Boot scripts do not tell PWA users to clear browser cache"* — substring checks over each boot script | **Removed.** Offline reachability of `pwa_recovery.js` is asserted structurally by the retained *"SW STATIC_FILES caches pwa_recovery.js"* case; the recovery behaviour itself is covered in `tests/pwa_recovery_test.ts`. |
-| *"index.html shows initial loading status"* — `/id="status"[^>]*>Loading/.test(html)` | **Rewritten** as a DOM query (option (a)): parse the page into a real document via `dom_helpers.loadDocument`, locate `#status`, and assert its rendered `textContent` shows a loading state. |
+| Old grep case                                                                                          | Resolution                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _"boot.js has error handling"_ — `boot.includes("catch") && boot.includes("import(")`                  | **Removed.** The recovery path is exercised end-to-end against the real helper in `tests/pwa_recovery_test.ts`.                                                                                                            |
+| _"Boot scripts do not tell PWA users to clear browser cache"_ — substring checks over each boot script | **Removed.** Offline reachability of `pwa_recovery.js` is asserted structurally by the retained _"SW STATIC_FILES caches pwa_recovery.js"_ case; the recovery behaviour itself is covered in `tests/pwa_recovery_test.ts`. |
+| _"index.html shows initial loading status"_ — `/id="status"[^>]*>Loading/.test(html)`                  | **Rewritten** as a DOM query (option (a)): parse the page into a real document via `dom_helpers.loadDocument`, locate `#status`, and assert its rendered `textContent` shows a loading state.                              |
 
 A documentation comment in the test file records why the two greps were removed
-and where their gestured behaviour is now verified, so the deletion is
-traceable rather than silent.
+and where their gestured behaviour is now verified, so the deletion is traceable
+rather than silent.
 
 The rewritten loading-status test now also covers `graph/index.html` (which
-shares the same loading contract), broadening real coverage. `starfield/index.html`
-intentionally ships an empty `#status` span, so it is not asserted against.
+shares the same loading contract), broadening real coverage.
+`starfield/index.html` intentionally ships an empty `#status` span, so it is not
+asserted against.
 
 ### Why this is a WHAT-test, not a HOW-test
 
