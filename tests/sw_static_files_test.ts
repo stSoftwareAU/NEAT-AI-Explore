@@ -1,4 +1,5 @@
 import { assert } from "./test_helpers.ts";
+import { loadDocument } from "./dom_helpers.ts";
 import { parseStaticFiles } from "./pwa_sw_harness.ts";
 
 /**
@@ -88,43 +89,22 @@ Deno.test("SW STATIC_FILES includes all shared modules imported by graph.js", as
   );
 });
 
-Deno.test("boot.js has error handling for app module import", async () => {
-  // Issue #218: the bootstrap IIFE was moved from an inline <script> in
-  // index.html to docs/boot.js so the page can declare `script-src 'self'`
-  // without 'unsafe-inline'. The try/catch + dynamic import still belong to
-  // the boot script — assert on the new location.
-  const boot = await Deno.readTextFile(repoPath("docs", "boot.js"));
-  assert(
-    boot.includes("catch") && boot.includes("import("),
-    "docs/boot.js should wrap the app module import in a try-catch for error visibility",
-  );
-});
-
-Deno.test("Boot scripts do not tell PWA users to clear browser cache (Issue #194)", async () => {
-  // The previous error message ("Failed to load app — please clear your
-  // browser cache and reload") was a dead end on installed PWAs (especially
-  // iOS), where there is no obvious cache to clear. The replacement is the
-  // automatic recovery path via docs/shared/pwa_recovery.js.
-  //
-  // Issue #218: the recovery wiring moved out of inline <script> blocks and
-  // into the extracted boot.js files — check those instead of the HTML.
-  const bootScripts = [
-    repoPath("docs", "boot.js"),
-    repoPath("docs", "graph", "boot.js"),
-    repoPath("docs", "starfield", "boot.js"),
-  ];
-  for (const path of bootScripts) {
-    const src = await Deno.readTextFile(path);
-    assert(
-      !src.includes("please clear your browser cache"),
-      `${path} must not instruct PWA users to clear the browser cache`,
-    );
-    assert(
-      src.includes("pwa_recovery.js"),
-      `${path} must wire up the PWA recovery helper`,
-    );
-  }
-});
+// Issue #373: two source-text grep "tests" were removed from this suite:
+//   - "boot.js has error handling for app module import" — asserted the
+//     literal substrings `catch` and `import(` appeared in docs/boot.js.
+//   - "Boot scripts do not tell PWA users to clear browser cache" — asserted
+//     the substring `pwa_recovery.js` appeared, and `please clear your
+//     browser cache` did not, in each boot script's source text.
+// Both inspected raw source rather than behaviour: they broke on any
+// behaviour-preserving rewrite (wrapping the import in `.catch()`, aliasing
+// the recovery import, rewording the message) and could go green for the
+// wrong reason. The behaviour they gestured at is verified observably
+// elsewhere:
+//   - The recovery path (clear caches, unregister the SW, reload, and the
+//     loop guard) is exercised end-to-end against the real helper in
+//     tests/pwa_recovery_test.ts.
+//   - Offline reachability of the recovery helper is asserted structurally by
+//     the "SW STATIC_FILES caches pwa_recovery.js" case below.
 
 Deno.test("SW STATIC_FILES caches pwa_recovery.js (Issue #194)", async () => {
   const swSource = await Deno.readTextFile(repoPath("docs", "sw.js"));
@@ -135,13 +115,33 @@ Deno.test("SW STATIC_FILES caches pwa_recovery.js (Issue #194)", async () => {
   );
 });
 
-Deno.test("index.html shows initial loading status before JS runs", async () => {
-  const html = await Deno.readTextFile(repoPath("docs", "index.html"));
-  // The status element should have visible text content so users see
-  // something before JavaScript executes (Issue #126).
-  assert(
-    html.includes('id="status"') &&
-      /id="status"[^>]*>Loading/.test(html),
-    "The #status element should have visible 'Loading…' text before JS runs",
+// Issue #373: rewritten from a source-text grep (`/id="status"[^>]*>Loading/`
+// over the raw HTML) into a DOM query. Parsing into a real document and
+// reading the element's rendered text content pins the test to the
+// user-observable contract — a visible loading status before JavaScript runs
+// — instead of the exact source markup, so it tolerates attribute reordering
+// and whitespace changes while still catching a genuinely empty status.
+for (
+  const page of [
+    { label: "index.html", parts: ["docs", "index.html"] },
+    { label: "graph/index.html", parts: ["docs", "graph", "index.html"] },
+  ]
+) {
+  Deno.test(
+    `${page.label} renders a visible loading status before JS runs (Issue #126)`,
+    async () => {
+      const doc = await loadDocument(repoPath(...page.parts));
+      const status = doc.getElementById("status");
+      assert(
+        status,
+        `${page.label} must have a #status element so users see state before JS runs`,
+      );
+      assert(
+        /loading/i.test(status.textContent ?? ""),
+        `${page.label} #status should show visible 'Loading…' text before JS runs, got: ${
+          JSON.stringify(status.textContent)
+        }`,
+      );
+    },
   );
-});
+}
