@@ -3,8 +3,8 @@
 ## Summary
 
 On the mobile detail view the trace-nav "⋯" (More actions) button did nothing
-when tapped — the popover never revealed **Observations**, **🧠** and
-**Synapses ⇄**. Closes #383.
+when tapped — the popover never revealed **Observations**, **🧠** and **Synapses
+⇄**. Closes #383.
 
 **Root cause:** `initTraceOverflowMenu()` was invoked **twice** — once
 standalone (`docs/app.js`) and again via `initCompactTraceNav()`. Each call
@@ -15,17 +15,16 @@ attached its own `click` listener to the "⋯" button, and each listener toggled
 ### Fix
 
 - Extracted the wiring into a new shared module
-  `docs/shared/trace_overflow_menu.js` (`wireTraceOverflowMenu()`), which is
-  now **idempotent** — a repeat call on the same wrapper is a no-op, so the
-  popover reliably opens on the first tap no matter how many times the
-  initialiser runs.
-- Removed the redundant standalone `initTraceOverflowMenu()` call; the
-  overflow menu is now wired exactly once via `initCompactTraceNav()`.
-- Registered the new module in `docs/sw.js` `STATIC_FILES` so the service
-  worker caches it (enforced by `tests/sw_static_files_test.ts`).
-- Cleanup (per the issue's optional note): removed the dead
-  `el.traceOverflow`, `el.traceOverflowToggle`, `el.traceOverflowMenu`
-  lookups, which referenced IDs that never existed and were always `null`.
+  `docs/shared/trace_overflow_menu.js` (`wireTraceOverflowMenu()`), which is now
+  **idempotent** — a repeat call on the same wrapper is a no-op, so the popover
+  reliably opens on the first tap no matter how many times the initialiser runs.
+- Removed the redundant standalone `initTraceOverflowMenu()` call; the overflow
+  menu is now wired exactly once via `initCompactTraceNav()`.
+- Registered the new module in `docs/sw.js` `STATIC_FILES` so the service worker
+  caches it (enforced by `tests/sw_static_files_test.ts`).
+- Cleanup (per the issue's optional note): removed the dead `el.traceOverflow`,
+  `el.traceOverflowToggle`, `el.traceOverflowMenu` lookups, which referenced IDs
+  that never existed and were always `null`.
 
 ```mermaid
 sequenceDiagram
@@ -45,11 +44,11 @@ sequenceDiagram
 ### Note on Synapses ⇄ on phone widths
 
 `.synapsePanelToggle` is hidden by **pre-existing** CSS on phone viewports
-(`docs/styles.css` — it is a tablet-only control, shown only at 640–1023px).
-So on a 375px phone the popover correctly contains **Observations** + **🧠**;
-**Synapses ⇄** joins them at tablet width where that control is visible. This
-is existing behaviour and unchanged by this fix — the bug was purely the
-popover failing to reveal on tap.
+(`docs/styles.css` — it is a tablet-only control, shown only at 640–1023px). So
+on a 375px phone the popover correctly contains **Observations** + **🧠**;
+**Synapses ⇄** joins them at tablet width where that control is visible. This is
+existing behaviour and unchanged by this fix — the bug was purely the popover
+failing to reveal on tap.
 
 ## Evidence
 

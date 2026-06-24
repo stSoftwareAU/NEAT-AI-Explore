@@ -1,6 +1,7 @@
 import { assertEquals } from "./test_helpers.ts";
 import {
   formatTraceScore,
+  hasOverflowActions,
   nextOverflowState,
   shouldCollapseTraceOverflow,
   shouldUseCompactHeader,
@@ -162,6 +163,31 @@ Deno.test("shouldCollapseTraceOverflow returns false for invalid input", () => {
   );
   assertEquals(
     shouldCollapseTraceOverflow({ barWidth: 500, childrenWidth: 0 }),
+    false,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// hasOverflowActions — Issue #384
+// ---------------------------------------------------------------------------
+
+Deno.test("hasOverflowActions true when at least one visible action", () => {
+  assertEquals(hasOverflowActions({ visibleActionCount: 1 }), true);
+  assertEquals(hasOverflowActions({ visibleActionCount: 3 }), true);
+});
+
+Deno.test("hasOverflowActions false when zero visible actions", () => {
+  // No actions to reveal ⇒ the "⋯" button must not be shown.
+  assertEquals(hasOverflowActions({ visibleActionCount: 0 }), false);
+});
+
+Deno.test("hasOverflowActions false for invalid input", () => {
+  assertEquals(hasOverflowActions(null as never), false);
+  assertEquals(hasOverflowActions(undefined as never), false);
+  assertEquals(hasOverflowActions({}), false);
+  assertEquals(hasOverflowActions({ visibleActionCount: NaN }), false);
+  assertEquals(
+    hasOverflowActions({ visibleActionCount: -1 }),
     false,
   );
 });

@@ -101,3 +101,28 @@ export function shouldCollapseTraceOverflow(m) {
   const available = Math.max(0, barWidth - padding);
   return childrenWidth > available;
 }
+
+/**
+ * Issue #384 — gate the "⋯" overflow button on there being at least one
+ * visible action to reveal. The collapse decision in
+ * `shouldCollapseTraceOverflow()` is driven purely by a width measurement,
+ * so the button can show even when the overflow menu has nothing to offer.
+ *
+ * Pure, DOM-free helper: the caller counts the visible `role="menuitem"`
+ * children (skipping `display:none`) and passes the tally in. Returns
+ * `true` only when there is ≥1 visible action — when it returns `false`
+ * the caller forces inline mode so the summary stays hidden and `⋯` does
+ * not render (rather than leaving an inert button behind).
+ *
+ * Invalid or missing counts fall back to `false` (no actions) so a bad
+ * measurement never leaves an empty overflow button on screen.
+ *
+ * @param {{ visibleActionCount?: number }} m
+ * @returns {boolean} `true` when the overflow menu has at least one action.
+ */
+export function hasOverflowActions(m) {
+  if (!m || typeof m !== "object") return false;
+  const count = /** @type {number} */ (m.visibleActionCount);
+  if (typeof count !== "number" || !Number.isFinite(count)) return false;
+  return count >= 1;
+}
