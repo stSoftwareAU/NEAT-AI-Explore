@@ -78,7 +78,11 @@ import {
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
 import { formatTraceScore } from "./shared/trace_score.js";
-import { shouldCollapseTraceOverflow } from "./shared/trace_header.js";
+import {
+  hasOverflowActions,
+  shouldCollapseTraceOverflow,
+} from "./shared/trace_header.js";
+import { wireTraceOverflowMenu } from "./shared/trace_overflow_menu.js";
 import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
 import {
   buildObservationContributionsHtml,
@@ -302,10 +306,9 @@ const el = {
   topoModalClose: document.querySelector(".topoModalClose"),
   topoModalBody: document.getElementById("topoModalBody"),
   explorerMain: document.querySelector(".explorer"),
-  // Issue #184 — compact phone trace nav.
-  traceOverflow: document.getElementById("traceOverflow"),
-  traceOverflowToggle: document.getElementById("traceOverflowToggle"),
-  traceOverflowMenu: document.getElementById("traceOverflowMenu"),
+  // Issue #184 — compact phone trace nav. The overflow controls are queried
+  // by class via wireTraceOverflowMenu()/syncTraceOverflowMode(); the former
+  // id-based lookups (#383) always returned null and have been removed.
   themeToggle: document.getElementById("themeToggle"),
   appHeaderControls: document.querySelector(".headerControls"),
   traceButtons: document.querySelector(".traceButtons"),
@@ -429,7 +432,13 @@ function syncTraceOverflowMode() {
     childrenWidth: childrenWidth + gapTotal,
     padding: padLeft + padRight,
   });
-  const nextMode = collapse ? "collapsed" : "inline";
+  // Issue #384 — only collapse behind "⋯" when the menu actually has a
+  // visible action to reveal. With no visible actions, force inline so the
+  // summary stays hidden and no inert "⋯" button is left behind.
+  const visibleActionCount = countVisibleOverflowActions(wrapper);
+  const nextMode = collapse && hasOverflowActions({ visibleActionCount })
+    ? "collapsed"
+    : "inline";
   if (nextMode !== currentMode) {
     wrapper.setAttribute("data-overflow-mode", nextMode);
     // Closing the popover keeps focus/aria in a sane state when the
@@ -445,6 +454,26 @@ function syncTraceOverflowMode() {
     // Restore the previous mode the measurement pass clobbered.
     wrapper.setAttribute("data-overflow-mode", currentMode);
   }
+}
+
+// Issue #384 — count the overflow menu's visible actions, skipping any
+// `display:none` items (mirrors the visibility pattern in
+// sumTraceBarChildrenWidth/countTopLevelFlexItems). Drives whether the "⋯"
+// summary should render at all.
+function countVisibleOverflowActions(wrapper) {
+  if (!(wrapper instanceof HTMLElement)) return 0;
+  const win = typeof window !== "undefined" ? window : null;
+  const items = wrapper.querySelectorAll(
+    ".traceOverflowMenu [role='menuitem']",
+  );
+  let count = 0;
+  for (const item of items) {
+    if (!(item instanceof HTMLElement)) continue;
+    const style = win?.getComputedStyle?.(item);
+    if (style && style.display === "none") continue;
+    count += 1;
+  }
+  return count;
 }
 
 function countTopLevelFlexItems(bar) {
@@ -1508,38 +1537,9 @@ function renderTraceScore() {
  * handler is a no-op for menu visibility.
  */
 function initTraceOverflowMenu() {
-  const wrapper = document.querySelector(".traceOverflow");
-  if (!(wrapper instanceof HTMLElement)) return;
-  const summary = wrapper.querySelector(".traceOverflowSummary");
-  if (!(summary instanceof HTMLElement)) return;
-
-  const setOpen = (open) => {
-    wrapper.setAttribute("data-overflow-open", open ? "true" : "false");
-    summary.setAttribute("aria-expanded", open ? "true" : "false");
-  };
-
-  const close = () => setOpen(false);
-
-  summary.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    const isOpen = wrapper.getAttribute("data-overflow-open") === "true";
-    setOpen(!isOpen);
-  });
-
-  // Close when a menu item is clicked so the popup does not linger.
-  wrapper.querySelectorAll(".traceOverflowMenu [role=menuitem]")
-    .forEach((item) => {
-      item.addEventListener("click", () => close());
-    });
-
-  // Close on outside click and Escape.
-  document.addEventListener("click", (ev) => {
-    if (wrapper.getAttribute("data-overflow-open") !== "true") return;
-    if (!wrapper.contains(/** @type {Node} */ (ev.target))) close();
-  });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") close();
-  });
+  // Idempotent wiring lives in the shared module (Issue #383) so calling
+  // this more than once cannot bind duplicate toggle handlers.
+  wireTraceOverflowMenu(document.querySelector(".traceOverflow"), document);
 }
 
 /**
@@ -4172,7 +4172,9 @@ const snapshotUrlParam = params.get("snapshotUrl") ?? params.get("url") ??
 // syncThemeTogglePlacement() relocates it between .headerControls and
 // .traceButtons based on viewport width, so we only ever bind one button.
 initThemeMode({ toggleButtonId: "themeToggle" });
-initTraceOverflowMenu();
+// Issue #383: overflow menu wiring runs once via initCompactTraceNav() below.
+// The previous standalone call here bound the toggle a second time, so a tap
+// fired both listeners and cancelled out — the popover never opened.
 initTouchTooltips();
 initInboundFilters();
 initInlineFiltersLayout();
