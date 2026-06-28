@@ -141,13 +141,3 @@ export function pinchZoomToward(midX, midY, canvasW, canvasH, zoomDelta) {
 
   return { panX, panY, zoom: zoomDelta };
 }
-
-/**
- * Clamp a camera distance to the allowed zoom range.
- *
- * @param {number} distance - Current camera distance from origin.
- * @returns {number} Clamped distance.
- */
-export function clampZoomDistance(distance) {
-  return Math.max(ZOOM_MIN_DISTANCE, Math.min(ZOOM_MAX_DISTANCE, distance));
-}
