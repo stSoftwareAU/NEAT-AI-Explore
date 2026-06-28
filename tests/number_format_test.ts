@@ -1,18 +1,15 @@
 /**
  * Tests for docs/shared/number_format.js (#242).
  *
- * Covers the four exported helpers: formatInteger, formatDecimal,
- * formatLarge, formatSigned. Each helper must handle happy paths,
- * boundary values, and missing/non-numeric inputs by returning the
- * stable placeholder.
+ * Covers the two exported helpers: formatInteger and formatDecimal.
+ * Each helper must handle happy paths, boundary values, and
+ * missing/non-numeric inputs by returning the stable placeholder.
  */
 
 import { assertEquals } from "./test_helpers.ts";
 import {
   formatDecimal,
   formatInteger,
-  formatLarge,
-  formatSigned,
   MISSING_NUMBER_PLACEHOLDER,
 } from "../docs/shared/number_format.js";
 
@@ -68,69 +65,4 @@ Deno.test("formatDecimal - missing or invalid input returns placeholder", () => 
   assertEquals(formatDecimal(undefined), MISSING_NUMBER_PLACEHOLDER);
   assertEquals(formatDecimal(NaN), MISSING_NUMBER_PLACEHOLDER);
   assertEquals(formatDecimal(Infinity), MISSING_NUMBER_PLACEHOLDER);
-});
-
-/* ── formatLarge ────────────────────────────────────────────────────────── */
-
-Deno.test("formatLarge - values < 1000 fall through to formatInteger", () => {
-  assertEquals(formatLarge(0), "0");
-  assertEquals(formatLarge(7), "7");
-  assertEquals(formatLarge(999), "999");
-  assertEquals(formatLarge(-42), "-42");
-});
-
-Deno.test("formatLarge - thousands use 'k' suffix", () => {
-  assertEquals(formatLarge(1000), "1.0k");
-  assertEquals(formatLarge(1200), "1.2k");
-  assertEquals(formatLarge(12345), "12.3k");
-  assertEquals(formatLarge(999999), "1,000.0k");
-});
-
-Deno.test("formatLarge - millions use 'M' suffix", () => {
-  assertEquals(formatLarge(1_000_000), "1.0M");
-  assertEquals(formatLarge(3_400_000), "3.4M");
-});
-
-Deno.test("formatLarge - billions use 'B' suffix", () => {
-  assertEquals(formatLarge(1_000_000_000), "1.0B");
-});
-
-Deno.test("formatLarge - negative values preserve sign", () => {
-  assertEquals(formatLarge(-1500), "-1.5k");
-});
-
-Deno.test("formatLarge - missing or invalid input returns placeholder", () => {
-  assertEquals(formatLarge(null), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatLarge(undefined), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatLarge(NaN), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatLarge(Infinity), MISSING_NUMBER_PLACEHOLDER);
-});
-
-/* ── formatSigned ───────────────────────────────────────────────────────── */
-
-Deno.test("formatSigned - positive values include leading '+'", () => {
-  assertEquals(formatSigned(3.14), "+3.14");
-  assertEquals(formatSigned(0.5, 1), "+0.5");
-});
-
-Deno.test("formatSigned - negative values use minus sign", () => {
-  assertEquals(formatSigned(-3.14), "-3.14");
-  assertEquals(formatSigned(-0.5, 1), "-0.5");
-});
-
-Deno.test("formatSigned - zero renders without sign prefix", () => {
-  assertEquals(formatSigned(0), "0.00");
-  assertEquals(formatSigned(-0), "0.00");
-});
-
-Deno.test("formatSigned - large values use thousand-separators", () => {
-  assertEquals(formatSigned(1234.5, 1), "+1,234.5");
-  assertEquals(formatSigned(-1234.5, 1), "-1,234.5");
-});
-
-Deno.test("formatSigned - missing or invalid input returns placeholder", () => {
-  assertEquals(formatSigned(null), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatSigned(undefined), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatSigned(NaN), MISSING_NUMBER_PLACEHOLDER);
-  assertEquals(formatSigned(Infinity), MISSING_NUMBER_PLACEHOLDER);
 });

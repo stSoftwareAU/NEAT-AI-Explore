@@ -2,9 +2,9 @@
  * Shared number formatting helpers (Issue #242).
  *
  * Every number the user sees in NEAT-AI Explore should pass through one of
- * these helpers so thousand-separators, decimal places, and large-number
- * suffixes stay consistent across the app. All helpers handle `NaN`,
- * `Infinity`, `null`, and `undefined` by returning a stable placeholder
+ * these helpers so thousand-separators and decimal places stay consistent
+ * across the app. All helpers handle `NaN`, `Infinity`, `null`, and
+ * `undefined` by returning a stable placeholder
  * (`MISSING_NUMBER_PLACEHOLDER`).
  *
  * The Australian English locale (`en-AU`) is used so digit grouping uses
@@ -57,39 +57,4 @@ export function formatDecimal(n, places = 2) {
     minimumFractionDigits: places,
     maximumFractionDigits: places,
   }).format(n);
-}
-
-/**
- * Format a large number with a compact suffix (`k`, `M`, `B`) for values
- * `>= 1000`. Below 1000 the helper falls through to `formatInteger`.
- *
- * Negative values preserve their sign (e.g. `-1500` → `-1.5k`).
- *
- * @param {unknown} n
- * @returns {string}
- */
-export function formatLarge(n) {
-  if (!isFiniteNumber(n)) return MISSING_NUMBER_PLACEHOLDER;
-  const abs = Math.abs(n);
-  if (abs < 1000) return formatInteger(n);
-  if (abs < 1_000_000) return `${formatDecimal(n / 1000, 1)}k`;
-  if (abs < 1_000_000_000) return `${formatDecimal(n / 1_000_000, 1)}M`;
-  return `${formatDecimal(n / 1_000_000_000, 1)}B`;
-}
-
-/**
- * Format a number for a diverging signal — preserves a leading `+`/`-` so
- * positive and negative values render with the same visual weight (e.g.
- * weight-sum deltas). Zero renders without a sign prefix.
- *
- * @param {unknown} n
- * @param {number} [places=2]
- * @returns {string}
- */
-export function formatSigned(n, places = 2) {
-  if (!isFiniteNumber(n)) return MISSING_NUMBER_PLACEHOLDER;
-  const body = formatDecimal(Math.abs(n), places);
-  if (n > 0) return `+${body}`;
-  if (n < 0) return `-${body}`;
-  return body;
 }
