@@ -7,7 +7,6 @@ import {
   synapseWeightColourCss,
   synapseWeightColourRgb01,
   synapseWeightStrength01,
-  u01ToSigned,
   u32ToU01,
 } from "../docs/shared/colour_maps.js";
 
@@ -57,20 +56,6 @@ Deno.test("hash32 handles empty string", () => {
   const h = hash32("");
   assertEquals(typeof h, "number");
   assert(h >= 0 && h <= 0xFFFFFFFF);
-});
-
-// --- u01ToSigned ---
-
-Deno.test("u01ToSigned maps 0 to -1", () => {
-  approx(u01ToSigned(0), -1);
-});
-
-Deno.test("u01ToSigned maps 0.5 to 0", () => {
-  approx(u01ToSigned(0.5), 0);
-});
-
-Deno.test("u01ToSigned maps 1 to 1", () => {
-  approx(u01ToSigned(1), 1);
 });
 
 // --- u32ToU01 ---

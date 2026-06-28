@@ -44,14 +44,6 @@ export function hash32(s) {
 }
 
 /**
- * @param {number} u01
- * @returns {number}
- */
-export function u01ToSigned(u01) {
-  return (u01 * 2) - 1;
-}
-
-/**
  * @param {number} u32
  * @returns {number} in [0, 1)
  */
