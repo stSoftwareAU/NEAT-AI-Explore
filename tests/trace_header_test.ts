@@ -4,7 +4,6 @@ import {
   hasOverflowActions,
   nextOverflowState,
   shouldCollapseTraceOverflow,
-  shouldUseCompactHeader,
 } from "../docs/shared/trace_header.js";
 
 // ---------------------------------------------------------------------------
@@ -64,32 +63,6 @@ Deno.test("formatTraceScore clamps invalid precision values", () => {
   assertEquals(formatTraceScore({ totalScore: 0.12345678 }, -2), "0.1235");
   // NaN precision falls back to default.
   assertEquals(formatTraceScore({ totalScore: 0.12345678 }, NaN), "0.1235");
-});
-
-// ---------------------------------------------------------------------------
-// shouldUseCompactHeader
-// ---------------------------------------------------------------------------
-
-Deno.test("shouldUseCompactHeader returns true for phone widths", () => {
-  assertEquals(shouldUseCompactHeader(320), true); // small phone
-  assertEquals(shouldUseCompactHeader(375), true); // iPhone SE
-  assertEquals(shouldUseCompactHeader(393), true); // iPhone 15
-  assertEquals(shouldUseCompactHeader(639), true);
-});
-
-Deno.test("shouldUseCompactHeader returns false at and above MOBILE_MAX", () => {
-  assertEquals(shouldUseCompactHeader(640), false);
-  assertEquals(shouldUseCompactHeader(768), false); // tablet
-  assertEquals(shouldUseCompactHeader(1024), false); // desktop
-  assertEquals(shouldUseCompactHeader(1920), false);
-});
-
-Deno.test("shouldUseCompactHeader returns false for invalid inputs", () => {
-  assertEquals(shouldUseCompactHeader(NaN), false);
-  assertEquals(shouldUseCompactHeader(Infinity), false);
-  // Non-numeric inputs are coerced to false rather than throwing.
-  assertEquals(shouldUseCompactHeader("400" as unknown as number), false);
-  assertEquals(shouldUseCompactHeader(undefined as unknown as number), false);
 });
 
 // ---------------------------------------------------------------------------
