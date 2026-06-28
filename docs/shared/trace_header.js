@@ -10,8 +10,6 @@
  * Last updated: 21-May-2026
  */
 
-import { MOBILE_MAX } from "./responsive.js";
-
 /**
  * Format the inbound-allocation Σ score for display beside "Path:" on the
  * Trace Explorer breadcrumb line. Returns `null` when the score should
@@ -37,20 +35,6 @@ export function formatTraceScore(allocation, precision = 4) {
     s = s.replace(/0+$/, "").replace(/\.$/, "");
   }
   return s;
-}
-
-/**
- * Decide whether the compact phone header layout should be used.
- * Mirrors the CSS `@media (max-width: 639px)` query so JS placement
- * (e.g. moving the theme toggle into the trace nav row) stays in sync
- * with CSS rules.
- *
- * @param {number} width Viewport width in CSS pixels.
- * @returns {boolean}
- */
-export function shouldUseCompactHeader(width) {
-  if (typeof width !== "number" || !Number.isFinite(width)) return false;
-  return width < MOBILE_MAX;
 }
 
 /**
