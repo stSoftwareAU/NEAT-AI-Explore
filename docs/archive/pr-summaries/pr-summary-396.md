@@ -5,7 +5,7 @@ test. Module-graph analysis confirmed the module — and its three exports
 `summariseInputDistribution`, `deriveLowRegimeThreshold` and
 `buildInputDistributionMap` — was imported by **no production module**. The only
 importer was `tests/input_distribution_test.ts`, the module was absent from the
-`docs/sw.js` precache manifest, and nothing loaded it dynamically by path.
+`docs/sw.js` precache manifest, and nothing loaded it dynamically by path
 
 The module's docstring referenced Issue #271 min-gate-awareness wiring in the
 influence calc. That integration was **never landed**:
