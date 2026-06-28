@@ -9,6 +9,7 @@ barrel. The surviving helpers `formatInteger` and `formatDecimal` (the ones the
 app actually uses) are untouched.
 
 Changes:
+
 - Deleted `formatLarge` and `formatSigned` and their JSDoc from
   `docs/shared/number_format.js`.
 - Trimmed the module docstring to drop the now-inaccurate "large-number
