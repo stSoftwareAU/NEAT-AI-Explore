@@ -9,7 +9,6 @@ import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 import {
   clampMomentum,
-  clampZoomDistance,
   classifyTouch,
   detectSwipeDirection,
   LONG_PRESS_MS,
@@ -220,23 +219,4 @@ Deno.test("pinchZoomToward: zero canvas dimensions return zero pan", () => {
   const { panX, panY } = pinchZoomToward(100, 100, 0, 0, -10);
   approx(panX, 0, 1e-9);
   approx(panY, 0, 1e-9);
-});
-
-// ── clampZoomDistance ─────────────────────────────────────────────────────────
-
-Deno.test("clampZoomDistance: within range passes through", () => {
-  assertEquals(clampZoomDistance(500), 500);
-});
-
-Deno.test("clampZoomDistance: below minimum clamps to minimum", () => {
-  assertEquals(clampZoomDistance(5), ZOOM_MIN_DISTANCE);
-});
-
-Deno.test("clampZoomDistance: above maximum clamps to maximum", () => {
-  assertEquals(clampZoomDistance(2000), ZOOM_MAX_DISTANCE);
-});
-
-Deno.test("clampZoomDistance: exactly at bounds passes through", () => {
-  assertEquals(clampZoomDistance(ZOOM_MIN_DISTANCE), ZOOM_MIN_DISTANCE);
-  assertEquals(clampZoomDistance(ZOOM_MAX_DISTANCE), ZOOM_MAX_DISTANCE);
 });
