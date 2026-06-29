@@ -102,7 +102,8 @@ interface Harness {
   renderCalls: MockElement[];
 }
 
-function buildHarness(): Harness {
+// deno-lint-ignore no-explicit-any
+function buildHarness(extraOpts: Record<string, any> = {}): Harness {
   const doc = new MockDocument();
   const modal = new MockElement("div");
   modal.ownerDocument = doc;
@@ -127,6 +128,7 @@ function buildHarness(): Harness {
     render: (target: unknown) => {
       renderCalls.push(target as MockElement);
     },
+    ...extraOpts,
   });
   return { modal, backdrop, closeBtn, body, doc, controller, renderCalls };
 }
@@ -219,26 +221,30 @@ Deno.test("createTopoModalController.close: no-op when already closed", () => {
   assertEquals(h.modal.hidden, true);
 });
 
-Deno.test("createTopoModalController: focus trap is installed on open, removed on close", () => {
-  const h = buildHarness();
-  // Track keydown listeners on the modal — installFocusTrap adds one on open
-  // and removes it on close.
-  const before = (h.modal.listeners["keydown"] ?? []).length;
+Deno.test("createTopoModalController: focus trap is engaged on open, released on close", () => {
+  // Assert the observable contract via the injectable installFocusTrap seam:
+  // open() engages the trap exactly once and close() releases it. This stays
+  // green regardless of *how* installFocusTrap traps focus (keydown listener,
+  // focusin, inert attribute, ...). The trapping behaviour itself is covered
+  // behaviourally in tests/modal_focus_test.ts.
+  let installs = 0;
+  let cleanups = 0;
+  const h = buildHarness({
+    installFocusTrap: () => {
+      installs += 1;
+      return () => {
+        cleanups += 1;
+      };
+    },
+  });
   const trigger = new MockElement("button");
   // deno-lint-ignore no-explicit-any
   h.controller.open(trigger as any);
-  const opened = (h.modal.listeners["keydown"] ?? []).length;
-  assert(
-    opened > before,
-    `expected open() to install a focus-trap listener (before=${before}, opened=${opened})`,
-  );
+  assertEquals(installs, 1, "open() should engage the focus trap once");
+  assertEquals(cleanups, 0, "open() should not release the focus trap");
   h.controller.close();
-  const closed = (h.modal.listeners["keydown"] ?? []).length;
-  assertEquals(
-    closed,
-    before,
-    "expected close() to remove the focus-trap listener",
-  );
+  assertEquals(cleanups, 1, "close() should release the focus trap");
+  assertEquals(installs, 1, "close() should not re-engage the focus trap");
 });
 
 Deno.test("createTopoModalController.isOpen reflects modal state", () => {
