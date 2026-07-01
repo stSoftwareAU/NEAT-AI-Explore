@@ -1,4 +1,4 @@
-import { launch } from "https://deno.land/x/astral@0.3.5/mod.ts";
+import { launch } from "@astral/astral";
 
 const EVIDENCE_DIR =
   "/Users/nigel/auto-issue-work/NEAT-AI-Explore/docs/evidence";
