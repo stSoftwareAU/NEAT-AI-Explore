@@ -28,7 +28,7 @@
  */
 
 import { Jimp, ResizeStrategy } from "jimp";
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 import { serveDir } from "@std/http/file-server";
 import { fromFileUrl } from "@std/path";
 
@@ -577,26 +577,6 @@ function startDocsServer(): ServerHandle {
   };
 }
 
-interface Page {
-  goto(url: string, opts?: { waitUntil?: string }): Promise<unknown>;
-  waitForFunction(
-    pred: string,
-    arg?: unknown,
-    opts?: { timeout?: number },
-  ): Promise<unknown>;
-  waitForSelector(sel: string, opts?: { timeout?: number }): Promise<unknown>;
-  waitForTimeout(ms: number): Promise<void>;
-  evaluate(fn: string): Promise<unknown>;
-  click(sel: string): Promise<void>;
-  screenshot(opts: { path: string; fullPage?: boolean }): Promise<unknown>;
-  mouse: {
-    click(x: number, y: number): Promise<void>;
-    move(x: number, y: number): Promise<void>;
-    down(): Promise<void>;
-    up(): Promise<void>;
-  };
-}
-
 async function loadApp(
   page: Page,
   serverUrl: string,
@@ -654,7 +634,7 @@ async function captureScreenshots(): Promise<void> {
     const desktopCtx = await browser.newContext({
       viewport: { width: 1280, height: 720 },
     });
-    const desktopPage = await desktopCtx.newPage() as unknown as Page;
+    const desktopPage = await desktopCtx.newPage();
     await loadApp(desktopPage, server.url, "Desktop");
     await desktopPage.screenshot({
       path: `${SHOTS_DIR}/desktop-screenshot.png`,
@@ -673,7 +653,7 @@ async function captureScreenshots(): Promise<void> {
       userAgent:
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     });
-    const mobilePage = await mobileCtx.newPage() as unknown as Page;
+    const mobilePage = await mobileCtx.newPage();
     await loadApp(mobilePage, server.url, "Mobile");
     await mobilePage.screenshot({
       path: `${SHOTS_DIR}/mobile-screenshot.png`,
@@ -690,7 +670,7 @@ async function captureScreenshots(): Promise<void> {
       userAgent:
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     });
-    const iphonePage = await iphoneCtx.newPage() as unknown as Page;
+    const iphonePage = await iphoneCtx.newPage();
     await loadApp(iphonePage, server.url, "iPhone");
     await iphonePage.screenshot({
       path: `${SHOTS_DIR}/iphone-screenshot.png`,
@@ -712,7 +692,7 @@ async function captureScreenshots(): Promise<void> {
       userAgent:
         "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     });
-    const ipadPage = await ipadCtx.newPage() as unknown as Page;
+    const ipadPage = await ipadCtx.newPage();
     await loadApp(ipadPage, server.url, "iPad");
     await ipadPage.screenshot({
       path: `${SHOTS_DIR}/ipad-screenshot.png`,
@@ -729,7 +709,7 @@ async function captureScreenshots(): Promise<void> {
     const graphCtx = await browser.newContext({
       viewport: { width: 1280, height: 720 },
     });
-    const graphPage = await graphCtx.newPage() as unknown as Page;
+    const graphPage = await graphCtx.newPage();
     await loadGraph(graphPage, server.url, "Desktop (graph)");
     await graphPage.screenshot({
       path: `${SHOTS_DIR}/graph-desktop.png`,
