@@ -7,7 +7,7 @@ Playwright's API drifted from the local interface, the compiler could not catch
 the mismatch. The script now imports `type Page` from the already-resolved
 `playwright` npm dependency, matching the repo's sibling verification scripts,
 so `newPage()`'s real `Promise<Page>` return type flows through without any
-cast. Closes #418.
+cast. Closes #418
 
 Changes:
 
