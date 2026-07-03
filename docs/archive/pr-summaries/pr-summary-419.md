@@ -1,10 +1,10 @@
 ## Summary
 
 The hand-authored evidence page `docs/evidence/loading-fix-evidence.html`,
-served on GitHub Pages alongside the rest of `docs/`, had an incomplete
-document head: the `<html>` tag carried no `lang` attribute, the `<head>`
-declared no `<meta charset="utf-8">`, and there was no `<meta name="viewport">`.
-The three app-shell pages (`docs/index.html`, `docs/graph/index.html`,
+served on GitHub Pages alongside the rest of `docs/`, had an incomplete document
+head: the `<html>` tag carried no `lang` attribute, the `<head>` declared no
+`<meta charset="utf-8">`, and there was no `<meta name="viewport">`. The three
+app-shell pages (`docs/index.html`, `docs/graph/index.html`,
 `docs/starfield/index.html`) all declare these, but `pa11yci.json` only tests
 `/`, `/graph/`, and `/starfield/`, so this page's defects slipped past CI.
 
@@ -14,8 +14,8 @@ Added the standard head metadata the sibling pages already use:
   document language (WCAG 3.1.1).
 - `<meta charset="utf-8" />` — the body's multi-byte UTF-8 glyphs (em-dash `—`,
   ellipsis `…`) decode correctly regardless of the server default.
-- `<meta name="viewport" content="width=device-width, initial-scale=1" />` —
-  the page renders readably on phones instead of zoomed-out.
+- `<meta name="viewport" content="width=device-width, initial-scale=1" />` — the
+  page renders readably on phones instead of zoomed-out.
 
 Closes #419.
 
