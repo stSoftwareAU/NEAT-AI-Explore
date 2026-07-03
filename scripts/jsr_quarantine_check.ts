@@ -111,6 +111,17 @@ export function parseImportSpec(spec: string): ExternalImport | null {
   return null;
 }
 
+/**
+ * Exhaustiveness guard for `ExternalImport.kind` switches. If a new
+ * variant is added to the union without a matching `case`, the `default`
+ * branch that calls this helper fails to type-check (the argument is no
+ * longer `never`), turning a future variant into a localised compile
+ * error rather than a silent runtime bug.
+ */
+export function assertNever(x: never): never {
+  throw new Error(`Unhandled ExternalImport kind: ${JSON.stringify(x)}`);
+}
+
 /** Stable dedup key for an `ExternalImport`. */
 function importKey(imp: ExternalImport): string {
   switch (imp.kind) {
@@ -122,6 +133,8 @@ function importKey(imp: ExternalImport): string {
       return `denoland-x:${imp.name}`;
     case "raw-url":
       return `raw:${imp.url}`;
+    default:
+      return assertNever(imp);
   }
 }
 
@@ -136,6 +149,8 @@ export function importDisplayName(imp: ExternalImport): string {
       return `deno.land/x/${imp.name}`;
     case "raw-url":
       return imp.url;
+    default:
+      return assertNever(imp);
   }
 }
 
@@ -337,6 +352,8 @@ export async function checkImportQuarantine(
       throw new Error(
         `cannot quarantine-check raw URL specifier: ${imp.url}`,
       );
+    default:
+      assertNever(imp);
   }
   const publishedAt = Date.parse(v.createdAt);
   const ageHours = (now.getTime() - publishedAt) / 3_600_000;
@@ -411,6 +428,8 @@ function describeSkipped(imp: ExternalImport): string {
       return `skip deno.land/x/${imp.name}`;
     case "raw-url":
       return `skip ${imp.url}`;
+    default:
+      return assertNever(imp);
   }
 }
 

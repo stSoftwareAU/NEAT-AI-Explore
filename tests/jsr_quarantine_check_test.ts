@@ -9,6 +9,7 @@
  */
 
 import {
+  assertNever,
   checkAll,
   checkImportQuarantine,
   checkQuarantine,
@@ -749,4 +750,45 @@ Deno.test("checkAll preserves existing JSR-only behaviour (regression)", async (
   assertEquals(result.cleared[0].package, "@std/path");
   assertEquals(result.skipped.length, 1);
   assertEquals(result.unsupported.length, 0);
+});
+
+Deno.test("assertNever throws for an unhandled ExternalImport kind", () => {
+  // Simulate a future union variant reaching a switch's default branch.
+  const rogue = { kind: "future-registry", name: "x" } as unknown as never;
+  let threw = false;
+  let message = "";
+  try {
+    assertNever(rogue);
+  } catch (e) {
+    threw = true;
+    message = (e as Error).message;
+  }
+  assert(threw, "assertNever should throw");
+  assert(
+    message.includes("Unhandled ExternalImport kind"),
+    `unexpected message: ${message}`,
+  );
+  assert(
+    message.includes("future-registry"),
+    `message should include the rogue value: ${message}`,
+  );
+});
+
+Deno.test("importDisplayName handles every current ExternalImport kind", () => {
+  assertEquals(
+    importDisplayName({ kind: "jsr", scope: "std", name: "yaml" }),
+    "@std/yaml",
+  );
+  assertEquals(
+    importDisplayName({ kind: "npm", name: "left-pad" }),
+    "npm:left-pad",
+  );
+  assertEquals(
+    importDisplayName({ kind: "denoland-x", name: "oak" }),
+    "deno.land/x/oak",
+  );
+  assertEquals(
+    importDisplayName({ kind: "raw-url", url: "https://example.com/mod.ts" }),
+    "https://example.com/mod.ts",
+  );
 });
