@@ -1,16 +1,16 @@
 ## Summary
 
 The live status element on the starfield page —
-`<span id="status" class="statusInline">` in `docs/starfield/index.html` —
-was missing the `role="status"` and `aria-live="polite"` attributes that the
+`<span id="status" class="statusInline">` in `docs/starfield/index.html` — was
+missing the `role="status"` and `aria-live="polite"` attributes that the
 identical element already carries on `docs/index.html` and
 `docs/graph/index.html`. Without a live region, screen-reader users on the
 starfield view got no spoken feedback when a snapshot loaded or failed — an
 inconsistent, degraded experience that pa11y (WCAG2AA) does not flag.
 
-Mirrored the other two pages by adding `role="status" aria-live="polite"` to
-the starfield status span, so all three app-shell views announce snapshot
-progress and errors consistently. Closes #420.
+Mirrored the other two pages by adding `role="status" aria-live="polite"` to the
+starfield status span, so all three app-shell views announce snapshot progress
+and errors consistently. Closes #420.
 
 ## Evidence
 
@@ -33,7 +33,7 @@ flowchart LR
 ## Test Plan
 
 - Added `tests/status_live_region_test.ts` — for `docs/index.html`,
-  `docs/graph/index.html` and `docs/starfield/index.html`, asserts the
-  `#status` element has `role="status"` and `aria-live="polite"`. This
-  reproduces #420 (failed against the unfixed starfield page, passes now).
+  `docs/graph/index.html` and `docs/starfield/index.html`, asserts the `#status`
+  element has `role="status"` and `aria-live="polite"`. This reproduces #420
+  (failed against the unfixed starfield page, passes now).
 - `./quality.sh` passes cleanly: 743 tests, 0 failures.
