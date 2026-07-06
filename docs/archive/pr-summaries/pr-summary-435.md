@@ -1,15 +1,17 @@
 ## Summary
 
-Removed the unused export `BREADCRUMB_TRANSITION_MS` from `docs/shared/transitions.js`
-and its assertions from `tests/transitions_test.ts`. Closes #435.
+Removed the unused export `BREADCRUMB_TRANSITION_MS` from
+`docs/shared/transitions.js` and its assertions from
+`tests/transitions_test.ts`. Closes #435.
 
 The constant was dead code: an identifier grep across every `.js`/`.ts` module
 (excluding `docs/vendor/`) found it referenced only in the unit test — no
 production module imported it and it was not re-exported from any barrel. The
 breadcrumb slide/fade timing is genuinely CSS-owned via the
-`--transition-breadcrumb: 200ms` custom property in `docs/styles.css` (applied in
-the `.breadcrumb li` transitions and `breadcrumbSlideDeeper`/`breadcrumbSlideBack`
-keyframes), so the JavaScript value was never read at runtime.
+`--transition-breadcrumb: 200ms` custom property in `docs/styles.css` (applied
+in the `.breadcrumb li` transitions and
+`breadcrumbSlideDeeper`/`breadcrumbSlideBack` keyframes), so the JavaScript
+value was never read at runtime.
 
 ## Evidence
 
