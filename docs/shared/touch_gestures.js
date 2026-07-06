@@ -36,12 +36,6 @@ export const SWIPE_MAX_CROSS_PX = 40;
 /** Maximum swipe duration (ms) — slower movements are treated as drags. */
 export const SWIPE_MAX_DURATION_MS = 400;
 
-/** Minimum zoom distance between camera and origin. */
-export const ZOOM_MIN_DISTANCE = 20;
-
-/** Maximum zoom distance between camera and origin. */
-export const ZOOM_MAX_DISTANCE = 1400;
-
 /** Touch feedback scale factor applied on touch-start. */
 export const TOUCH_SCALE_FACTOR = 1.12;
 

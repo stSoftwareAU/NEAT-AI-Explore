@@ -24,8 +24,6 @@ import {
   TAP_MAX_DURATION_MS,
   TAP_THRESHOLD_PX,
   TOUCH_SCALE_FACTOR,
-  ZOOM_MAX_DISTANCE,
-  ZOOM_MIN_DISTANCE,
 } from "../docs/shared/touch_gestures.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -42,8 +40,6 @@ Deno.test("all constants are positive numbers", () => {
       SWIPE_MIN_DISTANCE_PX,
       SWIPE_MAX_CROSS_PX,
       SWIPE_MAX_DURATION_MS,
-      ZOOM_MIN_DISTANCE,
-      ZOOM_MAX_DISTANCE,
       TOUCH_SCALE_FACTOR,
       RIPPLE_DURATION_MS,
     ]
@@ -55,10 +51,6 @@ Deno.test("all constants are positive numbers", () => {
 
 Deno.test("MOMENTUM_FRICTION is between 0 and 1", () => {
   assert(MOMENTUM_FRICTION > 0 && MOMENTUM_FRICTION < 1);
-});
-
-Deno.test("ZOOM_MIN_DISTANCE < ZOOM_MAX_DISTANCE", () => {
-  assert(ZOOM_MIN_DISTANCE < ZOOM_MAX_DISTANCE);
 });
 
 Deno.test("TOUCH_SCALE_FACTOR is greater than 1", () => {
