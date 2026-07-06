@@ -10,7 +10,6 @@
 import { assert, assertEquals } from "./test_helpers.ts";
 import {
   clearAllCaches,
-  clearRecoveryFlag,
   markRecoveryAttempted,
   recoverFromFailedAppLoad,
   shouldAttemptRecovery,
@@ -92,13 +91,6 @@ Deno.test("shouldAttemptRecovery returns false after markRecoveryAttempted", () 
   const storage = fakeStorage();
   markRecoveryAttempted(storage);
   assertEquals(shouldAttemptRecovery(storage), false);
-});
-
-Deno.test("clearRecoveryFlag removes the flag", () => {
-  const storage = fakeStorage();
-  markRecoveryAttempted(storage);
-  clearRecoveryFlag(storage);
-  assertEquals(shouldAttemptRecovery(storage), true);
 });
 
 Deno.test("shouldAttemptRecovery handles null storage gracefully", () => {

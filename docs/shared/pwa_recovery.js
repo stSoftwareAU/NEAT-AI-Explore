@@ -51,18 +51,6 @@ export function markRecoveryAttempted(storage) {
 }
 
 /**
- * @param {Storage | null | undefined} storage
- */
-export function clearRecoveryFlag(storage) {
-  if (!storage) return;
-  try {
-    storage.removeItem(RECOVERY_FLAG_KEY);
-  } catch {
-    // Ignore.
-  }
-}
-
-/**
  * Delete every Cache Storage cache.
  *
  * @param {CacheStorage | null | undefined} cachesApi
