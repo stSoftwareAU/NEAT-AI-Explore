@@ -7,7 +7,6 @@
 import { assert, assertEquals } from "./test_helpers.ts";
 
 import {
-  BREADCRUMB_TRANSITION_MS,
   CAMERA_FLY_MS,
   FOCUS_PULSE_MS,
   PANEL_CROSSFADE_MS,
@@ -24,7 +23,6 @@ Deno.test("all durations are positive numbers", () => {
   for (
     const val of [
       PANEL_CROSSFADE_MS,
-      BREADCRUMB_TRANSITION_MS,
       SYNAPSE_STAGGER_MS,
       SYNAPSE_STAGGER_CAP_MS,
       SYNAPSE_FADE_MS,
@@ -43,7 +41,6 @@ Deno.test("all durations are at most 300 ms (performance guardrail)", () => {
   for (
     const val of [
       PANEL_CROSSFADE_MS,
-      BREADCRUMB_TRANSITION_MS,
       SYNAPSE_FADE_MS,
       CAMERA_FLY_MS,
       FOCUS_PULSE_MS,
