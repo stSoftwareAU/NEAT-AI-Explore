@@ -4,22 +4,33 @@ import { assert, assertEquals } from "./test_helpers.ts";
  * Verifies that DOM-free shared modules are covered by `deno lint`.
  *
  * If the deno.json lint exclusions are accidentally widened back to
- * "docs/**", these tests will fail because `deno lint` will skip the
- * shared modules entirely (exit-code 0 but "Checked 0 files").
+ * "docs/**", these tests fail: passing an excluded file explicitly makes
+ * `deno lint` exit non-zero ("No target files found"), so `result.success`
+ * is a stable proxy for "the module was actually a lint target, not
+ * silently skipped". The assertions below read Deno's machine-readable
+ * `--json` report (a stable schema) rather than scraping the human-readable
+ * summary prose, which a Deno version bump could reword at any time.
  */
+
+interface LintReport {
+  version: number;
+  diagnostics: unknown[];
+  errors: unknown[];
+  checked_files?: string[];
+}
 
 function repoRoot(): string {
   const url = new URL(import.meta.url);
   return url.pathname.replace(/\/tests\/lint_coverage_test\.ts$/, "");
 }
 
-/** Run `deno lint` on a single file and return the result. */
+/** Run `deno lint --json` on a single file and return the result. */
 async function lintFile(
   relativePath: string,
 ): Promise<{ success: boolean; stdout: string; stderr: string }> {
   const fullPath = `${repoRoot()}/${relativePath}`;
   const cmd = new Deno.Command("deno", {
-    args: ["lint", fullPath],
+    args: ["lint", "--json", fullPath],
     stdout: "piped",
     stderr: "piped",
   });
@@ -29,6 +40,36 @@ async function lintFile(
     stdout: new TextDecoder().decode(out.stdout),
     stderr: new TextDecoder().decode(out.stderr),
   };
+}
+
+/**
+ * Assert a shared module was linted cleanly against Deno's stable `--json`
+ * schema. `result.success` proves the module was a real lint target (an
+ * excluded file exits non-zero); the parsed report proves the tool produced
+ * a structured, diagnostic-free result without relying on any summary wording.
+ */
+function assertLintedClean(mod: string, result: {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+}): void {
+  assert(
+    result.success,
+    `deno lint failed for ${mod}:\n${result.stderr}`,
+  );
+  const report = JSON.parse(result.stdout) as LintReport;
+  assertEquals(
+    report.diagnostics?.length ?? 0,
+    0,
+    `Expected no lint diagnostics for ${mod}, got: ${
+      JSON.stringify(report.diagnostics)
+    }`,
+  );
+  assertEquals(
+    report.errors?.length ?? 0,
+    0,
+    `Expected no lint errors for ${mod}, got: ${JSON.stringify(report.errors)}`,
+  );
 }
 
 const SHARED_MODULES = [
@@ -47,34 +88,20 @@ for (const mod of SHARED_MODULES) {
   const name = mod.split("/").pop()!;
   Deno.test(`deno lint covers shared module: ${name}`, async () => {
     const result = await lintFile(mod);
-    assert(
-      result.success,
-      `deno lint failed for ${mod}:\n${result.stderr}`,
-    );
-    // Verify the file was actually checked (not silently skipped)
-    assert(
-      result.stderr.includes("Checked 1 file"),
-      `Expected deno lint to check ${mod} but output was:\n${result.stderr}`,
-    );
+    assertLintedClean(mod, result);
   });
 }
 
 Deno.test("deno lint covers impact_attribution.js", async () => {
-  const result = await lintFile("docs/impact_attribution.js");
-  assert(result.success, `deno lint failed:\n${result.stderr}`);
-  assert(
-    result.stderr.includes("Checked 1 file"),
-    `Expected deno lint to check impact_attribution.js but output was:\n${result.stderr}`,
-  );
+  const mod = "docs/impact_attribution.js";
+  const result = await lintFile(mod);
+  assertLintedClean(mod, result);
 });
 
 Deno.test("deno lint covers impact_diagnostics.js", async () => {
-  const result = await lintFile("docs/impact_diagnostics.js");
-  assert(result.success, `deno lint failed:\n${result.stderr}`);
-  assert(
-    result.stderr.includes("Checked 1 file"),
-    `Expected deno lint to check impact_diagnostics.js but output was:\n${result.stderr}`,
-  );
+  const mod = "docs/impact_diagnostics.js";
+  const result = await lintFile(mod);
+  assertLintedClean(mod, result);
 });
 
 Deno.test("deno lint configuration excludes DOM-dependent files", async () => {
