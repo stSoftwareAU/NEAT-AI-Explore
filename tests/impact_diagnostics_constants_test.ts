@@ -1,6 +1,7 @@
 import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 import {
+  computeSquashDerivativeStats,
   ELU_ALPHA,
   EXP_CLAMP_MAX,
   GAUSSIAN_CLAMP_MAX,
@@ -12,11 +13,12 @@ import {
   squashDerivative,
 } from "../docs/impact_diagnostics.js";
 
-// --- Constant value tests ---
-
-Deno.test("NEAR_ZERO_THRESHOLD is 1e-6", () => {
-  assertEquals(NEAR_ZERO_THRESHOLD, 1e-6);
-});
+// --- Spec-backed constant value tests ---
+// These pin *published, spec-defined* activation-function parameters, so a bare
+// equality assertion is the contract (WHAT-tests). Arbitrary numerical-stability
+// tuning constants (NEAR_ZERO_THRESHOLD, EXP_CLAMP_MAX, GAUSSIAN_CLAMP_MAX) are
+// deliberately NOT pinned by literal here; their behavioural guarantees are
+// exercised below so a behaviour-preserving retune does not break the suite.
 
 Deno.test("SELU_LAMBDA matches the standard SELU scale factor", () => {
   approx(SELU_LAMBDA, 1.0507009873554805, 1e-15);
@@ -38,15 +40,34 @@ Deno.test("ELU_ALPHA defaults to 1", () => {
   assertEquals(ELU_ALPHA, 1);
 });
 
-Deno.test("EXP_CLAMP_MAX is 50", () => {
-  assertEquals(EXP_CLAMP_MAX, 50);
-});
-
-Deno.test("GAUSSIAN_CLAMP_MAX is 100", () => {
-  assertEquals(GAUSSIAN_CLAMP_MAX, 100);
-});
+// EXP_CLAMP_MAX and GAUSSIAN_CLAMP_MAX are arbitrary overflow/underflow
+// guardrails with no external spec fixing the exact number, so they are not
+// pinned by literal here. Their real contract — "extreme inputs produce a
+// finite result rather than Infinity/NaN, and the clamp bites at the boundary"
+// — is verified behaviourally in the clamp tests below.
 
 // --- Behavioural tests verifying constants drive function behaviour ---
+
+Deno.test("NEAR_ZERO_THRESHOLD is the boundary for near-zero derivative classification", () => {
+  // Derivatives whose absolute value is below NEAR_ZERO_THRESHOLD count towards
+  // fracNearZero; those at or above it do not. Using EXP (derivative = exp(x))
+  // we can place pre-activations precisely either side of the threshold, so the
+  // test tracks the classification boundary rather than the literal constant.
+  const belowX = Math.log(NEAR_ZERO_THRESHOLD / 2); // derivative just below
+  const aboveX = Math.log(NEAR_ZERO_THRESHOLD * 2); // derivative just above
+
+  const uuid = "n1";
+  const neuronsByUuid = new Map([
+    [uuid, { uuid, type: "hidden", squash: "EXP" }],
+  ]);
+  const preActivations = new Map([[uuid, [belowX, aboveX]]]);
+
+  const stats = computeSquashDerivativeStats({ neuronsByUuid, preActivations });
+  const s = stats.get(uuid);
+  assert(s != null);
+  // Exactly one of the two derivatives is below the threshold.
+  approx(s!.fracNearZero, 0.5, 1e-15);
+});
 
 Deno.test("LEAKYRELU uses LEAKY_RELU_SLOPE for negative inputs", () => {
   const r = squashDerivative("LEAKYRELU", -5);
