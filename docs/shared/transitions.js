@@ -15,9 +15,6 @@
 /** Cross-fade duration when switching the current neuron panel. */
 export const PANEL_CROSSFADE_MS = 180;
 
-/** Breadcrumb slide / fade duration. */
-export const BREADCRUMB_TRANSITION_MS = 200;
-
 /** Staggered delay between consecutive synapse rows fading in. */
 export const SYNAPSE_STAGGER_MS = 25;
 
