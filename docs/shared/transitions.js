@@ -21,9 +21,6 @@ export const SYNAPSE_STAGGER_MS = 25;
 /** Maximum total stagger so long lists don't take too long. */
 export const SYNAPSE_STAGGER_CAP_MS = 250;
 
-/** Duration for each synapse row's fade-in. */
-export const SYNAPSE_FADE_MS = 180;
-
 /** Camera fly-to duration in the graph explorer. */
 export const CAMERA_FLY_MS = 250;
 

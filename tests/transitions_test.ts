@@ -11,7 +11,6 @@ import {
   FOCUS_PULSE_MS,
   PANEL_CROSSFADE_MS,
   prefersReducedMotion,
-  SYNAPSE_FADE_MS,
   SYNAPSE_STAGGER_CAP_MS,
   SYNAPSE_STAGGER_MS,
   synapseStaggerDelay,
@@ -25,7 +24,6 @@ Deno.test("all durations are positive numbers", () => {
       PANEL_CROSSFADE_MS,
       SYNAPSE_STAGGER_MS,
       SYNAPSE_STAGGER_CAP_MS,
-      SYNAPSE_FADE_MS,
       CAMERA_FLY_MS,
       FOCUS_PULSE_MS,
     ]
@@ -41,7 +39,6 @@ Deno.test("all durations are at most 300 ms (performance guardrail)", () => {
   for (
     const val of [
       PANEL_CROSSFADE_MS,
-      SYNAPSE_FADE_MS,
       CAMERA_FLY_MS,
       FOCUS_PULSE_MS,
     ]
