@@ -1,8 +1,8 @@
 ## Summary
 
 Removed three magic-value change-detector assertions in
-`tests/impact_diagnostics_constants_test.ts` that pinned *internal
-numerical-stability tuning constants* to their current literals with no external
+`tests/impact_diagnostics_constants_test.ts` that pinned _internal
+numerical-stability tuning constants_ to their current literals with no external
 spec justifying the number. Following resolution (a) from the issue, the bare
 `assertEquals` lines were replaced/folded into behavioural coverage so the suite
 tracks the stability guarantee rather than the tuning number, while the
@@ -41,9 +41,10 @@ ok | 754 passed | 0 failed
 
 ## Test Plan
 
-- Rewrote `tests/impact_diagnostics_constants_test.ts::NEAR_ZERO_THRESHOLD is
-  the boundary for near-zero derivative classification` — behavioural assertion
-  via `computeSquashDerivativeStats`.
+- Rewrote
+  `tests/impact_diagnostics_constants_test.ts::NEAR_ZERO_THRESHOLD is
+  the boundary for near-zero derivative classification`
+  — behavioural assertion via `computeSquashDerivativeStats`.
 - Removed the redundant change-detector cases `EXP_CLAMP_MAX is 50` and
   `GAUSSIAN_CLAMP_MAX is 100`; behaviour remains covered by the existing EXP /
   GAUSSIAN clamp tests in the same file.
