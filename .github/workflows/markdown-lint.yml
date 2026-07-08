@@ -1,10 +1,13 @@
 name: Markdown Lint
 
+# Markdown Lint is a checker: it gates pull requests only. It deliberately does
+# not trigger on `push:` to the default branch — the post-merge run would just
+# duplicate the check that already passed on the PR, wasting runner minutes and
+# risking a red tick on the default branch for an already-green check (#454).
 on:
   pull_request:
     branches: ["*"]
-  push:
-    branches: [main, master, Develop]
+  workflow_dispatch:
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
 # gets feedback fastest and we do not waste runner minutes on stale work
