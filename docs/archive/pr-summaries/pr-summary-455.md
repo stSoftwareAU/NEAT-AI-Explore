@@ -12,15 +12,15 @@ The `a11y` job only reads `docs/` to run accessibility checks (pa11y-ci against
 a locally served copy of the static UI). It never pushes back to the repository
 and fetches no private submodules, so the persisted credential is unnecessary
 and only widens the blast radius of a compromised step. This PR adds
-`persist-credentials: false` to the checkout step so the token is not written
-to disk.
+`persist-credentials: false` to the checkout step so the token is not written to
+disk.
 
 Closes #455.
 
 ## Evidence
 
-Backend/CI-config change only — no web interface to screenshot. Verified via
-the workflow-config test suite (Deno) and the full quality gate.
+Backend/CI-config change only — no web interface to screenshot. Verified via the
+workflow-config test suite (Deno) and the full quality gate.
 
 ```mermaid
 flowchart LR
