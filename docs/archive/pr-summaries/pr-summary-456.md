@@ -4,10 +4,10 @@
 
 The `actionlint` job's `actions/checkout` step ran without
 `persist-credentials: false`, so `actions/checkout` wrote the workflow's
-`GITHUB_TOKEN` into `.git/config` as an auth header. Any later step in the job
-— including a compromised dependency or injected script — could read it and act
-as the token. This job only reads `.github/workflows/*.yml` to lint them; it
-never pushes back to the repo or fetches private submodules, so the persisted
+`GITHUB_TOKEN` into `.git/config` as an auth header. Any later step in the job —
+including a compromised dependency or injected script — could read it and act as
+the token. This job only reads `.github/workflows/*.yml` to lint them; it never
+pushes back to the repo or fetches private submodules, so the persisted
 credential is pure blast radius.
 
 Added `persist-credentials: false` to the checkout step so the token is not
@@ -29,7 +29,8 @@ flowchart LR
 
 Test run (before/after fix):
 
-- Before fix: `actionlint checkout does not persist the GITHUB_TOKEN to disk (#456)` FAILED
+- Before fix:
+  `actionlint checkout does not persist the GITHUB_TOKEN to disk (#456)` FAILED
 - After fix: 2 passed | 0 failed
 - Full gate: `ok | 762 passed | 0 failed`
 
