@@ -40,23 +40,21 @@ flowchart LR
 Backend/CI-config change — no web interface to screenshot. Verified via the Deno
 test suite (`./quality.sh`), which passes cleanly (756 tests).
 
-New behavioural tests in
-`tests/workflow_actionlint_push_trigger_test.ts` parse the workflow YAML and
-assert:
+New behavioural tests in `tests/workflow_actionlint_push_trigger_test.ts` parse
+the workflow YAML and assert:
 
 - `actionlint.yml` keeps its `pull_request` trigger (still gates PRs).
-- `actionlint.yml` does not trigger on `push` to the default branch
-  (`Develop`).
+- `actionlint.yml` does not trigger on `push` to the default branch (`Develop`).
 
 The push-trigger test fails against the unfixed workflow
 (`push.branches=["main","master","Develop"]`) and passes after the fix.
 
 ## Test Plan
 
-- Added `tests/workflow_actionlint_push_trigger_test.ts` (2 tests) —
-  reproduces #453 and verifies the fix.
-- Re-ran the existing workflow policy tests
-  (`workflow_actionlint_gate_test.ts`, `workflow_concurrency_test.ts`) — the
-  PR-gating and concurrency guarantees still hold.
+- Added `tests/workflow_actionlint_push_trigger_test.ts` (2 tests) — reproduces
+  #453 and verifies the fix.
+- Re-ran the existing workflow policy tests (`workflow_actionlint_gate_test.ts`,
+  `workflow_concurrency_test.ts`) — the PR-gating and concurrency guarantees
+  still hold.
 - Ran `./quality.sh < /dev/null` — fmt, lint, type check, and all 756 tests
   pass.
