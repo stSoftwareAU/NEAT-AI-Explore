@@ -28,12 +28,12 @@ Before/after of the affected step:
 
 ```yaml
 # before
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
 # after
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          persist-credentials: false
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+  with:
+    persist-credentials: false
 ```
 
 ## Test Plan
