@@ -28,7 +28,12 @@ jobs:
     timeout-minutes: 5
     steps:
       # actions/checkout@v6.0.2
+      # persist-credentials: false — this job only lints Markdown; it never
+      # pushes back or fetches private submodules, so the GITHUB_TOKEN must not
+      # be written to .git/config where a later step could read it (#461).
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       # actions/setup-node@v6.4.0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
