@@ -29,7 +29,8 @@ unit test and the full quality gate.
 
 - New test fails against the unfixed workflow:
   `dependency-review checkout does not persist the GITHUB_TOKEN to disk (#459)
-  ... FAILED` (missing `with.persist-credentials`).
+  ... FAILED`
+  (missing `with.persist-credentials`).
 - After the fix, `./quality.sh` passes cleanly: `ok | 768 passed | 0 failed`.
 
 ## Test Plan
@@ -38,6 +39,7 @@ unit test and the full quality gate.
   - `dependency-review job checks out the repository (#459)` — asserts the job
     has an `actions/checkout` step.
   - `dependency-review checkout does not persist the GITHUB_TOKEN to disk
-    (#459)` — parses the workflow YAML and asserts the checkout step sets
+    (#459)`
+    — parses the workflow YAML and asserts the checkout step sets
     `persist-credentials: false`. This reproduces the finding: it fails before
     the fix and passes after.
