@@ -44,7 +44,20 @@ jobs:
           node-version: "lts/*"
 
       - name: Install pa11y-ci and http-server
-        run: npm install -g pa11y-ci http-server
+        # Retry with backoff so a single transient npm network error
+        # (e.g. ECONNRESET mid-download) does not fail the whole a11y gate.
+        # Fails loud with a non-zero exit only after all attempts are exhausted.
+        run: |
+          set -Eeuo pipefail
+          for attempt in 1 2 3; do
+            if npm install -g pa11y-ci http-server; then
+              exit 0
+            fi
+            echo "npm install failed (attempt ${attempt}/3); retrying after backoff..."
+            sleep "$((attempt * 5))"
+          done
+          echo "npm install failed after 3 attempts"
+          exit 1
 
       - name: Install system Chrome
         # Use google-chrome-stable from apt so pa11y-ci's puppeteer-core gets a
