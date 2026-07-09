@@ -13,11 +13,10 @@ Closes #458.
 
 ## Evidence
 
-Backend/CI-only change — no web interface to screenshot. Verified via a new
-TDD test that parses the workflow YAML and asserts the `audit` job's checkout
-step sets `persist-credentials: false`. The test failed against the unfixed
-workflow and passes after the fix; the full `./quality.sh` gate passes
-(764 tests).
+Backend/CI-only change — no web interface to screenshot. Verified via a new TDD
+test that parses the workflow YAML and asserts the `audit` job's checkout step
+sets `persist-credentials: false`. The test failed against the unfixed workflow
+and passes after the fix; the full `./quality.sh` gate passes (764 tests).
 
 ```mermaid
 flowchart LR
