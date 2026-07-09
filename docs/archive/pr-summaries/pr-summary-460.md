@@ -19,8 +19,8 @@ Closes #460.
 
 Backend/CI-only change — no web interface to screenshot. Verified via the new
 YAML-parsing test which asserts the `deploy` job's checkout step sets
-`persist-credentials: false`, plus the full quality gate (`./quality.sh`,
-770 tests passing).
+`persist-credentials: false`, plus the full quality gate (`./quality.sh`, 770
+tests passing).
 
 ```mermaid
 flowchart LR
