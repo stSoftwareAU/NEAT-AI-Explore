@@ -27,9 +27,9 @@ flowchart LR
 Change applied to `.github/workflows/shellcheck.yml`:
 
 ```yaml
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          persist-credentials: false
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+  with:
+    persist-credentials: false
 ```
 
 ## Test Plan
@@ -37,7 +37,7 @@ Change applied to `.github/workflows/shellcheck.yml`:
 - Added `tests/workflow_shellcheck_persist_credentials_test.ts`, which parses
   `shellcheck.yml` and asserts:
   - the `shellcheck` job has an `actions/checkout` step, and
-  - every checkout step in that job sets `persist-credentials: false`.
-  This test fails against the unfixed workflow and passes after the fix.
+  - every checkout step in that job sets `persist-credentials: false`. This test
+    fails against the unfixed workflow and passes after the fix.
 - Ran `./quality.sh < /dev/null` — format, lint, type check, and all 778 tests
   pass cleanly.
