@@ -9,8 +9,8 @@ Added `with.persist-credentials: false` to the checkout step. Closes #462.
 
 ## Evidence
 
-Backend/CI change — no web interface to screenshot. Verified via a new Deno
-test that parses `.github/workflows/semgrep.yml` and asserts the `semgrep` job's
+Backend/CI change — no web interface to screenshot. Verified via a new Deno test
+that parses `.github/workflows/semgrep.yml` and asserts the `semgrep` job's
 checkout step sets `persist-credentials: false`.
 
 ```mermaid
