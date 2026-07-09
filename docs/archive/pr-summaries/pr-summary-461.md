@@ -9,8 +9,8 @@ the token. This job only lints Markdown; it never pushes back to the repository
 or fetches private submodules, so the persisted credential is unnecessary and
 only widens the blast radius of a compromised step.
 
-Added `with.persist-credentials: false` to the checkout step so the token is
-not written to disk. Fixes #461. Closes #461.
+Added `with.persist-credentials: false` to the checkout step so the token is not
+written to disk. Fixes #461. Closes #461.
 
 ```mermaid
 flowchart LR
@@ -28,8 +28,8 @@ YAML-parsing unit tests and the full quality gate:
 - `./quality.sh` — `772 passed | 0 failed`, `==> OK`.
 
 The new test fails against the unfixed workflow (no `with` block / no
-`persist-credentials` key) and passes after adding
-`persist-credentials: false`, giving a regression guard.
+`persist-credentials` key) and passes after adding `persist-credentials: false`,
+giving a regression guard.
 
 ## Test Plan
 
