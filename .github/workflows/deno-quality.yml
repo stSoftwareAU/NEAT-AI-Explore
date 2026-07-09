@@ -26,6 +26,11 @@ jobs:
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # This job only runs read-only quality checks and never pushes back to
+          # the repo, so the GITHUB_TOKEN must not be persisted to .git/config
+          # where a later step could read it (Issue #457).
+          persist-credentials: false
       # denoland/setup-deno@v2.0.4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
         with:
