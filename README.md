@@ -53,6 +53,13 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   compile step, so an unparseable script would otherwise land on the default
   branch unnoticed; this gate fails the build the moment a syntax error appears.
   `quality.sh` runs the same gate locally for parity (#479).
+- **ShellCheck gate**: `.github/workflows/shellcheck.yml` invokes the committed
+  gate script `quality/shellcheck.sh`, which runs
+  [`shellcheck`](https://github.com/koalaman/shellcheck) over every `*.sh` file
+  on each pull request. `bash -n` only catches parse errors, so common mistakes
+  — unquoted expansions, undefined variables — would otherwise slip through;
+  this gate fails the build (at `warning` severity) the moment a finding
+  appears. `quality.sh` runs the same gate locally for parity (#480).
 - **Accessibility workflow**: `.github/workflows/a11y.yml` runs
   [`pa11y-ci`](https://github.com/pa11y/pa11y-ci) against the Explorer, Graph
   and Starfield pages on every pull request. The configuration lives in

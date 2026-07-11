@@ -20,7 +20,8 @@ the linting half of the audit finding; this change adds the missing parse-only
   cross-repo Action (repo-isolation, Issue #3239).
 - **`.github/workflows/bash-syntax.yml`** — invokes the gate on every pull
   request. Obeys the repo-wide workflow policies: SHA-pinned checkout, job
-  `timeout-minutes`, cancelling concurrency group, and `persist-credentials:
+  `timeout-minutes`, cancelling concurrency group, and
+  `persist-credentials:
   false`.
 - **`quality.sh`** — runs the same gate locally for CI parity.
 - **`README.md`** — documents the new gate alongside the other CI gates.
