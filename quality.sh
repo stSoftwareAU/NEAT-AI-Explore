@@ -34,6 +34,12 @@ else
 fi
 
 echo ""
+echo "==> Bash syntax (bash -n)"
+# Mirror the CI bash-syntax gate locally so a broken script is caught before
+# it reaches a PR (#479).
+"$ROOT_DIR/quality/bash_syntax.sh"
+
+echo ""
 echo "==> Format (check)"
 deno fmt --check
 
