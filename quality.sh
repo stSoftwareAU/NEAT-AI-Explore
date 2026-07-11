@@ -34,6 +34,23 @@ else
 fi
 
 echo ""
+echo "==> Bash syntax (bash -n)"
+# Mirror the CI bash-syntax gate locally so a broken script is caught before
+# it reaches a PR (#479).
+"$ROOT_DIR/quality/bash_syntax.sh"
+
+echo ""
+echo "==> ShellCheck"
+# Mirror the CI shellcheck gate locally so a linting regression is caught
+# before it reaches a PR (#480). Skip gracefully when shellcheck is not
+# installed locally — CI enforces it on every PR regardless.
+if command -v shellcheck &> /dev/null; then
+  "$ROOT_DIR/quality/shellcheck.sh"
+else
+  echo "shellcheck not installed locally — skipping (CI still enforces it)"
+fi
+
+echo ""
 echo "==> Format (check)"
 deno fmt --check
 

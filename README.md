@@ -47,6 +47,19 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   `${{ }}` expressions, undefined `needs:`, invalid event filters and shellcheck
   issues in `run:` blocks fail the build instead of landing silently. The linter
   binary is pinned to a fixed release for reproducibility.
+- **Bash syntax gate**: `.github/workflows/bash-syntax.yml` invokes the
+  committed gate script `quality/bash_syntax.sh`, which runs `bash -n` (a
+  parse-only no-op) over every `*.sh` file on each pull request. Bash has no
+  compile step, so an unparseable script would otherwise land on the default
+  branch unnoticed; this gate fails the build the moment a syntax error appears.
+  `quality.sh` runs the same gate locally for parity (#479).
+- **ShellCheck gate**: `.github/workflows/shellcheck.yml` invokes the committed
+  gate script `quality/shellcheck.sh`, which runs
+  [`shellcheck`](https://github.com/koalaman/shellcheck) over every `*.sh` file
+  on each pull request. `bash -n` only catches parse errors, so common mistakes
+  — unquoted expansions, undefined variables — would otherwise slip through;
+  this gate fails the build (at `warning` severity) the moment a finding
+  appears. `quality.sh` runs the same gate locally for parity (#480).
 - **Accessibility workflow**: `.github/workflows/a11y.yml` runs
   [`pa11y-ci`](https://github.com/pa11y/pa11y-ci) against the Explorer, Graph
   and Starfield pages on every pull request. The configuration lives in
