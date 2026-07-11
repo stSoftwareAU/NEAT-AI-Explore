@@ -28,11 +28,9 @@ jobs:
           # back or fetches private submodules, so the GITHUB_TOKEN must not be
           # persisted to .git/config where a later step could read it (#463).
           persist-credentials: false
-      # ludeeus/action-shellcheck — pinned to a 40-char commit SHA.
-      # The upstream template uses @master, which is a moving ref and a
-      # known supply-chain risk.
-      - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca
-        with:
-          scandir: "."
-          severity: warning
+      # Invoke the committed gate script rather than a third-party action so
+      # the shellcheck configuration is a single source of truth that also runs
+      # locally via `quality.sh` (#480). shellcheck is pre-installed on
+      # ubuntu-latest runners; the gate fails loud if it is ever absent.
+      - name: Run ShellCheck gate (#480)
+        run: ./quality/shellcheck.sh
