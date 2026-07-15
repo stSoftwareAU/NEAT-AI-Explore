@@ -6,7 +6,7 @@ a `/`, so it matched `Develop`/`main` but never a `milestone/<slug>` branch.
 Milestone sub-issue PRs target a shared `milestone/<name>` branch, so the
 actionlint gate was silently skipped on every one of them — workflow regressions
 merged into the milestone branch unchecked, only caught later by the single
-rollup PR into the default branch.
+rollup PR into the default branch
 
 Fixed by adding the `milestone/*` glob to the filter
 (`branches: ["*", "milestone/*"]`) so the gate also runs on milestone PRs.
