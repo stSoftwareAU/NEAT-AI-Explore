@@ -21,8 +21,8 @@ flowchart LR
 
 ## Evidence
 
-Backend/CI-only change — no web interface to screenshot. Verified via a new
-unit test that replicates GitHub Actions branch-glob semantics and asserts the
+Backend/CI-only change — no web interface to screenshot. Verified via a new unit
+test that replicates GitHub Actions branch-glob semantics and asserts the
 workflow's `pull_request.branches` filter matches `milestone/<slug>` branches.
 
 - Before the fix: `deno-quality.yml runs on milestone/<slug> PRs (#493)` failed
