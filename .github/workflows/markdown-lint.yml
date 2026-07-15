@@ -6,7 +6,10 @@ name: Markdown Lint
 # risking a red tick on the default branch for an already-green check (#454).
 on:
   pull_request:
-    branches: ["*"]
+    # `*` stops at `/`, so it never matches a `milestone/<slug>` branch. List
+    # `milestone/*` explicitly so the gate runs on milestone sub-issue PRs too
+    # and they do not merge into the shared milestone branch unchecked (#495).
+    branches: ["*", "milestone/*"]
   workflow_dispatch:
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
