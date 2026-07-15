@@ -17,7 +17,10 @@ name: actionlint
 # risking a red tick on the default branch for an already-green check (#453).
 on:
   pull_request:
-    branches: ["*"]
+    # `*` matches single-level branches only (it stops at `/`), so a
+    # `milestone/<slug>` branch would be skipped. List `milestone/*` explicitly
+    # so the gate also runs on milestone sub-issue PRs (#492).
+    branches: ["*", "milestone/*"]
   workflow_dispatch:
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
