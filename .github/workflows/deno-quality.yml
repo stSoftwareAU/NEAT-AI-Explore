@@ -2,7 +2,10 @@ name: Deno Quality
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` stops at `/`, so it never matches a `milestone/<slug>` branch. List
+    # `milestone/*` explicitly so the gate runs on milestone sub-issue PRs too
+    # and they do not merge into the shared milestone branch unchecked (#493).
+    branches: ["*", "milestone/*"]
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
 # gets feedback fastest and we do not waste runner minutes on stale work
