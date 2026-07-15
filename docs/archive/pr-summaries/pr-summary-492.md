@@ -3,18 +3,18 @@
 ## Summary
 
 The actionlint CI quality workflow declared `pull_request.branches: ["*"]`.
-GitHub Actions treats `*` as "any character **except** `/`", so the filter
-never matched a `milestone/<slug>` branch. Milestone sub-issue PRs target a
-shared `milestone/<name>` branch, so the actionlint gate was silently skipped
-on every intermediate sub-issue PR — the workflow regressions it guards against
-could land in the milestone branch unchecked, caught only later by the single
-rollup PR into the default branch.
+GitHub Actions treats `*` as "any character **except** `/`", so the filter never
+matched a `milestone/<slug>` branch. Milestone sub-issue PRs target a shared
+`milestone/<name>` branch, so the actionlint gate was silently skipped on every
+intermediate sub-issue PR — the workflow regressions it guards against could
+land in the milestone branch unchecked, caught only later by the single rollup
+PR into the default branch.
 
 Fixed by adding the single-level `milestone/*` glob to the workflow's
 `pull_request.branches` filter (`["*", "milestone/*"]`). This preserves the
 existing coverage of all ordinary single-level branches and additionally runs
-the gate on milestone PRs. Milestone branch names are `milestone/<slug>` with
-no nested slashes, so the single-level `milestone/*` glob is sufficient.
+the gate on milestone PRs. Milestone branch names are `milestone/<slug>` with no
+nested slashes, so the single-level `milestone/*` glob is sufficient.
 
 Closes #492.
 
