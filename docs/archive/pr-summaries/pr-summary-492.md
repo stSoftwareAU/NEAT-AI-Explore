@@ -4,9 +4,9 @@ The actionlint CI quality workflow gated only single-segment branches. Its
 `pull_request.branches` filter was `["*"]`, and GitHub's `*` glob does not cross
 a `/`, so it matched `Develop`/`main` but never a `milestone/<slug>` branch.
 Milestone sub-issue PRs target a shared `milestone/<name>` branch, so the
-actionlint gate was silently skipped on every one of them — workflow
-regressions merged into the milestone branch unchecked, only caught later by the
-single rollup PR into the default branch.
+actionlint gate was silently skipped on every one of them — workflow regressions
+merged into the milestone branch unchecked, only caught later by the single
+rollup PR into the default branch.
 
 Fixed by adding the `milestone/*` glob to the filter
 (`branches: ["*", "milestone/*"]`) so the gate also runs on milestone PRs.
