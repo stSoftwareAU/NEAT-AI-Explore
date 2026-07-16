@@ -36,11 +36,36 @@ Deno.test("scan1d counts Infinity values", () => {
   assertEquals(result.firstPos, 0);
 });
 
-Deno.test("scan1d counts non-numeric values as non-finite", () => {
+// Issue #507 (business-logic change, documented): `null`/`undefined` mean
+// "value not recorded", NOT a non-finite number — JSON cannot carry
+// NaN/Infinity, so a non-finite always serialises to `null`. This test
+// previously asserted `null` counted as non-finite (count 2); it now asserts
+// the corrected split: unexpected junk (`"text"`) is non-finite, `null` is
+// absent.
+Deno.test("scan1d separates non-numeric junk from absent (null) entries", () => {
   const arr = [1, "text" as unknown as number, null as unknown as number, 4];
   const result = scan1d(arr);
+  assertEquals(result.count, 1); // "text" — genuinely non-finite / junk
+  assertEquals(result.firstPos, 1);
+  assertEquals(result.absentCount, 1); // null — not recorded
+  assertEquals(result.firstAbsentPos, 2);
+});
+
+Deno.test("scan1d counts null/undefined as absent, not non-finite", () => {
+  const arr = [1, null as unknown as number, undefined as unknown as number, 4];
+  const result = scan1d(arr);
+  assertEquals(result.count, 0);
+  assertEquals(result.firstPos, null);
+  assertEquals(result.absentCount, 2);
+  assertEquals(result.firstAbsentPos, 1);
+});
+
+Deno.test("scan1d keeps NaN/Infinity as non-finite (not absent)", () => {
+  const result = scan1d([1, NaN, Infinity, null as unknown as number]);
   assertEquals(result.count, 2);
   assertEquals(result.firstPos, 1);
+  assertEquals(result.absentCount, 1);
+  assertEquals(result.firstAbsentPos, 3);
 });
 
 Deno.test("scan1d returns zero count for empty array", () => {
@@ -88,6 +113,24 @@ Deno.test("scan2d returns zero count for empty 2D array", () => {
   const result = scan2d([]);
   assertEquals(result.count, 0);
   assertEquals(result.firstPos, null);
+});
+
+Deno.test("scan2d counts null cells as absent, not non-finite", () => {
+  const arr = [[1, null], [null, 2], [3, 4]] as unknown as number[][];
+  const result = scan2d(arr);
+  assertEquals(result.count, 0);
+  assertEquals(result.firstPos, null);
+  assertEquals(result.absentCount, 2);
+  assertEquals(result.firstAbsentPos, 0); // first absent is in row 0
+});
+
+Deno.test("scan2d separates absent cells from genuine NaN cells", () => {
+  const arr = [[1, null], [NaN, 2]] as unknown as number[][];
+  const result = scan2d(arr);
+  assertEquals(result.count, 1); // NaN
+  assertEquals(result.firstPos, 1);
+  assertEquals(result.absentCount, 1); // null
+  assertEquals(result.firstAbsentPos, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -207,6 +250,79 @@ Deno.test("computeNonFiniteIssues computes correct total", () => {
   assertEquals(issue.activation.count, 2);
   assertEquals(issue.value.count, 1);
   assertEquals(issue.errors.count, 1);
+});
+
+// Issue #507 regression: absent (null) value entries must NOT be reported as
+// non-finite. Before the fix, a series of JSON nulls produced a non-zero
+// `total` and flagged the neuron as "NaN/Infinity". Now they contribute to
+// `absentTotal` only, and `total` (genuine non-finite) stays zero.
+Deno.test("computeNonFiniteIssues reports null value entries as absent, not non-finite", () => {
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [0.1, 0.2, 0.3],
+        value: [null, null, 0.7],
+        errors: [[0.1], [0.2], [0.3]],
+      },
+    },
+  };
+  const result = computeNonFiniteIssues({ recording });
+  assertEquals(result.size, 1);
+  const issue = result.get("hidden-0")!;
+  assertEquals(issue.total, 0); // no genuine non-finite numbers
+  assertEquals(issue.absentTotal, 2); // two not-recorded values
+  assertEquals(issue.value.count, 0);
+  assertEquals(issue.value.absentCount, 2);
+  assertEquals(issue.value.firstAbsentObsIndex, 0);
+  assertEquals(issue.value.length, 3);
+});
+
+Deno.test("computeNonFiniteIssues maps first absent through obsIndices", () => {
+  const recording = {
+    obsIndices: [10, 20, 30],
+    neurons: {
+      "hidden-1": {
+        activation: [1, 2, 3],
+        value: [0.5, null, null],
+        errors: [],
+      },
+    },
+  };
+  const issue = computeNonFiniteIssues({ recording }).get("hidden-1")!;
+  assertEquals(issue.value.absentCount, 2);
+  assertEquals(issue.value.firstAbsentObsIndex, 20); // obsIndices[1]
+});
+
+Deno.test("computeNonFiniteIssues separates non-finite total from absent total", () => {
+  const recording = {
+    neurons: {
+      "n-0": {
+        activation: [NaN, 2, 3],
+        value: [null, null, 0.7],
+        errors: [[null], [0.2]],
+      },
+    },
+  };
+  const issue = computeNonFiniteIssues({ recording }).get("n-0")!;
+  assertEquals(issue.total, 1); // one NaN activation
+  assertEquals(issue.absentTotal, 3); // two null values + one null error cell
+  assertEquals(issue.activation.count, 1);
+  assertEquals(issue.value.absentCount, 2);
+  assertEquals(issue.errors.absentCount, 1);
+});
+
+Deno.test("computeNonFiniteIssues keeps skipping entirely clean neurons", () => {
+  const recording = {
+    neurons: {
+      "clean": {
+        activation: [1, 2, 3],
+        value: [0.5, 0.6, 0.7],
+        errors: [[0.1], [0.2], [0.3]],
+      },
+    },
+  };
+  const result = computeNonFiniteIssues({ recording });
+  assertEquals(result.size, 0);
 });
 
 // ---------------------------------------------------------------------------

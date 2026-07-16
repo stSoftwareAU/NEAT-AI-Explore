@@ -3453,51 +3453,79 @@ function renderIssuesPanel(currentUuid, neuronType) {
     }
   }
 
-  // NaN/Infinity activations / errors (issue #62: clearer terminology).
-  if (nonFinite) {
-    const dd = [];
-    if (nonFinite.activation?.count > 0) {
+  // NaN/Infinity (genuine non-finite numbers) and not-recorded entries.
+  //
+  // Issue #507: recordings serialise through JSON, which cannot carry
+  // NaN/Infinity — a non-finite number always becomes `null`. So a `null`
+  // means the value was *not recorded* (the error-attribution walk did not
+  // traverse this neuron on that observation), not that a non-finite number
+  // was produced. We report the raw fact instead of the false "NaN/Infinity
+  // (exploding gradients)" flag. Genuine non-finite numbers (should they ever
+  // appear from a non-JSON source) are still surfaced separately.
+  {
+    // Genuinely non-finite numbers (real NaN/Infinity) — kept because they
+    // would be a true fault. Structurally absent from JSON-sourced recordings.
+    const nf = [];
+    if (nonFinite?.activation?.count > 0) {
       const ref = formatObsRef(nonFinite.activation.firstObsIndex);
-      dd.push(
+      nf.push(
         `NaN/Infinity activations: ${nonFinite.activation.count}${
           ref ? ` (first at ${ref})` : ""
         }`,
       );
     }
-    if (nonFinite.value?.count > 0) {
+    if (nonFinite?.value?.count > 0) {
       const ref = formatObsRef(nonFinite.value.firstObsIndex);
-      dd.push(
+      nf.push(
         `NaN/Infinity values: ${nonFinite.value.count}${
           ref ? ` (first at ${ref})` : ""
         }`,
       );
     }
-    if (nonFinite.errors?.count > 0) {
+    if (nonFinite?.errors?.count > 0) {
       const ref = formatObsRef(nonFinite.errors.firstObsIndex);
-      dd.push(
+      nf.push(
         `NaN/Infinity errors: ${nonFinite.errors.count}${
           ref ? ` (first at ${ref})` : ""
         }`,
       );
     }
-    pieces.push(`
+    if (nf.length) {
+      pieces.push(`
       <div class="issueRow">
-        <div class="issueRowTitle">NaN/Infinity (exploding gradients)</div>
+        <div class="issueRowTitle">NaN/Infinity (non-finite numbers)</div>
         <div class="synapseStats">${
-      dd.length
-        ? dd.map((x) => `<span class="stat error">${escapeHtml(x)}</span>`)
+        nf.map((x) => `<span class="stat error">${escapeHtml(x)}</span>`)
           .join("")
-        : `<span class="stat">No NaN/Infinity values detected</span>`
-    }</div>
+      }</div>
       </div>
     `);
-  } else {
-    pieces.push(`
+    }
+
+    // Not-recorded (absent) entries — the raw fact, no interpretation.
+    const nr = [];
+    const absentStat = (label, s) => {
+      if (!s || !(s.absentCount > 0)) return;
+      const ref = formatObsRef(s.firstAbsentObsIndex);
+      const denom = s.length > 0 ? `/${s.length}` : "";
+      nr.push(
+        `${label} not recorded for ${s.absentCount}${denom} observations` +
+          ` (error walk did not traverse)${ref ? ` (first at ${ref})` : ""}`,
+      );
+    };
+    absentStat("activation", nonFinite?.activation);
+    absentStat("value", nonFinite?.value);
+    absentStat("errors", nonFinite?.errors);
+    if (nr.length) {
+      pieces.push(`
       <div class="issueRow">
-        <div class="issueRowTitle">NaN/Infinity (exploding gradients)</div>
-        <div class="synapseStats"><span class="stat">No NaN/Infinity values detected</span></div>
+        <div class="issueRowTitle">Not recorded</div>
+        <div class="synapseStats">${
+        nr.map((x) => `<span class="stat">${escapeHtml(x)}</span>`).join("")
+      }</div>
       </div>
     `);
+    }
   }
 
   // Values not recorded (issue #507): JSON `null` entries mean the error
@@ -3568,8 +3596,16 @@ function renderIssuesPanel(currentUuid, neuronType) {
     (DIAG_INPUTS?.constantInputs ?? []).map((x) => x.uuid).filter(Boolean),
   );
 
+  // Genuine non-finite numbers only (total > 0). Absent-only neurons are
+  // excluded here and surfaced in the "Not recorded" list below (issue #507).
   const nonFiniteUuids = Array.from(DIAG_NONFINITE.entries())
+    .filter(([, d]) => (d?.total ?? 0) > 0)
     .sort((a, b) => (b[1]?.total ?? 0) - (a[1]?.total ?? 0))
+    .slice(0, 10);
+
+  const notRecordedUuids = Array.from(DIAG_NONFINITE.entries())
+    .filter(([, d]) => (d?.absentTotal ?? 0) > 0)
+    .sort((a, b) => (b[1]?.absentTotal ?? 0) - (a[1]?.absentTotal ?? 0))
     .slice(0, 10);
 
   const clampedUuids = Array.from(DIAG_DEADZONES.entries())
@@ -3617,6 +3653,21 @@ function renderIssuesPanel(currentUuid, neuronType) {
       const ref = formatObsRef(d.errors?.firstObsIndex);
       return `<span class="stat error">count: ${
         escapeHtml(String(d.total ?? 0))
+      }</span>` +
+        (ref ? `<span class="stat">first at ${escapeHtml(ref)}</span>` : "");
+    },
+  ));
+
+  pieces.push(renderJumpList(
+    "Not recorded (top 10)",
+    notRecordedUuids,
+    (d) => {
+      const ref = formatObsRef(
+        d.value?.firstAbsentObsIndex ?? d.errors?.firstAbsentObsIndex ??
+          d.activation?.firstAbsentObsIndex,
+      );
+      return `<span class="stat">not recorded: ${
+        escapeHtml(String(d.absentTotal ?? 0))
       }</span>` +
         (ref ? `<span class="stat">first at ${escapeHtml(ref)}</span>` : "");
     },
