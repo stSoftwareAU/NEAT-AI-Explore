@@ -1,67 +1,93 @@
+# Issues tab: absent (`null`) value entries are no longer flagged as NaN/Infinity
+
 ## Summary
 
-The Issues tab wrongly reported absent (`null`) recording entries as
-"NaN/Infinity (exploding gradients)". A recording serialises through JSON, which
-cannot carry `NaN`/`Infinity` — those land as `null`, meaning the value was
-**not recorded** (the error-attribution walk did not traverse that neuron at
-that observation), not that a gradient exploded. The scan counted every `null`
-as non-finite, so ~39k not-recorded cells were mis-flagged as data corruption.
+The Issues tab wrongly reported absent (`null`) `value`/`errors`/`activation`
+entries as "NaN/Infinity (exploding gradients)". Recordings are serialised
+through JSON, which **cannot** carry non-finite numbers — a genuinely non-finite
+value always serialises to `null`. So a `null` in a neuron series means the
+value was **not recorded** (the error-attribution walk did not traverse that
+neuron on that observation), not that a non-finite number was produced. Every
+flagged cell in the reported snapshot was one of these structural `null`s.
 
-The fix is viewer-only: `scan1d`/`scan2d` now classify each anomaly as either
-**absent** (`null`/`undefined`) or **genuine non-finite** (`NaN`/`Infinity`).
-`computeNonFiniteIssues` counts only genuine non-finite values (so a real
-anomaly still surfaces loudly — fail-loud, Issue #3234), and a new
-`computeNotRecordedIssues` reports the absent counts. The Issues panel keeps the
-NaN/Infinity row for true positives and adds a factual **"Values not recorded"**
-info row (e.g.
-`value not recorded for 4/4 observations (error walk did not
-traverse)`) with no
-severity styling or interpretation.
+This change teaches the diagnostics scan to distinguish the two cases and
+presents the raw fact instead of a false alarm. Genuine non-finite numbers
+(should they ever arrive from a non-JSON source) are still surfaced separately.
 
-Closes #507.
+**Fixes #507.**
 
-## Data flow
+### What changed
+
+- **`docs/shared/diagnostics_scan.js`**
+  - `scan1d` / `scan2d` now return `absentCount` / `firstAbsentPos` alongside
+    the existing non-finite `count` / `firstPos`. `null`/`undefined` count as
+    _absent_; only real `NaN`/`Infinity` numbers (and unexpected non-numeric
+    junk) count as _non-finite_.
+  - `computeNonFiniteIssues` now reports a per-neuron `total` (genuine
+    non-finite) **and** `absentTotal` (not recorded), with per-series counts,
+    first-observation references, and series lengths. A neuron is included when
+    it has any non-finite **or** any absent entry.
+- **`docs/app.js` (Issues tab)**
+  - Removed the always-shown, structurally-false "NaN/Infinity (exploding
+    gradients)" row.
+  - Added a genuine "NaN/Infinity (non-finite numbers)" row, shown **only** when
+    real non-finite numbers exist.
+  - Added a raw-fact "Not recorded" info row, e.g.
+    `value not recorded for k/N
+    observations (error walk did not traverse)`
+    — no interpretation, no severity editorialising.
+  - Added a "Not recorded (top 10)" flagged list; the "NaN/Infinity (top 10)"
+    list now filters to genuine non-finite neurons only.
+
+### Data-flow
 
 ```mermaid
 flowchart LR
-    R["recording.neurons[uuid]<br/>value / errors"] --> S["scan1d / scan2d"]
-    S -->|"null → absent"| NR["computeNotRecordedIssues"]
-    S -->|"NaN/Infinity → non-finite"| NF["computeNonFiniteIssues"]
-    NR --> IR["'Values not recorded' info row<br/>(raw fact, no severity)"]
-    NF --> ER["'NaN/Infinity' row<br/>(only true positives)"]
+    A[neuron series entry] --> B{finite number?}
+    B -- yes --> C[OK, ignored]
+    B -- no --> D{null / undefined?}
+    D -- yes --> E["absent — 'not recorded'<br/>error walk did not traverse"]
+    D -- no --> F["non-finite — genuine NaN/Infinity<br/>(cannot occur via JSON)"]
+    E --> G["Issues tab: 'Not recorded' info row"]
+    F --> H["Issues tab: 'NaN/Infinity' error row"]
 ```
 
 ## Evidence
 
-Captured live via a headless Chrome render of the real viewer, loading a minimal
-snapshot whose `output-0` neuron activates on every observation but records
-`null` for 7 of 10 `value` slots (the exact shape described in the issue). The
-Issues tab now shows the "NaN/Infinity (exploding gradients)" row as **"No
-NaN/Infinity values detected"** and adds the factual **"Values not recorded"**
-info row — no false exploding-gradient flag:
+Both panels below render the **same** synthetic recording
+(`value = [0.5, null, null, 0.6, null]` plus one genuinely `NaN` errors cell)
+through the real `computeNonFiniteIssues()`. Before, three JSON `null`s were
+mislabelled as exploding gradients; after, they are reported as "not recorded"
+and only the genuine `NaN` remains flagged.
 
-![Issues tab: absent value entries reported as "Values not recorded", not NaN/Infinity](docs/evidence/issue-507-issues-tab.png)
+![Before/after of the Issues tab rows for absent vs non-finite entries](docs/evidence/issue-507-not-recorded.png)
 
-Before the fix, the same input yielded a non-empty `computeNonFiniteIssues`
-result and rendered the false "NaN/Infinity (exploding gradients)" error row.
+This is a viewer/data-logic change. The Issues tab needs an externally-loaded
+snapshot, so the screenshot was produced from a self-contained harness that
+imports the production `docs/shared/diagnostics_scan.js` module (the harness was
+removed after capture; only the PNG is committed).
 
 ## Test Plan
 
-Added to `tests/diagnostics_scan_test.ts`:
+All 827 repo tests pass (`deno test -A`). New/updated coverage in
+`tests/diagnostics_scan_test.ts`:
 
-- `scan1d classifies null/undefined as absent, not non-finite`
-- `scan1d separates absent nulls from genuine non-finite`
-- `scan2d separates absent nulls from genuine non-finite`
-- `computeNonFiniteIssues ignores absent (null) value entries` — reproduces the
-  #507 bug (all-null neuron must not be flagged) and passes after the fix.
-- `computeNonFiniteIssues still flags genuine NaN alongside nulls`
-- `computeNotRecordedIssues counts absent value entries with denominator`
-- `computeNotRecordedIssues ignores genuine non-finite values`
-- `computeNotRecordedIssues maps first absent index via obsIndices`
-- `computeNotRecordedIssues counts absent 2D error rows`
-- `computeNotRecordedIssues returns empty map for clean data`
-- `computeNotRecordedIssues returns empty map for null recording`
+- `scan1d separates non-numeric junk from absent (null) entries` — **updated**
+  business-logic test (previously asserted `null` counted as non-finite; now
+  asserts the corrected absent/non-finite split, documented inline).
+- `scan1d counts null/undefined as absent, not non-finite`
+- `scan1d keeps NaN/Infinity as non-finite (not absent)`
+- `scan2d counts null cells as absent, not non-finite`
+- `scan2d separates absent cells from genuine NaN cells`
+- `computeNonFiniteIssues reports null value entries as absent, not non-finite`
+  — regression test for the reported bug.
+- `computeNonFiniteIssues maps first absent through obsIndices`
+- `computeNonFiniteIssues separates non-finite total from absent total`
+- `computeNonFiniteIssues keeps skipping entirely clean neurons`
 
-All existing `scan1d`/`scan2d`/`computeNonFiniteIssues` tests still pass
-unchanged (they exercise genuine `NaN`/`Infinity` inputs, which remain flagged).
-Full gate: `./quality.sh` → 830 passed, 0 failed.
+## Related (out of scope, already reported per the issue)
+
+- `stSoftwareAU/NEAT-AI-Discovery#1620` — 15 functionally-constant hidden
+  neurons that persist because removal is gain-driven.
+- `stSoftwareAU/NEAT-AI#3389` — producer-side recording gap for aggregate-squash
+  neurons (complements, does not block, this viewer fix).
