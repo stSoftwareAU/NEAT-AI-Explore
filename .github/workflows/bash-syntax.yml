@@ -2,7 +2,11 @@ name: Bash Syntax
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not cross a `/`, so it matches single-segment branches
+    # (Develop, main) but never a `milestone/<slug>` branch. Add the
+    # `milestone/*` glob so this gate also runs on milestone sub-issue PRs
+    # (#497); without it those PRs merge into the milestone branch unchecked.
+    branches: ["*", "milestone/*"]
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
 # gets feedback fastest and we do not waste runner minutes on stale work
