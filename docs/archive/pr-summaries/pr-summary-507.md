@@ -33,12 +33,12 @@ flowchart LR
 
 ## Evidence
 
-Captured live via a headless Chrome render of the real viewer, loading a
-minimal snapshot whose `output-0` neuron activates on every observation but
-records `null` for 7 of 10 `value` slots (the exact shape described in the
-issue). The Issues tab now shows the "NaN/Infinity (exploding gradients)" row
-as **"No NaN/Infinity values detected"** and adds the factual **"Values not
-recorded"** info row — no false exploding-gradient flag:
+Captured live via a headless Chrome render of the real viewer, loading a minimal
+snapshot whose `output-0` neuron activates on every observation but records
+`null` for 7 of 10 `value` slots (the exact shape described in the issue). The
+Issues tab now shows the "NaN/Infinity (exploding gradients)" row as **"No
+NaN/Infinity values detected"** and adds the factual **"Values not recorded"**
+info row — no false exploding-gradient flag:
 
 ![Issues tab: absent value entries reported as "Values not recorded", not NaN/Infinity](docs/evidence/issue-507-issues-tab.png)
 
