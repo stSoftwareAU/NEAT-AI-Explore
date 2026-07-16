@@ -75,6 +75,7 @@ import {
 import {
   computeErrorConcentrationIssues,
   computeNonFiniteIssues,
+  computeNotRecordedIssues,
 } from "./shared/diagnostics_scan.js";
 import { initThemeMode } from "./shared/theme.js";
 import { formatTraceScore } from "./shared/trace_score.js";
@@ -137,6 +138,7 @@ let DIAG_PROXY = new Map();
 let DIAG_PRE_STATS = new Map();
 let DIAG_DEADZONES = new Map();
 let DIAG_NONFINITE = new Map();
+let DIAG_NOTRECORDED = new Map();
 let DIAG_ERROR_TAIL = new Map();
 let DIAG_INPUTS = {
   constantInputs: [],
@@ -956,6 +958,9 @@ async function loadSnapshot(source, label) {
       DIAG_NONFINITE = computeNonFiniteIssues({
         recording: SNAPSHOT?.recording ?? null,
       });
+      DIAG_NOTRECORDED = computeNotRecordedIssues({
+        recording: SNAPSHOT?.recording ?? null,
+      });
       DIAG_ERROR_TAIL = computeErrorConcentrationIssues({
         recording: SNAPSHOT?.recording ?? null,
       });
@@ -983,6 +988,7 @@ async function loadSnapshot(source, label) {
       DIAG_PROXY = new Map();
       DIAG_DEADZONES = new Map();
       DIAG_NONFINITE = new Map();
+      DIAG_NOTRECORDED = new Map();
       DIAG_ERROR_TAIL = new Map();
       DIAG_INPUTS = {
         constantInputs: [],
@@ -3415,6 +3421,7 @@ function renderIssuesPanel(currentUuid, neuronType) {
 
   const dead = DIAG_DEADZONES.get(currentUuid);
   const nonFinite = DIAG_NONFINITE.get(currentUuid);
+  const notRecorded = DIAG_NOTRECORDED.get(currentUuid);
   const tail = DIAG_ERROR_TAIL.get(currentUuid);
 
   const pieces = [];
@@ -3491,6 +3498,39 @@ function renderIssuesPanel(currentUuid, neuronType) {
         <div class="synapseStats"><span class="stat">No NaN/Infinity values detected</span></div>
       </div>
     `);
+  }
+
+  // Values not recorded (issue #507): JSON `null` entries mean the error
+  // attribution walk did not traverse this neuron at those observations. This
+  // is a raw recording fact, not a non-finite/exploding-gradient problem, so we
+  // present the counts verbatim with no interpretation or severity styling.
+  if (notRecorded) {
+    const dd = [];
+    if (notRecorded.activation?.count > 0) {
+      dd.push(
+        `activation not recorded for ${notRecorded.activation.count}/${notRecorded.activation.length} observations`,
+      );
+    }
+    if (notRecorded.value?.count > 0) {
+      dd.push(
+        `value not recorded for ${notRecorded.value.count}/${notRecorded.value.length} observations (error walk did not traverse)`,
+      );
+    }
+    if (notRecorded.errors?.count > 0) {
+      dd.push(
+        `errors not recorded for ${notRecorded.errors.count}/${notRecorded.errors.rows} observations`,
+      );
+    }
+    if (dd.length) {
+      pieces.push(`
+        <div class="issueRow">
+          <div class="issueRowTitle">Values not recorded</div>
+          <div class="synapseStats">${
+        dd.map((x) => `<span class="stat">${escapeHtml(x)}</span>`).join("")
+      }</div>
+        </div>
+      `);
+    }
   }
 
   // Error concentration.

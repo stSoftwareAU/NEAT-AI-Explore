@@ -8,6 +8,7 @@
 import {
   computeErrorConcentrationIssues,
   computeNonFiniteIssues,
+  computeNotRecordedIssues,
   scan1d,
   scan2d,
 } from "../docs/shared/diagnostics_scan.js";
@@ -206,6 +207,167 @@ Deno.test("computeNonFiniteIssues computes correct total", () => {
   assertEquals(issue.activation.count, 2);
   assertEquals(issue.value.count, 1);
   assertEquals(issue.errors.count, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Absent (not-recorded) vs genuine non-finite classification (issue #507)
+// ---------------------------------------------------------------------------
+
+Deno.test("scan1d classifies null/undefined as absent, not non-finite", () => {
+  const arr = [1, null as unknown as number, undefined as unknown as number, 4];
+  const result = scan1d(arr);
+  assertEquals(result.count, 2); // total anomalies (backward compat)
+  assertEquals(result.absentCount, 2);
+  assertEquals(result.nonFiniteCount, 0);
+  assertEquals(result.firstAbsentPos, 1);
+  assertEquals(result.firstNonFinitePos, null);
+});
+
+Deno.test("scan1d separates absent nulls from genuine non-finite", () => {
+  const arr = [1, null as unknown as number, NaN, Infinity, 5];
+  const result = scan1d(arr);
+  assertEquals(result.count, 3);
+  assertEquals(result.absentCount, 1);
+  assertEquals(result.nonFiniteCount, 2);
+  assertEquals(result.firstAbsentPos, 1);
+  assertEquals(result.firstNonFinitePos, 2);
+});
+
+Deno.test("scan2d separates absent nulls from genuine non-finite", () => {
+  const arr = [
+    [1, null as unknown as number],
+    [NaN, 4],
+    [null as unknown as number, 6],
+  ];
+  const result = scan2d(arr);
+  assertEquals(result.absentCount, 2);
+  assertEquals(result.nonFiniteCount, 1);
+  assertEquals(result.firstAbsentPos, 0);
+  assertEquals(result.firstNonFinitePos, 1);
+});
+
+Deno.test("computeNonFiniteIssues ignores absent (null) value entries", () => {
+  // All null: the error walk did not traverse — must NOT be flagged as
+  // NaN/Infinity (issue #507).
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [1, 2, 3],
+        value: [null, null, null],
+        errors: [[null], [null]],
+      },
+    },
+  };
+  const result = computeNonFiniteIssues({ recording });
+  assertEquals(result.size, 0);
+});
+
+Deno.test("computeNonFiniteIssues still flags genuine NaN alongside nulls", () => {
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [1, NaN, 3],
+        value: [null, null, 0.5],
+        errors: [],
+      },
+    },
+  };
+  const result = computeNonFiniteIssues({ recording });
+  assertEquals(result.size, 1);
+  const issue = result.get("hidden-0")!;
+  assertEquals(issue.total, 1); // only the NaN, not the two nulls
+  assertEquals(issue.activation.count, 1);
+  assertEquals(issue.value.count, 0);
+});
+
+// ---------------------------------------------------------------------------
+// computeNotRecordedIssues (issue #507)
+// ---------------------------------------------------------------------------
+
+Deno.test("computeNotRecordedIssues counts absent value entries with denominator", () => {
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [1, 2, 3, 4],
+        value: [null, 0.5, null, null],
+        errors: [],
+      },
+    },
+  };
+  const result = computeNotRecordedIssues({ recording });
+  const issue = result.get("hidden-0")!;
+  assertEquals(issue.value.count, 3);
+  assertEquals(issue.value.length, 4); // k/N framing
+  assertEquals(issue.value.firstObsIndex, 0);
+  assertEquals(issue.activation.count, 0);
+  assertEquals(issue.total, 3);
+});
+
+Deno.test("computeNotRecordedIssues ignores genuine non-finite values", () => {
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [NaN, Infinity],
+        value: [0.5, 0.6],
+        errors: [],
+      },
+    },
+  };
+  // NaN/Infinity are not "absent" — nothing to report here.
+  const result = computeNotRecordedIssues({ recording });
+  assertEquals(result.size, 0);
+});
+
+Deno.test("computeNotRecordedIssues maps first absent index via obsIndices", () => {
+  const recording = {
+    obsIndices: [10, 20, 30],
+    neurons: {
+      "hidden-0": {
+        activation: [1, 2, 3],
+        value: [0.5, null, null],
+        errors: [],
+      },
+    },
+  };
+  const result = computeNotRecordedIssues({ recording });
+  const issue = result.get("hidden-0")!;
+  assertEquals(issue.value.firstObsIndex, 20); // position 1 → obsIndices[1]
+});
+
+Deno.test("computeNotRecordedIssues counts absent 2D error rows", () => {
+  const recording = {
+    neurons: {
+      "hidden-0": {
+        activation: [1, 2],
+        value: [0.5, 0.6],
+        errors: [[null, null], [0.1, 0.2], [null]],
+      },
+    },
+  };
+  const result = computeNotRecordedIssues({ recording });
+  const issue = result.get("hidden-0")!;
+  assertEquals(issue.errors.count, 3);
+  assertEquals(issue.errors.rows, 3);
+  assertEquals(issue.errors.firstObsIndex, 0);
+});
+
+Deno.test("computeNotRecordedIssues returns empty map for clean data", () => {
+  const recording = {
+    neurons: {
+      "output-0": {
+        activation: [1, 2, 3],
+        value: [0.5, 0.6, 0.7],
+        errors: [[0.1], [0.2]],
+      },
+    },
+  };
+  const result = computeNotRecordedIssues({ recording });
+  assertEquals(result.size, 0);
+});
+
+Deno.test("computeNotRecordedIssues returns empty map for null recording", () => {
+  const result = computeNotRecordedIssues({ recording: null });
+  assertEquals(result.size, 0);
 });
 
 // ---------------------------------------------------------------------------

@@ -673,7 +673,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/sparkline.js`         | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
 | `docs/shared/correlation.js`       | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
 | `docs/shared/discovery.js`         | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
-| `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeErrorConcentrationIssues`                                                           |
+| `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
 | `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 | `docs/shared/ui_helpers.js`        | `escapeHtml`, `extractTooltips`                                                                                                           |
 
