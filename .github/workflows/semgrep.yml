@@ -2,7 +2,11 @@ name: Semgrep
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not cross a `/`, so it matches single-segment branches
+    # (Develop, main, feature-x) but never a `milestone/<slug>` branch. The
+    # explicit `milestone/*` pattern keeps the scan gate running on milestone
+    # sub-issue PRs too, instead of skipping them until the rollup PR (#496).
+    branches: ["*", "milestone/*"]
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
 # gets feedback fastest and we do not waste runner minutes on stale work
