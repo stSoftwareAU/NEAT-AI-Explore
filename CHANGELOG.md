@@ -17,6 +17,16 @@ themselves; minor and major bumps are made manually when warranted.
 
 ## [Unreleased]
 
+### Fixed
+
+- Issues tab no longer mis-reports absent (JSON `null`) `value` entries as
+  "NaN/Infinity (exploding gradients)" (#507). JSON cannot carry non-finite
+  numbers, so a `null` only ever means the value was not recorded because the
+  error-attribution walk did not traverse that neuron. `computeNonFiniteIssues`
+  now classifies each cell as finite, genuinely non-finite, or absent, and the
+  viewer surfaces absent values as a plain factual "Values not recorded" row
+  (e.g. `value not recorded for 197/200 observations`) instead of a false fault.
+
 ### Added
 
 - `SECURITY.md` supply-chain readiness runbook (#356) with a private disclosure

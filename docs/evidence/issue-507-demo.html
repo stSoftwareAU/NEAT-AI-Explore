@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Issue #507 — absent (null) values are not NaN/Infinity</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      max-width: 720px;
+    }
+    h1 {
+      font-size: 18px;
+    }
+    .note {
+      opacity: 0.8;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    </style>
+  </head>
+  <body>
+    <h1>Issues tab — hidden neuron with an all-null <code>value</code> series</h1>
+    <p class="note">
+      Rendered from the real <code>computeNonFiniteIssues</code> output. The null
+      <code>value</code> entries (error walk did not traverse) are now reported
+      as a plain fact, not as NaN/Infinity.
+    </p>
+    <div id="out"></div>
+
+    <script type="module">
+    import { computeNonFiniteIssues } from "../shared/diagnostics_scan.js";
+
+    const escapeHtml = (s) =>
+      String(s).replace(
+        /[&<>"']/g,
+        (c) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[c],
+      );
+    const formatObsRef = (i) => (i == null ? "" : `obs #${i}`);
+
+    // Mirrors the reported scenario: activation fully recorded for all 200
+    // observations; value null for 197 of them (error walk did not traverse).
+    const value = Array.from({ length: 200 }, (_, i) => (i < 3 ? 0.42 : null));
+    const recording = {
+      neurons: {
+        "hidden-42": {
+          activation: Array.from({ length: 200 }, () => 0.42),
+          value,
+          errors: [],
+        },
+      },
+    };
+
+    const nonFinite = computeNonFiniteIssues({ recording }).get("hidden-42");
+    const pieces = [];
+    pieces.push(`<div class="panelSectionTitle">Current neuron</div>`);
+    pieces.push(`<div class="issueList">`);
+
+    // NaN/Infinity row — now correctly reports none.
+    pieces.push(`
+      <div class="issueRow">
+        <div class="issueRowTitle">NaN/Infinity (exploding gradients)</div>
+        <div class="synapseStats"><span class="stat">No NaN/Infinity values detected</span></div>
+      </div>
+    `);
+
+    // Values not recorded — factual info row.
+    const absent = nonFinite.absent;
+    const dd = [];
+    const addRow = (label, field) => {
+      if (!(field?.count > 0)) return;
+      const ref = formatObsRef(field.firstObsIndex);
+      dd.push(
+        `${label} not recorded for ${field.count}/${field.of} observations${
+          ref ? ` (first at ${ref})` : ""
+        }`,
+      );
+    };
+    addRow("activation", absent.activation);
+    addRow("value", absent.value);
+    addRow("errors", absent.errors);
+    pieces.push(`
+      <div class="issueRow">
+        <div class="issueRowTitle">Values not recorded</div>
+        <div class="synapseStats">${
+      dd.map((x) => `<span class="stat">${escapeHtml(x)}</span>`).join("")
+    }<span class="stat">error walk did not traverse</span></div>
+      </div>
+    `);
+    pieces.push(`</div>`);
+    document.getElementById("out").innerHTML = pieces.join("");
+    </script>
+  </body>
+</html>
