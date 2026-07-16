@@ -33,18 +33,14 @@ flowchart LR
 
 ## Evidence
 
-Playwright MCP was unavailable in this environment, so no live screenshot could
-be captured. The fix was verified end-to-end against a minimal snapshot whose
-`hidden-0` neuron activates on every observation but records only `null` values
-and errors (the exact shape described in the issue). Running the real shared
-module over that recording produced:
+Captured live via a headless Chrome render of the real viewer, loading a
+minimal snapshot whose `output-0` neuron activates on every observation but
+records `null` for 7 of 10 `value` slots (the exact shape described in the
+issue). The Issues tab now shows the "NaN/Infinity (exploding gradients)" row
+as **"No NaN/Infinity values detected"** and adds the factual **"Values not
+recorded"** info row — no false exploding-gradient flag:
 
-```
-NaN/Infinity issues (should be empty): 0
-Not-recorded row for hidden-0:
-  - value not recorded for 4/4 observations (error walk did not traverse)
-  - errors not recorded for 4/4 observations
-```
+![Issues tab: absent value entries reported as "Values not recorded", not NaN/Infinity](docs/evidence/issue-507-issues-tab.png)
 
 Before the fix, the same input yielded a non-empty `computeNonFiniteIssues`
 result and rendered the false "NaN/Infinity (exploding gradients)" error row.
