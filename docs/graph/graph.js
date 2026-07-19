@@ -29,6 +29,14 @@ import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js"
 import { loadConsumerContract } from "../shared/consumer_contract.js";
 import { formatInteger } from "../shared/number_format.js";
 import {
+  clearPanelSize,
+  computeDragPanelSize,
+  loadPanelSize,
+  PANEL_SIZE_KEYS,
+  resolveInitialPanelSize,
+  savePanelSize,
+} from "../shared/panel_resize.js";
+import {
   AUTO_LOAD_MAX_RETRIES,
   AUTO_LOAD_RETRY_DELAY_MS,
   DEFAULT_SNAPSHOT_URL,
@@ -3153,6 +3161,156 @@ function initPanels() {
   }
 }
 
+// Width-resize handles on the Focus/Legend overlays (Issue #510). Wired
+// independently of the WebGL renderer so the overlays stay resizable even if
+// the 3D canvas cannot start.
+function initOverlayResizers() {
+  initOverlayResize(el.hud, {
+    key: PANEL_SIZE_KEYS.graphHud,
+    grow: "right",
+    label: "Resize focus panel",
+    fallback: OVERLAY_HUD_DEFAULT_WIDTH,
+  });
+  initOverlayResize(el.legend, {
+    key: PANEL_SIZE_KEYS.graphLegend,
+    grow: "left",
+    label: "Resize legend panel",
+    fallback: OVERLAY_LEGEND_DEFAULT_WIDTH,
+  });
+}
+
+// Resizable graph overlays (Issue #510). Each panel gets a drag handle on its
+// free edge (the Focus panel grows to the right, the Legend to the left). The
+// width is remembered per browser and restored, clamped to the viewport.
+const OVERLAY_MIN_WIDTH = 200;
+const OVERLAY_HUD_DEFAULT_WIDTH = 420;
+const OVERLAY_LEGEND_DEFAULT_WIDTH = 320;
+const OVERLAY_VIEWPORT_MARGIN = 28;
+
+function overlayMaxWidth() {
+  try {
+    return Math.max(
+      OVERLAY_MIN_WIDTH,
+      (window.innerWidth ?? 0) - OVERLAY_VIEWPORT_MARGIN,
+    );
+  } catch (_e) {
+    return OVERLAY_MIN_WIDTH;
+  }
+}
+
+// Phones (≤640px) keep the fixed bottom-sheet/stacked overlays, matching the
+// `.panelResizeHandle { display: none }` breakpoint in graph.css.
+function overlayResizeEnabled() {
+  try {
+    return window.matchMedia?.("(min-width: 641px)")?.matches === true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function initOverlayResize(panel, opts) {
+  if (!(panel instanceof HTMLElement)) return;
+  const { key, grow, label, fallback } = opts;
+
+  const applyWidth = (width) => {
+    if (Number.isFinite(width)) panel.style.width = `${width}px`;
+  };
+
+  const applyStored = () => {
+    if (!overlayResizeEnabled()) {
+      // Let the stylesheet own the bottom-sheet/stacked phone layout.
+      panel.style.removeProperty("width");
+      return;
+    }
+    applyWidth(resolveInitialPanelSize({
+      stored: loadPanelSize(key),
+      fallback,
+      min: OVERLAY_MIN_WIDTH,
+      max: overlayMaxWidth(),
+    }));
+  };
+
+  const handle = document.createElement("div");
+  handle.className = `panelResizeHandle panelResizeHandle-${grow}`;
+  handle.setAttribute("role", "separator");
+  handle.setAttribute("aria-orientation", "vertical");
+  handle.setAttribute("aria-label", label);
+  handle.setAttribute("tabindex", "0");
+  handle.title = "Drag to resize · double-click to reset";
+  panel.appendChild(handle);
+
+  let dragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  // grow-right: pointer moving right widens; grow-left: pointer moving left
+  // widens. Fold the direction into the delta sign so the maths stays shared.
+  const deltaFor = (clientX) =>
+    grow === "left" ? startX - clientX : clientX - startX;
+
+  const onPointerMove = (e) => {
+    if (!dragging) return;
+    const next = computeDragPanelSize({
+      startSize: startWidth,
+      delta: deltaFor(e.clientX),
+      min: OVERLAY_MIN_WIDTH,
+      max: overlayMaxWidth(),
+    });
+    if (next !== null) applyWidth(next);
+  };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove("isDragging");
+    savePanelSize(key, panel.getBoundingClientRect().width, undefined);
+  };
+
+  handle.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    handle.classList.add("isDragging");
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (_e) { /* stale pointer id */ }
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  handle.addEventListener("pointermove", onPointerMove);
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+
+  handle.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 40 : 12;
+    let delta = 0;
+    if (e.key === "ArrowLeft") delta = grow === "left" ? step : -step;
+    else if (e.key === "ArrowRight") delta = grow === "left" ? -step : step;
+    else return;
+    const next = computeDragPanelSize({
+      startSize: panel.getBoundingClientRect().width,
+      delta,
+      min: OVERLAY_MIN_WIDTH,
+      max: overlayMaxWidth(),
+    });
+    if (next !== null) {
+      applyWidth(next);
+      savePanelSize(key, next, undefined);
+    }
+    e.preventDefault();
+  });
+
+  handle.addEventListener("dblclick", (e) => {
+    clearPanelSize(key, undefined);
+    applyWidth(fallback);
+    savePanelSize(key, fallback, undefined);
+    e.stopPropagation();
+  });
+
+  window.addEventListener("resize", applyStored);
+  applyStored();
+}
+
 function setFocusBadge(uuid) {
   if (!el.focusBadge) return;
   // Avoid stale hover tooltips when focus changes (or is cleared). The badge's
@@ -3649,6 +3807,10 @@ function initStarfield() {
     e.preventDefault();
     navigateBack();
   });
+
+  // Overlay resize handles don't need WebGL — wire them before the renderer,
+  // which can throw when WebGL is unavailable (Issue #510).
+  initOverlayResizers();
 
   if (!(el.canvas instanceof HTMLCanvasElement)) {
     throw new Error("Missing #glCanvas");

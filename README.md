@@ -257,6 +257,12 @@ block the request.
   deltas to identify recording or squash function mismatches.
 - **Graph explorer**: A 3D neighbourhood view of the NEAT network to build
   intuition about local connectivity and high-impact pathways.
+- **Resizable panels (remembered per device)**: Drag the divider between the
+  neuron-detail and inbound-synapse panels to rebalance the explorer, and drag
+  the edge handle on the graph view's Focus/Legend overlays to widen them. Works
+  with both mouse and touch. Each size is saved to `localStorage` and restored
+  on the next visit (clamped to the current viewport), and a
+  double-click/double-tap on a divider or handle resets it to the default.
 
 ---
 
@@ -675,6 +681,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/discovery.js`         | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
 | `docs/shared/diagnostics_scan.js`  | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
 | `docs/shared/theme.js`             | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
+| `docs/shared/panel_resize.js`      | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
 | `docs/shared/ui_helpers.js`        | `escapeHtml`, `extractTooltips`                                                                                                           |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be

@@ -108,6 +108,14 @@ import {
   decideFiltersMode,
   decideFiltersModeByWidth,
 } from "./shared/filter_layout.js";
+import {
+  clearPanelSize,
+  computeDragPanelSize,
+  loadPanelSize,
+  PANEL_SIZE_KEYS,
+  resolveInitialPanelSize,
+  savePanelSize,
+} from "./shared/panel_resize.js";
 /** @type {Element|null} Element that triggered the currently open modal. */
 let _modalTrigger = null;
 /** @type {(() => void)|null} Cleanup function for the current focus trap. */
@@ -4028,6 +4036,9 @@ function showOverviewDashboard() {
 function showExplorer() {
   if (el.overviewDashboard) el.overviewDashboard.style.display = "none";
   if (el.explorerMain) el.explorerMain.style.display = "";
+  // The split container now has a real width — restore the saved panel size
+  // against the correct bounds (Issue #510).
+  _reapplyExplorerWidth?.();
 }
 
 function renderOverviewDashboard() {
@@ -4250,6 +4261,167 @@ el.fetchUrl.onkeydown = (e) => {
   if (e.key === "Enter") el.fetchBtn.click();
 };
 
+// ── Resizable explorer split (Issue #510) ───────────────────────────────────
+//
+// The `.flowArrow` divider between the neuron-detail panel (`.currentNeuron`)
+// and the inbound-synapse list (`.synapseList`) becomes a draggable handle on
+// desktop. The chosen width is remembered per browser via `localStorage` and
+// restored (clamped to the current viewport) on load. Double-click resets it.
+//
+// Only the desktop layout (≥1024px) has a fixed-width left panel; on tablet
+// and phone the panels stack or slide, so the divider is inert there.
+const EXPLORER_NEURON_DEFAULT_WIDTH = 320;
+const EXPLORER_NEURON_MIN_WIDTH = 280;
+const EXPLORER_ARROW_WIDTH = 50;
+const EXPLORER_SYNAPSE_MIN_WIDTH = 320;
+
+function explorerResizeEnabled() {
+  try {
+    return window.matchMedia?.("(min-width: 1024px)")?.matches === true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function explorerNeuronMaxWidth(container) {
+  // The container is `display:none` while the overview dashboard is shown, so
+  // its measured width is 0. Fall back to the viewport width so a restored
+  // size is not wrongly clamped to the minimum before the explorer opens.
+  let total = container?.getBoundingClientRect?.().width ?? 0;
+  if (!(total > 0)) total = window.innerWidth ?? 0;
+  const max = total - EXPLORER_ARROW_WIDTH - EXPLORER_SYNAPSE_MIN_WIDTH;
+  return Math.max(EXPLORER_NEURON_MIN_WIDTH, max);
+}
+
+// Re-applies the stored explorer width. Assigned by initExplorerResize() and
+// invoked when the explorer view is revealed (the container has no width until
+// then).
+let _reapplyExplorerWidth = null;
+
+function applyExplorerNeuronWidth(neuron, width) {
+  if (!(neuron instanceof HTMLElement) || !Number.isFinite(width)) return;
+  // `flex-basis` + zero grow/shrink pins the width against the flex sibling.
+  neuron.style.flex = `0 0 ${width}px`;
+  neuron.style.width = `${width}px`;
+}
+
+function clearExplorerNeuronWidth(neuron) {
+  if (!(neuron instanceof HTMLElement)) return;
+  neuron.style.removeProperty("flex");
+  neuron.style.removeProperty("width");
+}
+
+function initExplorerResize() {
+  const container = document.querySelector(".explorerMain");
+  const neuron = document.querySelector(".currentNeuron");
+  const divider = document.querySelector(".flowArrow");
+  if (
+    !(container instanceof HTMLElement) ||
+    !(neuron instanceof HTMLElement) ||
+    !(divider instanceof HTMLElement)
+  ) {
+    return;
+  }
+
+  const key = PANEL_SIZE_KEYS.explorerNeuron;
+
+  const applyStored = () => {
+    if (!explorerResizeEnabled()) {
+      // Let the stylesheet own the layout on tablet/phone.
+      clearExplorerNeuronWidth(neuron);
+      return;
+    }
+    const width = resolveInitialPanelSize({
+      stored: loadPanelSize(key),
+      fallback: EXPLORER_NEURON_DEFAULT_WIDTH,
+      min: EXPLORER_NEURON_MIN_WIDTH,
+      max: explorerNeuronMaxWidth(container),
+    });
+    applyExplorerNeuronWidth(neuron, width);
+  };
+
+  // Turn the arrow into an accessible vertical separator.
+  divider.setAttribute("role", "separator");
+  divider.setAttribute("aria-orientation", "vertical");
+  divider.setAttribute("aria-label", "Resize neuron detail panel");
+  divider.setAttribute("tabindex", "0");
+  divider.classList.add("isResizable");
+
+  let dragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  const onPointerMove = (e) => {
+    if (!dragging) return;
+    const next = computeDragPanelSize({
+      startSize: startWidth,
+      delta: e.clientX - startX,
+      min: EXPLORER_NEURON_MIN_WIDTH,
+      max: explorerNeuronMaxWidth(container),
+    });
+    if (next !== null) applyExplorerNeuronWidth(neuron, next);
+  };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove("isDragging");
+    savePanelSize(key, neuron.getBoundingClientRect().width, undefined);
+  };
+
+  divider.addEventListener("pointerdown", (e) => {
+    if (!explorerResizeEnabled()) return;
+    dragging = true;
+    startX = e.clientX;
+    startWidth = neuron.getBoundingClientRect().width;
+    divider.classList.add("isDragging");
+    try {
+      divider.setPointerCapture(e.pointerId);
+    } catch (_e) { /* setPointerCapture can throw on stale ids */ }
+    e.preventDefault();
+  });
+  divider.addEventListener("pointermove", onPointerMove);
+  divider.addEventListener("pointerup", endDrag);
+  divider.addEventListener("pointercancel", endDrag);
+
+  // Keyboard: arrow keys nudge the boundary for non-pointer users.
+  divider.addEventListener("keydown", (e) => {
+    if (!explorerResizeEnabled()) return;
+    const step = e.shiftKey ? 40 : 12;
+    let delta = 0;
+    if (e.key === "ArrowLeft") delta = -step;
+    else if (e.key === "ArrowRight") delta = step;
+    else return;
+    const next = computeDragPanelSize({
+      startSize: neuron.getBoundingClientRect().width,
+      delta,
+      min: EXPLORER_NEURON_MIN_WIDTH,
+      max: explorerNeuronMaxWidth(container),
+    });
+    if (next !== null) {
+      applyExplorerNeuronWidth(neuron, next);
+      savePanelSize(key, next, undefined);
+    }
+    e.preventDefault();
+  });
+
+  // Double-click / double-tap resets this boundary to its default.
+  divider.addEventListener("dblclick", () => {
+    if (!explorerResizeEnabled()) return;
+    clearPanelSize(key, undefined);
+    applyExplorerNeuronWidth(neuron, EXPLORER_NEURON_DEFAULT_WIDTH);
+    savePanelSize(key, EXPLORER_NEURON_DEFAULT_WIDTH, undefined);
+  });
+
+  // Re-clamp to the new viewport when the window resizes.
+  window.addEventListener("resize", applyStored);
+
+  // Let showExplorer() re-apply once the container has a measurable width.
+  _reapplyExplorerWidth = applyStored;
+
+  applyStored();
+}
+
 // ============================================================================
 // Init
 // ============================================================================
@@ -4270,6 +4442,7 @@ initTouchTooltips();
 initInboundFilters();
 initInlineFiltersLayout();
 initCompactTraceNav();
+initExplorerResize();
 
 // Provide an easy on-ramp to the 3D graph explorer, carrying the current query
 // params (e.g. snapshotUrl / snapshotUrlB64) across.
