@@ -67,6 +67,7 @@ const STATIC_FILES = [
   "./shared/trace_overflow_menu.js",
   "./shared/observation_contributions.js",
   "./shared/observation_contributions_storage.js",
+  "./shared/panel_resize.js",
   "./shared/synapse_render.js",
   "./shared/consumer_contract.js",
   "./shared/gate_chip.js",

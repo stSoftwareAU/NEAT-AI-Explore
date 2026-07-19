@@ -383,6 +383,51 @@ body {
   display: none;
 }
 
+/*
+ * Issue #510: width-resize handle on the free edge of the Focus/Legend
+ * overlays. `touch-action: none` lets a touch drag resize rather than pan the
+ * canvas underneath. Hidden on phones, where the panels keep their bottom-sheet
+ * behaviour.
+ */
+.panelResizeHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 21;
+}
+
+.panelResizeHandle-right {
+  right: 0;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.panelResizeHandle-left {
+  left: 0;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.panelResizeHandle:hover,
+.panelResizeHandle:focus-visible,
+.panelResizeHandle.isDragging {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.panelResizeHandle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Collapsed panels have no body to resize against — hide the handle. */
+.hud.isCollapsed .panelResizeHandle,
+.legend.isCollapsed .panelResizeHandle {
+  display: none;
+}
+
 .legend.isCollapsed .legendBody {
   display: none;
 }
@@ -468,6 +513,10 @@ body {
 }
 
 @media (max-width: 640px) {
+  /* Phones keep the fixed bottom-sheet / stacked overlay behaviour (#510). */
+  .panelResizeHandle {
+    display: none;
+  }
   .input {
     min-width: 0;
     flex: 1 1 100%;
