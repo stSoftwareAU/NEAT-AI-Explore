@@ -82,6 +82,7 @@ const SHARED_MODULES = [
   "docs/shared/touch_gestures.js",
   "docs/shared/sparkline.js",
   "docs/shared/responsive.js",
+  "docs/shared/selection_attribution.js",
 ];
 
 for (const mod of SHARED_MODULES) {

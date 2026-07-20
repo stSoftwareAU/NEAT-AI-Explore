@@ -1374,6 +1374,43 @@ function getMeanContribution(fromUuid, toUuid) {
     synData?.stats?.mean_contribution ?? null;
 }
 
+/**
+ * Per-observation contribution series (weight × activation) for a synapse
+ * (Issue #513). Used by selection-squash (MINIMUM/MAXIMUM) win-fraction
+ * attribution. Resolution order:
+ *   1. `recording.synapses[from→to].contribution` (or `.contributions`), if
+ *      the snapshot records per-synapse series directly.
+ *   2. Fallback: `recording.neurons[from].activation` × `weight`.
+ * Returns `null` when neither source is available, in which case the
+ * allocation falls back to an even split.
+ *
+ * @param {string} fromUuid
+ * @param {string} toUuid
+ * @param {number} weight
+ * @returns {number[] | null}
+ */
+function getSynapseContributions(fromUuid, toUuid, weight) {
+  const rec = SNAPSHOT?.recording;
+  if (!rec) return null;
+
+  const syn = rec.synapses;
+  if (syn) {
+    const key = `${fromUuid}→${toUuid}`;
+    const entry = Array.isArray(syn)
+      ? syn.find((s) => s?.fromUuid === fromUuid && s?.toUuid === toUuid)
+      : (syn[key] ?? syn[`${fromUuid}->${toUuid}`]);
+    const c = entry?.contribution ?? entry?.contributions;
+    if (Array.isArray(c)) return c;
+  }
+
+  // Fallback: reconstruct from the source neuron's recorded activation series.
+  const act = rec.neurons?.[fromUuid]?.activation;
+  if (Array.isArray(act) && typeof weight === "number" && isFinite(weight)) {
+    return act.map((a) => (typeof a === "number" ? a * weight : NaN));
+  }
+  return null;
+}
+
 function getReconstructionCheck(uuid) {
   const reconChecks = SNAPSHOT?.derived?.reconstructionChecks ??
     SNAPSHOT?.derived?.reconstruction_checks ?? [];
@@ -2062,6 +2099,8 @@ function computeTopContributingInputs(focusUuid, opts = {}) {
         toUuid: s.toUuid,
         weight: s.weight,
         meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+        // Issue #513 — per-observation series for selection-squash attribution.
+        contributions: getSynapseContributions(s.fromUuid, s.toUuid, s.weight),
       }));
     },
     // Issue #270: propagate the squash cap at each hop so accumulated
@@ -2317,6 +2356,8 @@ function renderImpactBreakdown(uuid, neuronImpact) {
       toUuid: s.toUuid,
       weight: s.weight,
       meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+      // Issue #513 — per-observation series for selection-squash attribution.
+      contributions: getSynapseContributions(s.fromUuid, s.toUuid, s.weight),
     })),
     toNeuronSquash: toNeuron?.squash ?? null,
     recordedActivationMax: recordedActMax,
@@ -2570,6 +2611,8 @@ function renderSynapseList(toUuid, { animate = false } = {}) {
       toUuid: s.toUuid,
       weight: s.weight,
       meanContribution: getMeanContribution(s.fromUuid, s.toUuid),
+      // Issue #513 — per-observation series for selection-squash attribution.
+      contributions: getSynapseContributions(s.fromUuid, s.toUuid, s.weight),
     })),
     toNeuronSquash: toNeuron?.squash ?? null,
     recordedActivationMax: recordedActMax,

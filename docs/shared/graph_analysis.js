@@ -29,7 +29,7 @@ import { computeInboundSynapseImpactAllocation } from "../impact_attribution.js"
 import { computeInputActiveFraction } from "./consumer_contract.js";
 
 /**
- * @typedef {{ fromUuid: string, toUuid: string, weight: number, meanContribution?: number|null }} Edge
+ * @typedef {{ fromUuid: string, toUuid: string, weight: number, meanContribution?: number|null, contributions?: number[]|null }} Edge
  */
 
 /**
@@ -259,6 +259,9 @@ export function computeTopContributingInputs(input) {
         toUuid: e.toUuid,
         weight: e.weight,
         meanContribution: e.meanContribution ?? null,
+        // Issue #513 — per-observation contribution series lets the allocation
+        // apply selection-squash (MINIMUM/MAXIMUM) win-fraction attribution.
+        contributions: Array.isArray(e.contributions) ? e.contributions : null,
       })),
       toNeuronSquash: toNeuronSquash ?? null,
       recordedActivationMax: typeof recordedActivationMax === "number"
