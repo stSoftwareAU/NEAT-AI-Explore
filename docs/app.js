@@ -1594,9 +1594,19 @@ function truncateUuid(uuid) {
 function truncateNeuronName(uuid) {
   const alias = getAlias(uuid);
   if (alias) {
-    return alias.length > 20 ? alias.slice(0, 18) + "…" : alias;
+    // Issue #512 — return the full alias; row labels now flex into the
+    // available width and CSS `text-overflow: ellipsis` is the single
+    // truncation mechanism, so no JS hard-truncation is applied here.
+    return alias;
   }
   return truncateUuid(uuid);
+}
+
+// Full, untruncated neuron name for a row's `title` attribute (Issue #512) so
+// any label still clipped by CSS overflow remains readable on hover.
+function fullNeuronName(uuid) {
+  const alias = getAlias(uuid);
+  return alias ? `${alias} (${uuid})` : uuid;
 }
 
 function getImpactClass(impact) {
@@ -2249,7 +2259,9 @@ function renderImpactDiagnosticsPanel(uuid, neuronType) {
 
     return `
       <div class="impactBreakdownRow">
-        <div class="impactBreakdownOut">${escapeHtml(toLabel)}</div>
+        <div class="impactBreakdownOut" title="${
+      escapeHtml(fullNeuronName(t.toUuid))
+    }">${escapeHtml(toLabel)}</div>
         <div class="impactBreakdownStats">
           <span class="stat" title="Downstream squash">${
       escapeHtml(warn)
@@ -2341,7 +2353,9 @@ function renderImpactBreakdown(uuid, neuronImpact) {
       : "N/A";
     return `
       <div class="impactBreakdownRow">
-        <div class="impactBreakdownOut">${escapeHtml(fromLabel)}</div>
+        <div class="impactBreakdownOut" title="${
+      escapeHtml(fullNeuronName(r.fromUuid))
+    }">${escapeHtml(fromLabel)}</div>
         <div class="impactBreakdownStats">
           <span class="stat" title="Allocated impact from this inbound synapse">${
       escapeHtml(alloc)

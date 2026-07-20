@@ -190,6 +190,48 @@ Deno.test("buildObservationContributionsRow: HTML-escapes label and group", () =
   assert(html.includes("Group &amp; Co"), "group must be HTML-escaped");
 });
 
+// ============================================================================
+// Row label uses available width; full label surfaced via `title` (Issue #512).
+// ============================================================================
+
+Deno.test("buildObservationContributionsRow: no fixed-width clip on the label div", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-0", score: 0.5 },
+    { getAlias: () => "volume-recommendation" },
+  );
+  // The label must render in full — no JS-side truncation ellipsis injected.
+  assert(
+    html.includes("volume-recommendation (input-0)"),
+    "full alias (uuid) label must render untruncated",
+  );
+  assert(
+    !html.includes("volume-recommen…"),
+    "label must not be hard-truncated with an ellipsis in JS",
+  );
+});
+
+Deno.test("buildObservationContributionsRow: sets full label as the title attribute", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-0", score: 0.5 },
+    { getAlias: () => "volume-recommendation" },
+  );
+  assert(
+    html.includes('title="volume-recommendation (input-0)"'),
+    "row label must carry the full label as a title attribute for hover",
+  );
+});
+
+Deno.test("buildObservationContributionsRow: escapes the title attribute", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-x", score: 0.25 },
+    { getAlias: () => '"><img>' },
+  );
+  assert(
+    html.includes('title="&quot;&gt;&lt;img&gt; (input-x)"'),
+    "title attribute must be HTML-escaped to prevent attribute injection",
+  );
+});
+
 Deno.test("formatSharePercent: formats a fractional share as a percent string", () => {
   assertEquals(formatSharePercent(0.5, 4), "50.00%");
   assertEquals(formatSharePercent(1, 4), "100.0%");

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Issue #512 — Observation Contributions label width</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+    body {
+      background: var(--bg, #0d1117);
+      padding: 24px;
+    }
+    .demo {
+      width: 420px;
+    }
+    .demo h2 {
+      color: var(--text, #e6edf3);
+      font: 14px/1.4 system-ui;
+    }
+    .impactBreakdown {
+      max-width: 420px;
+    }
+    </style>
+  </head>
+  <body class="impactBreakdown">
+    <div class="demo">
+      <h2>Observation Contributions (Issue #512 — labels use available width)</h2>
+      <div id="panel"></div>
+    </div>
+    <script type="module">
+    import {
+      buildObservationContributionsHtml,
+    } from "../shared/observation_contributions.js";
+
+    const aliases = {
+      "input-0": "volume-recommendation",
+      "input-1": "atmospheric-pressure-sensor",
+      "input-2": "temp",
+      "input-3": "relative-humidity-reading-normalised",
+    };
+    const html = buildObservationContributionsHtml({
+      uuid: "output-0",
+      neuronType: "output",
+      inputs: [
+        { uuid: "input-0", score: 0.42 },
+        { uuid: "input-1", score: 0.31 },
+        { uuid: "input-2", score: 0.18 },
+        { uuid: "input-3", score: 0.09 },
+      ],
+      getAlias: (u) => aliases[u] ?? null,
+      topN: 10,
+    });
+    document.getElementById("panel").innerHTML = html;
+    </script>
+  </body>
+</html>
