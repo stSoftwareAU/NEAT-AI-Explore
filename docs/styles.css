@@ -845,7 +845,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  /*
+   * Issue #512 — flex into the available row width instead of clipping at a
+   * fixed 140px. `min-width: 0` lets the flex item shrink below its content
+   * width so `text-overflow: ellipsis` only engages on genuine overflow.
+   */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Observation contributions panel (Issue #186). */
@@ -854,6 +860,8 @@ body {
   flex-direction: column;
   min-width: 0;
   gap: 2px;
+  /* Issue #512 — grow into the row so the wrapped label can use the space. */
+  flex: 1 1 auto;
 }
 
 /*

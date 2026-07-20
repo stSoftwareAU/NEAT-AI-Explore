@@ -161,7 +161,9 @@ export function buildObservationContributionsRow(row, lookups = {}) {
     escapeHtml(uuid)
   }"${topAttr}>
         <div class="observationContributionsLabelWrap">
-          <div class="impactBreakdownOut">${escapeHtml(label)}</div>
+          <div class="impactBreakdownOut" title="${escapeHtml(label)}">${
+    escapeHtml(label)
+  }</div>
           ${subtitle}
         </div>
         <div class="impactBreakdownStats">
