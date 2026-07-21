@@ -272,6 +272,19 @@ export function computeImpactBreakdownToOutputs(input) {
  * `recordedActivationMax` to provide an observed envelope; otherwise the
  * helper falls back to current behaviour (no cap).
  *
+ * Selection-aware allocation (issue #513)
+ * ---------------------------------------
+ * MINIMUM/MAXIMUM/IF neurons select a single operand per observation rather
+ * than summing their inbound synapses, so the additive `|meanContribution|`
+ * share misattributes them. When `toNeuronSquash` is a selection squash and
+ * each inbound synapse carries a per-observation `contributions` series
+ * (weight × activation), the allocation replaces the additive `share` with the
+ * operand's *win fraction* — the fraction of observations where it is the
+ * argmin (MINIMUM) / argmax (MAXIMUM). IF, and any selection neuron whose
+ * operands lack per-observation records, fall back to an even `1/n` split
+ * (`selectionFallback: true`). The additive share is preserved as
+ * `preGateShare` so the pre-gate badge can show the pre-selection value.
+ *
  * Unknown or missing squash strings fall back gracefully — no console
  * output, the cap is simply skipped.
  *
@@ -282,13 +295,18 @@ export function computeImpactBreakdownToOutputs(input) {
 
 import { squashEmitCeiling } from "./shared/squash_bounds.js";
 import { computeInputActiveFraction } from "./shared/consumer_contract.js";
+import {
+  computeSelectionWinShares,
+  normaliseSelectionSquash,
+} from "./shared/selection_attribution.js";
 
 /**
  * @typedef {{
  *   fromUuid: string,
  *   toUuid: string,
  *   weight: number,
- *   meanContribution?: number | null
+ *   meanContribution?: number | null,
+ *   contributions?: number[] | null
  * }} InboundSynapseWithStats
  */
 
@@ -303,8 +321,13 @@ import { computeInputActiveFraction } from "./shared/consumer_contract.js";
  *     share: number,
  *     effectiveShare: number,
  *     gateMaskedFraction: number,
+ *     preGateShare?: number,
+ *     selectionWinShare?: number | null,
+ *     selectionFallback?: boolean,
  *     allocatedImpact: number | null
- *   }>
+ *   }>,
+ *   selectionKind?: ("MINIMUM"|"MAXIMUM"|"IF"|null),
+ *   selectionFallback?: boolean
  * }} InboundAllocationResult
  */
 
@@ -362,8 +385,32 @@ export function computeInboundSynapseImpactAllocation(input) {
   );
   const haveFiniteCeiling = isFinite(emitCeiling) && emitCeiling > 0;
 
-  const synapses = rows.map((r) => {
-    const share = totalScore > 0 ? r.score / totalScore : 0;
+  // Issue #513 — selection-squash awareness. MINIMUM/MAXIMUM/IF neurons pick a
+  // single operand per observation, so the additive `|meanContribution|` share
+  // misattributes their inbound synapses. When the receiving neuron is a
+  // selection squash, allocate each inbound synapse's `share` by its win
+  // fraction (argmin/argmax of the per-observation contribution series) instead
+  // of the additive score. The additive share is preserved as `preGateShare`
+  // so the existing pre-gate badge can show the old value for comparison.
+  const selectionKind = normaliseSelectionSquash(toNeuronSquash);
+  let selectionShares = null;
+  let selectionFallback = false;
+  if (selectionKind) {
+    const winRes = computeSelectionWinShares({
+      squash: selectionKind,
+      operands: rows.map((r) => ({
+        contributions: Array.isArray(r.contributions) ? r.contributions : null,
+      })),
+    });
+    if (winRes.shares.length === rows.length) {
+      selectionShares = winRes.shares;
+      selectionFallback = winRes.fallback;
+    }
+  }
+
+  const synapses = rows.map((r, idx) => {
+    const additiveShare = totalScore > 0 ? r.score / totalScore : 0;
+    const share = selectionShares ? selectionShares[idx] : additiveShare;
 
     let allocatedImpact = null;
     if (
@@ -397,10 +444,40 @@ export function computeInboundSynapseImpactAllocation(input) {
     ) {
       activeFraction = computeInputActiveFraction(consumerContract, r.fromUuid);
     }
-    const effectiveShare = share * activeFraction;
-    const gateMaskedFraction = 1 - activeFraction;
+    let effectiveShare = share * activeFraction;
+    let gateMaskedFraction = 1 - activeFraction;
 
-    return { ...r, share, effectiveShare, gateMaskedFraction, allocatedImpact };
+    // Issue #513 — when selection allocation reduced this operand's share
+    // below its additive share, surface the additive value via the existing
+    // pre-gate badge so old and new views stay comparable. The selection
+    // "masking" takes precedence for the badge because a MINIMUM/MAXIMUM
+    // selection is itself a gate on the operand.
+    let preGateShare;
+    let selectionWinShare = null;
+    if (selectionShares) {
+      selectionWinShare = share;
+      preGateShare = additiveShare;
+      const masked = additiveShare > 0
+        ? Math.max(0, Math.min(1, 1 - share / additiveShare))
+        : 0;
+      // Only override when selection actually reduced the share; otherwise
+      // leave the #272 gate diagnostics untouched.
+      if (masked > 0) {
+        gateMaskedFraction = masked;
+        effectiveShare = share;
+      }
+    }
+
+    return {
+      ...r,
+      share,
+      effectiveShare,
+      gateMaskedFraction,
+      ...(preGateShare !== undefined ? { preGateShare } : {}),
+      selectionWinShare,
+      selectionFallback: selectionShares ? selectionFallback : false,
+      allocatedImpact,
+    };
   }).sort((a, b) =>
     (b.allocatedImpact ?? b.score) - (a.allocatedImpact ?? a.score)
   );
@@ -410,6 +487,8 @@ export function computeInboundSynapseImpactAllocation(input) {
     neuronImpact: neuronImpact ?? null,
     totalScore,
     emitCeiling,
+    selectionKind,
+    selectionFallback: selectionShares ? selectionFallback : false,
     synapses,
   };
 }
