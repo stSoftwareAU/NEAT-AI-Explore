@@ -6,7 +6,8 @@ target branch — runs `deno fmt --check`, `deno lint`, `deno check`, and
 `deno test` with coverage uploaded to Codecov. The existing `Quality Gate`
 (`ci.yml`) only runs on PRs targeting `Develop`; this new workflow extends the
 same checks to feature-branch PRs and adds Codecov coverage reporting,
-addressing the VibeCoding workflow auditor's `deno-quality` sync. Closes #172.
+addressing the organisation's internal workflow auditor's `deno-quality` sync.
+Closes #172.
 
 Third-party actions are pinned to 40-character commit SHAs per the project's
 supply-chain policy:
