@@ -433,6 +433,19 @@ to the output.
   families (2,132 in the published snapshot).
 - **Tooltips** reuse the #521 observation-summary format
   (`buildObservationTooltip`).
+- **Touch tooltips (Issue #536)** — native SVG `<title>` only renders on hover,
+  so the same tooltip string is also driven into the `#tooltip` panel on tap and
+  on keyboard focus (`docs/sankey/tooltip_panel.js`). The panel is clamped
+  inside the viewport, and dismisses on tap-away, `Escape`, or blur. Hover and
+  the screen-reader `aria-label` are untouched — this is additive.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hidden
+    Hidden --> Shown: tap / focus a node or band
+    Shown --> Shown: tap another node or band
+    Shown --> Hidden: tap away · Escape · blur · re-render
+```
 
 ```mermaid
 flowchart LR
@@ -859,6 +872,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
 | `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
 | `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`                                                                                                            |
+| `docs/sankey/tooltip_panel.js`          | `clampTooltipPosition`, `anchorPoint`, `createTooltipController`, `attachTooltipTrigger`, `attachTooltipDismissers`                       |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based

@@ -30,6 +30,11 @@ import { buildAggregatedGraphModel } from "../shared/aggregated_graph_model.js";
 import { bandWidth, buildSankeyFlow } from "../shared/sankey_flow.js";
 import { extractTooltips } from "../shared/ui_helpers.js";
 import { synapseWeightColourCss } from "../shared/colour_maps.js";
+import {
+  attachTooltipDismissers,
+  attachTooltipTrigger,
+  createTooltipController,
+} from "./tooltip_panel.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEW_HEIGHT = 620;
@@ -51,6 +56,29 @@ function setStatus(text, isBad = false) {
   if (!el) return;
   el.textContent = text;
   el.className = isBad ? "status bad" : "status";
+}
+
+let tooltipController = null;
+
+/**
+ * The shared touch/keyboard tooltip panel (Issue #536).
+ *
+ * SVG `<title>` only renders on hover, so the panel is what makes the #521
+ * observation summaries reachable on a phone. Created once, on first use.
+ */
+function tooltipPanel() {
+  if (tooltipController) return tooltipController;
+  const el = document.getElementById("tooltip");
+  if (!el) {
+    // Fail loud rather than silently dropping touch tooltips (Issue #3234).
+    console.error(
+      "Tooltip panel #tooltip is missing — touch tooltips are off.",
+    );
+    return null;
+  }
+  tooltipController = createTooltipController(el);
+  attachTooltipDismissers(document, tooltipController);
+  return tooltipController;
 }
 
 function nodeColour(node) {
@@ -80,6 +108,9 @@ function render(flow) {
   const meta = document.getElementById("meta");
   if (!wrap) return;
   wrap.textContent = "";
+  // A panel left open would describe a node that no longer exists.
+  const tip = tooltipPanel();
+  tip?.hide();
 
   const visible = flow.nodes.filter((n) => n.value > 0);
   if (visible.length === 0) {
@@ -201,13 +232,14 @@ function render(flow) {
     const pct = flow.totalScore > 0
       ? ((link.value / flow.totalScore) * 100).toFixed(1)
       : "0.0";
+    const titleText = `${labelFor(rectById, link.source)} → ${
+      labelFor(rectById, link.target)
+    }\n${pct}% of the Score`;
     const title = svg("title");
-    title.textContent =
-      `${labelFor(rectById, link.source)} → ${
-        labelFor(rectById, link.target)
-      }\n` +
-      `${pct}% of the Score`;
+    title.textContent = titleText;
     path.appendChild(title);
+    // Same string on both paths — hover renders <title>, touch renders the panel.
+    if (tip) attachTooltipTrigger(path, titleText, tip);
     svgEl.appendChild(path);
   }
 
@@ -232,6 +264,7 @@ function render(flow) {
     title.textContent = node.tooltip;
     group.appendChild(rect);
     group.appendChild(title);
+    if (tip) attachTooltipTrigger(group, node.tooltip, tip);
 
     if (h >= 8) {
       const isLeftColumn = x < PAD_X + innerW / 2;
