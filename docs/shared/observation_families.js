@@ -3,15 +3,29 @@
  *
  * The default published snapshot carries 2,461 input observations. Rendering
  * one node per observation is unreadable, so the aggregated layered graph
- * model buckets them into a handful of **families** first.
+ * model buckets them into **families** first (232 on the published snapshot).
  *
  * A family key is derived from the observation metadata the viewer already
  * has — the snapshot's `tooltips` entries surfaced by `extractTooltips`:
  *
  *   1. the tooltip `group` (GRQ supplies e.g. `macro`, `rates`, `equities`);
- *   2. failing that, the leading segment of the observation label, split on
- *      the first `:`, `/`, `|` or spaced dash;
+ *   2. failing that, the **leading subject token** of the observation label
+ *      (Issue #539);
  *   3. failing that, {@link UNGROUPED_FAMILY_KEY}.
+ *
+ * The published snapshot carries no `group` metadata at all, so step 2 does
+ * all the work there. Its labels come in three dialects, and every one of them
+ * puts the subject first and the statistic/window last:
+ *
+ *   - `close-best-fit-30-7`, `divYieldYr-0`   → `close`, `divyieldyr`
+ *   - `EMVMACROTRADE mean 9M`, `Treasury 2Y mean 28D` → `emvmacrotrade`, `treasury`
+ *   - `P/E ratio (TTM) trend (4 quarters)`    → `p-e`
+ *
+ * Taking the leading token therefore groups by the underlying series and
+ * collapses the ~2,509 published observations to a couple of hundred
+ * families instead of one family per observation (Issue #539). `/` is
+ * deliberately *not* a token boundary so ratio labels (`P/E`, `P/FCF`,
+ * `EV/EBITDA`) stay distinct rather than collapsing into a meaningless `p`.
  *
  * Callers that need a different bucketing — a per-stock view, for instance —
  * pass their own `deriveFamily`. Every family retains its member UUIDs, so a
@@ -24,8 +38,13 @@
 /** Family key used when no group or label metadata is available. */
 export const UNGROUPED_FAMILY_KEY = "ungrouped";
 
-/** Separators that terminate the leading segment of an observation label. */
-const LABEL_SEPARATOR_RE = /\s+[—–-]\s+|[:/|]/;
+/**
+ * Token boundaries inside an observation label (Issue #539).
+ *
+ * Whitespace, dashes, underscores, brackets and the `:`/`|` separators all
+ * end the subject. `/` is excluded so ratio labels keep their identity.
+ */
+const LABEL_TOKEN_SEPARATOR_RE = /[\s\-–—_:|()[\]{},]+/;
 
 /**
  * Slugify a display label into a stable, comparable family key.
@@ -62,9 +81,13 @@ export function deriveObservationFamily(observation) {
 
   const labelText = typeof label === "string" ? label.trim() : "";
   if (labelText) {
-    const head = labelText.split(LABEL_SEPARATOR_RE)[0].trim();
-    const key = normaliseFamilyKey(head);
-    if (key) return { key, label: head };
+    // First token that carries a letter or digit — punctuation-only leaders
+    // ("— Momentum") are skipped rather than swallowing the whole label.
+    for (const token of labelText.split(LABEL_TOKEN_SEPARATOR_RE)) {
+      const head = token.trim();
+      const key = normaliseFamilyKey(head);
+      if (key) return { key, label: head };
+    }
   }
 
   return { key: UNGROUPED_FAMILY_KEY, label: UNGROUPED_FAMILY_KEY };

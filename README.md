@@ -397,7 +397,12 @@ flowchart LR
 ```
 
 - **Families** — inputs bucket by their tooltip `group`, falling back to the
-  label's leading segment, then to `ungrouped`.
+  label's **leading subject token**, then to `ungrouped` (Issue #539). The
+  published snapshot supplies no `group` metadata, so the fallback does all the
+  work there: `close-best-fit-30-7`, `EMVMACROTRADE mean 9M` and
+  `P/E ratio (TTM)` group as `close`, `emvmacrotrade` and `p-e`, collapsing
+  2,132 singleton families to 232 real ones. `/` is deliberately not a token
+  boundary so ratio labels keep their identity.
 - **Layers** — a longest-path Kahn sweep; recurrent networks still terminate,
   and output neurons are pinned to the final layer.
 - **Impact** — exported `derived.impactsByNeuronUuid` values win; anything
@@ -428,9 +433,10 @@ to the output.
   the Score.
 - **Aggregation-first** — the model already collapses low-impact hidden neurons;
   the view additionally folds each layer's low-contribution tail into one
-  per-layer "other" node (`maxNodesPerLayer`), so the diagram stays legible even
-  when the snapshot's inputs explode into thousands of single-observation
-  families (2,132 in the published snapshot).
+  per-layer "other" node (`maxNodesPerLayer`), so the diagram stays legible.
+  Since #539 the layer-0 bands it ranks are genuine observation families (232 on
+  the published snapshot) rather than single observations, so the bands read as
+  family contributions to the Score.
 - **Inspectable folds (Issue #538)** — the fold is what keeps the diagram
   readable, but it also hides the thin/absent flows a viewer hunting **dead
   zones** is looking for. Selecting an "other" node lists what it swallowed,

@@ -50,6 +50,75 @@ Deno.test("deriveObservationFamily falls back to the label's leading segment", (
   );
 });
 
+Deno.test("deriveObservationFamily reads the published label dialects (Issue #539)", () => {
+  // Hyphenated technical series — the trailing window/offset is a modifier.
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-0", label: "divYieldYr-0" }).key,
+    "divyieldyr",
+  );
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-1", label: "close-best-fit-0-180" })
+      .key,
+    "close",
+  );
+  assertEquals(
+    deriveObservationFamily({
+      uuid: "input-2",
+      label: "retail_sales-best-fit-6",
+    })
+      .key,
+    "retail",
+  );
+  // Series code plus statistic, separated by spaces.
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-3", label: "EMVMACROTRADE mean 9M" })
+      .key,
+    "emvmacrotrade",
+  );
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-4", label: "Treasury 2Y mean 28D" })
+      .label,
+    "Treasury",
+  );
+  // Prose fundamentals with a bracketed qualifier.
+  assertEquals(
+    deriveObservationFamily({
+      uuid: "input-5",
+      label: "Cash ratio trend (20 quarters)",
+    }).key,
+    "cash",
+  );
+});
+
+Deno.test("deriveObservationFamily keeps ratio labels intact (Issue #539)", () => {
+  // "/" is part of the subject, not a separator: P/E, P/B and P/FCF are
+  // distinct families rather than one meaningless "p".
+  assertEquals(
+    deriveObservationFamily({
+      uuid: "input-6",
+      label: "P/FCF ratio (TTM) trend (2 quarters)",
+    }).key,
+    "p-fcf",
+  );
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-7", label: "P/E ratio (TTM)" })
+      .label,
+    "P/E",
+  );
+});
+
+Deno.test("deriveObservationFamily skips leading tokens with no letters or digits", () => {
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-8", label: "— Momentum 30 day" })
+      .key,
+    "momentum",
+  );
+  assertEquals(
+    deriveObservationFamily({ uuid: "input-9", label: "  ---  " }).key,
+    UNGROUPED_FAMILY_KEY,
+  );
+});
+
 Deno.test("deriveObservationFamily returns the ungrouped family with no metadata", () => {
   const family = deriveObservationFamily({ uuid: "input-9" });
   assertEquals(family.key, UNGROUPED_FAMILY_KEY);
