@@ -408,6 +408,41 @@ flowchart LR
   `members` and a stable `id`, so a later per-stock view can re-expand or
   re-weight it without a rewrite.
 
+### Sankey contribution-flow view (Issue #526)
+
+`docs/sankey/` is a candidate replacement graph view that draws contribution
+**flow** rather than nodes and edges. It consumes the aggregated layered graph
+model and turns it into a **conserved** Sankey: the band into the output is the
+Score, and every upstream band is proportional to the contribution that reaches
+it. That makes "how does the Score decompose across observation families?" a
+proportional, phone-friendly picture — the primary strength of a Sankey — while
+thin/absent bands surface dead zones and a single family's band traces forward
+to the output.
+
+- **Entry point**: `docs/sankey/index.html` (linked from the trace explorer's
+  overflow menu, alongside the 3D graph).
+- **Conserved flow** — `buildSankeyFlow` seeds each output with its impact and
+  walks layers back-to-front, splitting each node's throughput across its
+  inbound edges by contribution (`sankey_flow.js`). Every node's inbound bands
+  therefore sum to its outbound bands, so the layer-0 family bands sum back to
+  the Score.
+- **Aggregation-first** — the model already collapses low-impact hidden neurons;
+  the view additionally folds each layer's low-contribution tail into one
+  per-layer "other" node (`maxNodesPerLayer`), so the diagram stays legible even
+  when the snapshot's inputs explode into thousands of single-observation
+  families (2,132 in the published snapshot).
+- **Tooltips** reuse the #521 observation-summary format
+  (`buildObservationTooltip`).
+
+```mermaid
+flowchart LR
+    S[snapshot] --> M["buildAggregatedGraphModel<br/>aggregate · layer · impact · collapse"]
+    M --> F["buildSankeyFlow<br/>seed outputs = Score"]
+    F --> B["back-to-front flow split<br/>throughput ∝ contribution"]
+    B --> R{"per-layer rank fold<br/>keep top-K, rest → other"}
+    R --> V["SVG bands<br/>width ∝ contribution to Score"]
+```
+
 ---
 
 ## 🕸️ Layered DAG view (`/dag/`)
@@ -785,6 +820,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
 | `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
+| `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`                                                                                                            |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based
