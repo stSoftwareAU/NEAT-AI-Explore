@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Content-Security-Policy (Issue #218). See docs/index.html for the full
+      rationale, including why `frame-ancestors` is omitted (ignored when
+      delivered via a meta tag per CSP3 §3.4). This page embeds the candidate
+      views in same-origin <iframe>s, which `default-src 'self'` allows
+      (frame-src falls back to default-src).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://stsoftwareau.github.io https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'none'"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>NEAT-AI Explore - Compare candidate views</title>
+
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="theme-color"
+      content="#0a0e1a"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <link rel="stylesheet" href="./compare.css?v=__BUILD_ID__" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../favicon.ico" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="../icons/icon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="../icons/icon-16x16.png"
+    />
+    <link rel="apple-touch-icon" href="../icons/icon-192x192.png" />
+  </head>
+  <body>
+    <header class="appHeader">
+      <h1>Compare candidate views</h1>
+      <div class="headerControls" role="group" aria-label="Snapshot loader">
+        <input
+          id="snapshotUrl"
+          class="input"
+          aria-label="Snapshot URL shared across all candidate views"
+          placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+        />
+        <button id="applyBtn" class="button" type="button">Apply</button>
+        <a
+          class="button buttonSecondary"
+          href="../"
+          aria-label="Back to Trace explorer"
+        >Trace</a>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      Choose a snapshot, then open or compare the three candidate views on it.
+    </p>
+
+    <main>
+      <p class="intro">
+        Three candidate views were built side by side to replace the 3D
+        starfield. Each reads the <strong>same</strong> snapshot, so you can
+        judge them on identical data against the three goals: understanding the
+        Score, finding dead zones, and troubleshooting problem neurons. The
+        evaluation and recommended winner are recorded in
+        <code>docs/archive/candidate-view-evaluation-528.md</code>.
+      </p>
+
+      <ul id="cards" class="cards" aria-label="Candidate views"></ul>
+
+      <div class="sideBySideControls">
+        <button id="sideBySideBtn" class="button" type="button">
+          Compare side by side
+        </button>
+        <span class="hint">
+          Loads all three views together — heavier on phones.
+        </span>
+      </div>
+
+      <section
+        id="sideBySide"
+        class="sideBySide"
+        aria-label="Side-by-side comparison"
+        hidden
+      ></section>
+    </main>
+
+    <!--
+      Boot script extracted to ./boot.js so the page can declare a strict
+      Content-Security-Policy with `script-src 'self'` (no 'unsafe-inline').
+      See Issue #218.
+    -->
+    <script type="module" src="./boot.js?v=__BUILD_ID__"></script>
+  </body>
+</html>
