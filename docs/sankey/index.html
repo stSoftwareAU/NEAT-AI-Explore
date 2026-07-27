@@ -120,6 +120,48 @@
       </aside>
 
       <p id="meta" class="metaLine"></p>
+
+      <!--
+        Folded-tail inspector (Issue #538). Selecting an "other" node lists what
+        the per-layer fold swallowed, weakest first, so dead zones stay
+        discoverable instead of vanishing into one opaque band.
+      -->
+      <aside
+        id="foldPanel"
+        class="foldPanel"
+        aria-labelledby="foldPanelTitle"
+        aria-hidden="true"
+      >
+        <div class="foldPanelHeader">
+          <h2 id="foldPanelTitle" class="foldPanelTitle">Folded members</h2>
+          <button
+            id="foldPanelClose"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <p id="foldPanelSummary" class="foldPanelSummary"></p>
+        <ol id="foldPanelList" class="foldPanelList" aria-live="polite"></ol>
+        <div class="foldPanelPager">
+          <button
+            id="foldPanelPrev"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Previous
+          </button>
+          <span id="foldPanelPageInfo" class="foldPanelPageInfo"></span>
+          <button
+            id="foldPanelNext"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Next
+          </button>
+        </div>
+      </aside>
     </main>
 
     <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
