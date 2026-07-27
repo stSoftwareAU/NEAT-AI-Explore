@@ -84,7 +84,16 @@ import {
   shouldCollapseTraceOverflow,
 } from "./shared/trace_header.js";
 import { wireTraceOverflowMenu } from "./shared/trace_overflow_menu.js";
-import { escapeHtml, extractTooltips } from "./shared/ui_helpers.js";
+import {
+  buildObservationTooltip,
+  escapeHtml,
+  extractTooltips,
+} from "./shared/ui_helpers.js";
+import {
+  loadFallbackTooltips,
+  mergeTooltipMaps,
+  needsFallbackTooltips,
+} from "./shared/tooltips_fallback.js";
 import {
   buildObservationContributionsHtml,
   clampTopN,
@@ -615,6 +624,27 @@ function loadInputLabelsFromSnapshot(snapshot) {
   uuidToGroup = result.groups;
 }
 
+/**
+ * Issue #521 — snapshots generated before GRQ embedded Tooltips.json carry no
+ * descriptions. For those, merge in the bundled copy so observation rows still
+ * have a summary to show on hover. The snapshot always wins where it has data.
+ */
+async function applyFallbackTooltips() {
+  if (!needsFallbackTooltips({ descriptions: uuidToDescription })) return;
+  try {
+    const fallback = await loadFallbackTooltips();
+    uuidToDescription = mergeTooltipMaps(
+      uuidToDescription,
+      fallback.descriptions,
+    );
+  } catch (e) {
+    // The bundle is committed to this repo, so a failure here is a real
+    // deploy/serving fault — surface it loudly rather than silently showing
+    // label-only tooltips.
+    console.error("Bundled observation tooltips unavailable:", e);
+  }
+}
+
 function getAlias(uuid) {
   return uuidToLabel[uuid] ?? null;
 }
@@ -906,6 +936,7 @@ async function loadSnapshot(source, label) {
 
     SNAPSHOT = obj;
     loadInputLabelsFromSnapshot(SNAPSHOT);
+    await applyFallbackTooltips();
     // Issue #273 — resolve the consumer contract once per snapshot load so
     // every calc-layer call site can pass the same value through.
     CONSUMER_CONTRACT = loadConsumerContract(SNAPSHOT);
@@ -1278,8 +1309,17 @@ function renderObsModal() {
       );
     }
 
+    // Issue #521 — hovering the row shows the observation's summary.
+    const rowTitle = buildObservationTooltip({
+      uuid: r.uuid,
+      label: r.alias ? `${r.alias} (${r.uuid})` : r.uuid,
+      description: r.description,
+    });
+
     return `
-      <div class="obsRow" data-obs-uuid="${escapeHtml(r.uuid)}">
+      <div class="obsRow" data-obs-uuid="${escapeHtml(r.uuid)}" title="${
+      escapeHtml(rowTitle)
+    }">
         <div class="obsRowTitle">${alias}${uuid}</div>
         <div class="synapseStats">${chips.join("")}</div>
         ${desc}
@@ -1640,10 +1680,16 @@ function truncateNeuronName(uuid) {
 }
 
 // Full, untruncated neuron name for a row's `title` attribute (Issue #512) so
-// any label still clipped by CSS overflow remains readable on hover.
+// any label still clipped by CSS overflow remains readable on hover. When the
+// neuron is an observation with a Tooltips.json summary, the summary is
+// appended so hovering explains what the observation means (Issue #521).
 function fullNeuronName(uuid) {
   const alias = getAlias(uuid);
-  return alias ? `${alias} (${uuid})` : uuid;
+  return buildObservationTooltip({
+    uuid,
+    label: alias ? `${alias} (${uuid})` : uuid,
+    description: getInputDescription(uuid),
+  });
 }
 
 function getImpactClass(impact) {
@@ -2206,6 +2252,7 @@ function renderObservationContributions(uuid, neuronType) {
     inputs: cached.inputs ?? [],
     getAlias,
     getGroup: getInputGroup,
+    getDescription: getInputDescription,
     isPhone: isNarrowMobile(),
     userToggle: OBSERVATION_CONTRIBUTIONS_TOGGLE.get(uuid) ?? null,
     topN: getObservationTopN(),

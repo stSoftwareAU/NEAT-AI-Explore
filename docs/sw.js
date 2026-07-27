@@ -60,6 +60,9 @@ const STATIC_FILES = [
   "./shared/discovery.js",
   "./shared/diagnostics_scan.js",
   "./shared/ui_helpers.js",
+  // Issue #521: the module is precached, but ./tooltips.json (~430 KB) is not
+  // — it is fetched on demand only for snapshots that lack embedded tooltips.
+  "./shared/tooltips_fallback.js",
   "./shared/modal_focus.js",
   "./shared/responsive.js",
   "./shared/filter_layout.js",

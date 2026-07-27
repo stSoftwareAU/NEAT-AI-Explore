@@ -218,6 +218,32 @@ Optional fields:
   dashboard (e.g. `macro`, `rates`, `equities`). Example:
   `snapshot.tooltips["input-0"] = { label, description, group: "rates" }`.
 
+#### Observation summary on hover (Issue #521)
+
+Every surface that renders an observation label shows that observation's
+`description` on mouse-over — the Observation Contributions panel, the
+Observations dashboard, the impact/inbound breakdown rows, the trace breadcrumb,
+and the graph explorer's labels, focus badge and HUD. Where no description
+exists the label alone remains the tooltip. Touch devices reuse the existing tap
+/ long-press tooltip patterns.
+
+Snapshot descriptions are always the source of truth, so the viewer works for
+non-GRQ networks. Snapshots generated before GRQ embedded `Tooltips.json` carry
+no descriptions; for those, the viewer lazily fetches the bundled copy at
+`docs/tooltips.json`. The bundle is ~430 KB, so it is **not** precached — a
+snapshot with its own tooltips never downloads it.
+
+```mermaid
+flowchart LR
+    S[snapshot.tooltips] --> E[extractTooltips]
+    E --> D{any descriptions?}
+    D -- yes --> M[uuidToDescription]
+    D -- no --> F[fetch docs/tooltips.json]
+    F --> M
+    M --> T[buildObservationTooltip]
+    T --> R["row title = label — description"]
+```
+
 ### ☁️ Loading snapshots from S3 (presigned URLs)
 
 If you load a snapshot via a presigned S3 URL from GitHub Pages, the S3 bucket
@@ -682,7 +708,8 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/diagnostics_scan.js`      | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
 | `docs/shared/theme.js`                 | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 | `docs/shared/panel_resize.js`          | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
-| `docs/shared/ui_helpers.js`            | `escapeHtml`, `extractTooltips`                                                                                                           |
+| `docs/shared/ui_helpers.js`            | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
+| `docs/shared/tooltips_fallback.js`     | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
 | `docs/shared/selection_attribution.js` | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be

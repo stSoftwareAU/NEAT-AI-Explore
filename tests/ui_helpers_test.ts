@@ -1,6 +1,10 @@
 import { assertEquals } from "./test_helpers.ts";
 
-import { escapeHtml, extractTooltips } from "../docs/shared/ui_helpers.js";
+import {
+  buildObservationTooltip,
+  escapeHtml,
+  extractTooltips,
+} from "../docs/shared/ui_helpers.js";
 
 // --- escapeHtml ---
 
@@ -122,4 +126,59 @@ Deno.test("extractTooltips trims label and description values", () => {
   const result = extractTooltips(snapshot);
   assertEquals(result.labels["input-0"], "Price");
   assertEquals(result.descriptions["input-0"], "Current");
+});
+
+// --- buildObservationTooltip (Issue #521) ---
+
+Deno.test("buildObservationTooltip appends the description to the label", () => {
+  assertEquals(
+    buildObservationTooltip({
+      uuid: "input-0",
+      label: "divYieldYr-0 (input-0)",
+      description: "Dividend yield for the current year",
+    }),
+    "divYieldYr-0 (input-0) — Dividend yield for the current year",
+  );
+});
+
+Deno.test("buildObservationTooltip falls back to the label when no description", () => {
+  assertEquals(
+    buildObservationTooltip({ uuid: "input-0", label: "divYieldYr-0" }),
+    "divYieldYr-0",
+  );
+  assertEquals(
+    buildObservationTooltip({
+      uuid: "input-0",
+      label: "divYieldYr-0",
+      description: "   ",
+    }),
+    "divYieldYr-0",
+  );
+});
+
+Deno.test("buildObservationTooltip falls back to the uuid when no label", () => {
+  assertEquals(buildObservationTooltip({ uuid: "input-7" }), "input-7");
+  assertEquals(
+    buildObservationTooltip({ uuid: "input-7", description: "Free cash flow" }),
+    "input-7 — Free cash flow",
+  );
+});
+
+Deno.test("buildObservationTooltip returns the description alone when nothing identifies the row", () => {
+  assertEquals(
+    buildObservationTooltip({ description: "Free cash flow" }),
+    "Free cash flow",
+  );
+});
+
+Deno.test("buildObservationTooltip returns an empty string for empty input", () => {
+  assertEquals(buildObservationTooltip(), "");
+  assertEquals(buildObservationTooltip({}), "");
+});
+
+Deno.test("buildObservationTooltip trims surrounding whitespace", () => {
+  assertEquals(
+    buildObservationTooltip({ label: "  Price  ", description: "  Now  " }),
+    "Price — Now",
+  );
 });
