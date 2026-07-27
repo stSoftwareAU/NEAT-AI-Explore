@@ -14,8 +14,11 @@
  * - docs/screenshots/graph-desktop-focus.png
  * - docs/screenshots/graph-desktop-tilt.png
  *
- * Browser-side predicates are passed as source strings so Deno does not
- * type-check DOM globals (document, window) against its Deno-runtime libs.
+ * Browser-side predicates are passed as real functions, not source strings:
+ * `waitForFunction` re-evaluates a string predicate inside the page on every
+ * poll, which the graph view's `script-src 'self'` CSP blocks (Issue #529).
+ * They reach DOM globals through `globalThis` so Deno does not type-check
+ * `document`/`window` against its Deno-runtime libs.
  *
  * Usage (from repo root):
  *   deno run -A scripts/verify_starfield_layout.ts
@@ -24,6 +27,26 @@
 import { serveDir } from "@std/http/file-server";
 import { fromFileUrl } from "@std/path";
 import { chromium } from "playwright";
+
+/** The subset of `window.__neatStarfield` (graph.js `exposeDebugApi`) used here. */
+interface StarfieldDebugApi {
+  getSnapshotLoaded(): boolean;
+  getDefaultOutputUuid(): string | null;
+  getNeighbourUuids(uuid: string): string[];
+  pickHighestRiskNeighbour(uuid: string): string | null;
+  focusByUuid(uuid: string): boolean;
+}
+
+/** The page globals the browser-side predicates below reach for. */
+interface PageGlobals {
+  document: {
+    getElementById(id: string): {
+      textContent: string | null;
+      classList: { contains(token: string): boolean };
+    } | null;
+  };
+  __neatStarfield?: StarfieldDebugApi;
+}
 
 const REPO_ROOT = fromFileUrl(new URL("..", import.meta.url));
 const DOCS = `${REPO_ROOT}docs`;
@@ -90,13 +113,13 @@ async function main(): Promise<number> {
       // - #status text to "Observations: ..."
       // - and kind "ok" (class: statusInline ok)
       await page.waitForFunction(
-        `(() => {
-          const el = document.getElementById('status');
+        () => {
+          const { document } = globalThis as unknown as PageGlobals;
+          const el = document.getElementById("status");
           if (!el) return false;
-          const txt = (el.textContent || '').trim();
-          const ok = el.classList.contains('ok');
-          return ok && txt.startsWith('Observations:');
-        })()`,
+          const txt = (el.textContent || "").trim();
+          return el.classList.contains("ok") && txt.startsWith("Observations:");
+        },
         undefined,
         { timeout: 60_000 },
       );
@@ -107,29 +130,35 @@ async function main(): Promise<number> {
       // Verify we can explore from output neurons to discover issues.
       // Use the in-page debug API (added for screenshot automation).
       await page.waitForFunction(
-        `Boolean(window.__neatStarfield && window.__neatStarfield.getSnapshotLoaded())`,
+        () => {
+          const api = (globalThis as unknown as PageGlobals).__neatStarfield;
+          return Boolean(api?.getSnapshotLoaded());
+        },
         undefined,
         { timeout: 10_000 },
       );
       await page.waitForFunction(
-        `Boolean(window.__neatStarfield.getDefaultOutputUuid())`,
+        () => {
+          const api = (globalThis as unknown as PageGlobals).__neatStarfield;
+          return Boolean(api?.getDefaultOutputUuid());
+        },
         undefined,
         { timeout: 10_000 },
       );
 
       // Start at output-0 (or first output).
-      await page.evaluate(
-        `(() => {
-          const api = window.__neatStarfield;
-          const out = api.getDefaultOutputUuid();
-          api.focusByUuid(out);
-        })()`,
-      );
+      await page.evaluate(() => {
+        const api = (globalThis as unknown as PageGlobals).__neatStarfield;
+        const out = api?.getDefaultOutputUuid();
+        if (out) api?.focusByUuid(out);
+      });
       await page.waitForFunction(
-        `(() => {
-          const txt = (document.getElementById('hud')?.textContent || '');
-          return txt.includes('Focus:') && (txt.includes('output-0') || txt.includes('Score'));
-        })()`,
+        () => {
+          const { document } = globalThis as unknown as PageGlobals;
+          const txt = document.getElementById("hud")?.textContent || "";
+          return txt.includes("Focus:") &&
+            (txt.includes("output-0") || txt.includes("Score"));
+        },
         undefined,
         { timeout: 10_000 },
       );
@@ -139,34 +168,33 @@ async function main(): Promise<number> {
       console.log(`Wrote ${relToRoot(out0)}`);
 
       // Hop to a directly linked neighbour and ensure the focus badge/HUD changes.
-      await page.evaluate(
-        `(() => {
-          const api = window.__neatStarfield;
-          const out = api.getDefaultOutputUuid();
-          const neigh = api.getNeighbourUuids(out);
-          if (neigh && neigh.length) api.focusByUuid(neigh[0]);
-        })()`,
-      );
+      await page.evaluate(() => {
+        const api = (globalThis as unknown as PageGlobals).__neatStarfield;
+        const out = api?.getDefaultOutputUuid();
+        if (!out) return;
+        const neigh = api?.getNeighbourUuids(out);
+        if (neigh?.length) api?.focusByUuid(neigh[0]);
+      });
       await page.waitForFunction(
-        `(() => {
-          const hud = document.getElementById('hud');
-          const txt = (hud?.textContent || '');
-          return txt.includes('Focus:') && !txt.includes('output-0') && !txt.includes('Score');
-        })()`,
+        () => {
+          const { document } = globalThis as unknown as PageGlobals;
+          const txt = document.getElementById("hud")?.textContent || "";
+          return txt.includes("Focus:") && !txt.includes("output-0") &&
+            !txt.includes("Score");
+        },
         undefined,
         { timeout: 10_000 },
       );
 
       // Now jump to the highest-risk neighbour of output and ensure flags are
       // visible (if any).
-      await page.evaluate(
-        `(() => {
-          const api = window.__neatStarfield;
-          const out = api.getDefaultOutputUuid();
-          const risky = api.pickHighestRiskNeighbour(out);
-          if (risky) api.focusByUuid(risky);
-        })()`,
-      );
+      await page.evaluate(() => {
+        const api = (globalThis as unknown as PageGlobals).__neatStarfield;
+        const out = api?.getDefaultOutputUuid();
+        if (!out) return;
+        const risky = api?.pickHighestRiskNeighbour(out);
+        if (risky) api?.focusByUuid(risky);
+      });
       await page.waitForTimeout(250);
 
       const out1 = `${OUT_DIR}/graph-desktop-focus.png`;
