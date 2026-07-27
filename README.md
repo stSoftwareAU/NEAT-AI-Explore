@@ -374,6 +374,205 @@ NEAT networks.
 
 ![Graph explorer tilt](docs/screenshots/graph-desktop-tilt.png)
 
+### Aggregated layered graph model (data foundation)
+
+`docs/shared/aggregated_graph_model.js` is the DOM-free model that new graph
+views consume instead of the raw graph. At the default snapshot scale (2,461
+inputs, 1,655 hidden neurons, 21,492 synapses) a node-per-neuron rendering is
+unreadable, so the model aggregates first and returns
+`{ nodes, edges, layers, families, meta }`.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> N[normaliseCreature]
+    N --> R["computeReachableToOutputs<br/>drop dead neurons"]
+    R --> L["assignNeuronLayers<br/>topological ranks"]
+    L --> I["impact_attribution<br/>per-node + per-edge impact"]
+    I --> F["observation_families<br/>group the inputs"]
+    F --> C{"impact ≥<br/>collapseThreshold?"}
+    C -- yes --> K["neuron:UUID"]
+    C -- no --> X["collapsed:layer-N"]
+    K --> M["{ nodes, edges, layers, families }"]
+    X --> M
+```
+
+- **Families** — inputs bucket by their tooltip `group`, falling back to the
+  label's **leading subject token**, then to `ungrouped` (Issue #539). The
+  published snapshot supplies no `group` metadata, so the fallback does all the
+  work there: `close-best-fit-30-7`, `EMVMACROTRADE mean 9M` and
+  `P/E ratio (TTM)` group as `close`, `emvmacrotrade` and `p-e`, collapsing
+  2,132 singleton families to 232 real ones. `/` is deliberately not a token
+  boundary so ratio labels keep their identity.
+- **Layers** — a longest-path Kahn sweep; recurrent networks still terminate,
+  and output neurons are pinned to the final layer.
+- **Impact** — exported `derived.impactsByNeuronUuid` values win; anything
+  missing (inputs, typically) is propagated back from the outputs through the
+  inbound allocation shares.
+- **Collapse** — `collapseThreshold` (default 1% of the strongest neuron) folds
+  weak neurons into a per-layer aggregate. Every aggregate node keeps its
+  `members` and a stable `id`, so a later per-stock view can re-expand or
+  re-weight it without a rewrite.
+
+### Sankey contribution-flow view (Issue #526)
+
+`docs/sankey/` is a candidate replacement graph view that draws contribution
+**flow** rather than nodes and edges. It consumes the aggregated layered graph
+model and turns it into a **conserved** Sankey: the band into the output is the
+Score, and every upstream band is proportional to the contribution that reaches
+it. That makes "how does the Score decompose across observation families?" a
+proportional, phone-friendly picture — the primary strength of a Sankey — while
+thin/absent bands surface dead zones and a single family's band traces forward
+to the output.
+
+- **Entry point**: `docs/sankey/index.html` (linked from the trace explorer's
+  overflow menu, alongside the 3D graph).
+- **Conserved flow** — `buildSankeyFlow` seeds each output with its impact and
+  walks layers back-to-front, splitting each node's throughput across its
+  inbound edges by contribution (`sankey_flow.js`). Every node's inbound bands
+  therefore sum to its outbound bands, so the layer-0 family bands sum back to
+  the Score.
+- **Aggregation-first** — the model already collapses low-impact hidden neurons;
+  the view additionally folds each layer's low-contribution tail into one
+  per-layer "other" node (`maxNodesPerLayer`), so the diagram stays legible.
+  Since #539 the layer-0 bands it ranks are genuine observation families (232 on
+  the published snapshot) rather than single observations, so the bands read as
+  family contributions to the Score.
+- **Inspectable folds (Issue #538)** — the fold is what keeps the diagram
+  readable, but it also hides the thin/absent flows a viewer hunting **dead
+  zones** is looking for. Selecting an "other" node lists what it swallowed,
+  **weakest first**, with each member's share of the Score; members carrying no
+  flow at all are marked _dead_ rather than merely minor. `rankFoldedTail` and
+  `pageFoldedTail` (`sankey_flow.js`) are DOM-free and unit-tested; the panel
+  (`docs/sankey/fold_panel.js`) keeps exactly one page in the DOM, so a
+  2,121-member fold does not lock up a phone.
+- **Tooltips** reuse the #521 observation-summary format
+  (`buildObservationTooltip`).
+- **Touch tooltips (Issue #536)** — native SVG `<title>` only renders on hover,
+  so the same tooltip string is also driven into the `#tooltip` panel on tap and
+  on keyboard focus (`docs/sankey/tooltip_panel.js`). The panel is clamped
+  inside the viewport, and dismisses on tap-away, `Escape`, or blur. Hover and
+  the screen-reader `aria-label` are untouched — this is additive.
+- **Phone layout (Issue #540)** — a phone gets a _different_ layout, not the
+  desktop canvas shrunk: half the per-layer fold budget (so each band is roughly
+  twice as tall and its label survives), thicker band and node floors, shorter
+  labels, and width-based `@media` rules that reflow the header, legend and meta
+  line. The published snapshot lays out as 33 layers, so the phone opens on one
+  **full-height screenful** of that strip and pans, rather than fitting the
+  whole illegible thing on screen. Pinch, drag, wheel, the `+`/`−`/`Reset`
+  buttons and the `+`, `−`, `0` and arrow keys all drive the same `viewBox`
+  window (`docs/shared/viewbox_zoom.js`, `docs/sankey/zoom_pan.js`), so
+  magnifying is never touch-only. The desktop layout is unchanged.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hidden
+    Hidden --> Shown: tap / focus a node or band
+    Shown --> Shown: tap another node or band
+    Shown --> Hidden: tap away · Escape · blur · re-render
+```
+
+```mermaid
+flowchart TD
+    W["viewport width"] --> B{"≤ 640px?"}
+    B -->|yes| P["phone layout<br/>6 per layer · 3px bands · 12-char labels"]
+    B -->|no| D["desktop layout<br/>12 per layer · 1.5px bands · 22-char labels"]
+    P --> G["computeSankeyGeometry<br/>docs/shared/sankey_layout.js"]
+    D --> G
+    G --> S["SVG"]
+    P --> Z["open on a full-height screenful<br/>pinch · drag · +/−/0 · arrows"]
+    D --> F["open on the whole diagram"]
+    Z --> S
+    F --> S
+```
+
+```mermaid
+flowchart LR
+    S[snapshot] --> M["buildAggregatedGraphModel<br/>aggregate · layer · impact · collapse"]
+    M --> F["buildSankeyFlow<br/>seed outputs = Score"]
+    F --> B["back-to-front flow split<br/>throughput ∝ contribution"]
+    B --> R{"per-layer rank fold<br/>keep top-K, rest → other"}
+    R --> V["SVG bands<br/>width ∝ contribution to Score"]
+    R --> O["other node keeps foldedNodes"]
+    O --> K["rankFoldedTail<br/>weakest first · dead flagged"]
+    K --> P["pageFoldedTail → one page<br/>docs/sankey/fold_panel.js"]
+```
+
+---
+
+## 🕸️ Layered DAG view (`/dag/`)
+
+`docs/dag/` renders the aggregated model above as a left-to-right diagram —
+observation families on the left, hidden layers in topological order, the output
+on the right. It ships **alongside** the 3D starfield (`/graph/`), which is
+unchanged; reach it from the Trace explorer's ⋯ menu.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> A["buildAggregatedGraphModel<br/>shared/aggregated_graph_model.js"]
+    A --> C["assignDagColumns<br/>families left · output right"]
+    C --> F["fold weakest per column<br/>maxNodesPerColumn"]
+    F --> G["computeDagLayout<br/>size · colour · link width"]
+    G --> V["dagLayoutToSvgString → SVG"]
+    T["extractTooltips<br/>shared/ui_helpers.js"] --> G
+```
+
+- **Impact encodings** — node radius and colour intensity scale with per-node
+  impact; link width scales with the contribution the merged synapses carry.
+  Both reuse `TOPO_MIN/MAX_NODE_R` and `TOPO_MIN/MAX_LINK_W` from
+  `shared/topology_diagram.js`, and link colour reuses the diverging weight-sum
+  map from `shared/colour_maps.js`.
+- **Tooltips** — the same observation summaries as the trace explorer, from
+  `extractTooltips` (Issue #521), rendered as SVG `<title>` text and expanded in
+  the Details panel.
+- **Readability at full scale** — each column draws its strongest nodes and
+  folds the remainder into a single grey aggregate. Nothing is dropped silently:
+  the summary line states how many neurons are dead, how many the model
+  collapsed, and how many the view folded.
+- **Detail** — the header control trades readability for completeness (Coarse 8
+  rows / Fine 20 rows per column).
+
+![Layered DAG view, desktop](docs/evidence/issue-525-dag-desktop.png)
+
+![Layered DAG view, phone](docs/evidence/issue-525-dag-phone.png)
+
+---
+
+## 🎯 Top-impact subgraph view (`/subgraph/`)
+
+`docs/subgraph/` is the third candidate. Instead of drawing the whole network it
+extracts only the **highest-contributing paths to the Score** and states how
+much of the network that leaves out. On the default snapshot the default
+settings draw 12 paths — 25 nodes and 24 links out of 4,120 neurons.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> A["buildAggregatedGraphModel<br/>families · layers · impact"]
+    S --> W["computeTopContributingInputs<br/>squash-aware upstream walk"]
+    A --> R["buildSubgraphSource<br/>ranked paths, once per snapshot"]
+    W --> R
+    R --> E["extractTopImpactSubgraph<br/>top N · min share"]
+    E --> G["computeDagLayout → SVG<br/>shared/dag_layout.js"]
+    E --> D["dead-zone summary<br/>excluded = total − subgraph"]
+```
+
+- **Extraction** — `computeTopContributingInputs` (`shared/graph_analysis.js`)
+  ranks every observation by its squash-aware contribution to the output; the
+  view keeps the top N that clear the minimum share and carves the matching
+  nodes and edges out of the aggregated model.
+- **Controls** — **Top paths** (5–50) and **Min share** (0–5%) re-extract from
+  the cached ranking, so changing either is instant.
+- **Rendering** — the same layered layout, impact encodings and Issue #521
+  observation tooltips as the DAG view, so the two candidates read alike.
+- **Dead zones** — every observation, neuron and aggregate node excluded from
+  the subgraph is counted in the Dead zones panel, alongside the neurons with no
+  path to the Score at all. Excluded is always exactly total minus subgraph.
+- **Troubleshooting** — picking a path (or tapping a node) shows the observation
+  summary, the share of the Score it carries, and the full neuron chain.
+
+![Top-impact subgraph view, desktop](docs/evidence/issue-527-subgraph-desktop.png)
+
+![Top-impact subgraph view, phone](docs/evidence/issue-527-subgraph-phone.png)
+
 ---
 
 ## 🧭 Direction terminology (to avoid confusion)
@@ -691,26 +890,35 @@ assert(src.includes("Math.pow"));
 
 Only pure, DOM-free modules can be tested in Deno:
 
-| Module                                 | Testable functions                                                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/impact_attribution.js`           | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
-| `docs/impact_diagnostics.js`           | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
-| `docs/shared/config.js`                | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`, `ALLOWED_SNAPSHOT_ORIGINS`                                                              |
-| `docs/shared/graph_analysis.js`        | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
-| `docs/shared/snapshot_loader.js`       | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`, `normaliseCreature`                                              |
-| `docs/shared/colour_maps.js`           | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
-| `docs/shared/creature_overview.js`     | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
-| `docs/shared/transitions.js`           | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
-| `docs/shared/touch_gestures.js`        | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
-| `docs/shared/sparkline.js`             | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
-| `docs/shared/correlation.js`           | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
-| `docs/shared/discovery.js`             | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
-| `docs/shared/diagnostics_scan.js`      | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
-| `docs/shared/theme.js`                 | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
-| `docs/shared/panel_resize.js`          | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
-| `docs/shared/ui_helpers.js`            | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
-| `docs/shared/tooltips_fallback.js`     | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
-| `docs/shared/selection_attribution.js` | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
+| Module                                  | Testable functions                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/impact_attribution.js`            | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
+| `docs/impact_diagnostics.js`            | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
+| `docs/shared/config.js`                 | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`, `ALLOWED_SNAPSHOT_ORIGINS`                                                              |
+| `docs/shared/graph_analysis.js`         | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
+| `docs/shared/snapshot_loader.js`        | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`, `normaliseCreature`                                              |
+| `docs/shared/colour_maps.js`            | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
+| `docs/shared/creature_overview.js`      | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
+| `docs/shared/transitions.js`            | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
+| `docs/shared/touch_gestures.js`         | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
+| `docs/shared/sparkline.js`              | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
+| `docs/shared/correlation.js`            | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
+| `docs/shared/discovery.js`              | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
+| `docs/shared/diagnostics_scan.js`       | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
+| `docs/shared/theme.js`                  | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
+| `docs/shared/panel_resize.js`           | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
+| `docs/shared/ui_helpers.js`             | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
+| `docs/shared/tooltips_fallback.js`      | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
+| `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
+| `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
+| `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
+| `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`, `rankFoldedTail`, `pageFoldedTail`                                                                        |
+| `docs/sankey/tooltip_panel.js`          | `clampTooltipPosition`, `anchorPoint`, `createTooltipController`, `attachTooltipTrigger`, `attachTooltipDismissers`                       |
+| `docs/sankey/fold_panel.js`             | `formatSharePercent`, `summariseFoldedTail`, `createFoldPanelController`, `attachFoldTrigger`, `attachFoldPanelDismissers`                |
+| `docs/shared/sankey_responsive.js`      | `sankeyLayoutForWidth`, `sankeyViewWidth`                                                                                                 |
+| `docs/shared/sankey_layout.js`          | `computeSankeyGeometry`, `truncateLabel`                                                                                                  |
+| `docs/shared/viewbox_zoom.js`           | `fitWindow`, `fitHeightWindow`, `clampWindow`, `zoomWindow`, `panWindow`, `contentPointAt`, `contentDelta`, `zoomOf`, `maxZoomFor`        |
+| `docs/sankey/zoom_pan.js`               | `createZoomPanController`, `attachZoomControls`                                                                                           |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based

@@ -1,0 +1,254 @@
+/*
+ * Candidate comparison page styling (Issue #528).
+ *
+ * Phone-first: candidate cards stack in a single column on small screens and
+ * flow into a responsive grid on wider ones; the side-by-side comparison
+ * stacks its iframes vertically on phones and lays them out in columns on
+ * desktop. Light/dark themes are driven by prefers-color-scheme.
+ */
+
+:root {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-border: #d7deea;
+  --text: #1a2333;
+  --muted: #55617a;
+  --accent: #1565c0;
+  --accent-text: #ffffff;
+  --focus-ring: #1565c0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0e1a;
+    --panel: #141b2d;
+    --panel-border: #26304a;
+    --text: #e8edf7;
+    --muted: #9aa7c2;
+    --accent: #64b5f6;
+    --accent-text: #06111f;
+    --focus-ring: #64b5f6;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+  min-height: 100vh;
+}
+
+.appHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.appHeader h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.headerControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.2rem;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.buttonSecondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+.input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  min-width: 12rem;
+  flex: 1 1 18rem;
+}
+
+.status {
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status.bad {
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status.bad {
+    color: #ef9a9a;
+  }
+}
+
+main {
+  padding: 0.5rem 1rem 2rem;
+}
+
+.intro {
+  max-width: 60ch;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.intro strong {
+  color: var(--text);
+}
+
+.intro code {
+  font-size: 0.82em;
+}
+
+.cards {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.card {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cardTagline {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.cardBestFor {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cardActions {
+  margin-top: auto;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sideBySideControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.sideBySideControls .hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.sideBySide {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 60rem) {
+  .sideBySide {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.frameCard {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+
+.frameTitle {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.frameTitle a {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.frameCard iframe {
+  width: 100%;
+  height: 60vh;
+  min-height: 24rem;
+  border: 0;
+  background: var(--bg);
+}
+
+.textLink {
+  color: var(--accent);
+}

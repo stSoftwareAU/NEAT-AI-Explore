@@ -14,6 +14,8 @@
   "urls": [
     "http://127.0.0.1:8080/",
     "http://127.0.0.1:8080/graph/?noAutoLoad=1",
-    "http://127.0.0.1:8080/starfield/?noAutoLoad=1"
+    "http://127.0.0.1:8080/starfield/?noAutoLoad=1",
+    "http://127.0.0.1:8080/dag/?noAutoLoad=1",
+    "http://127.0.0.1:8080/subgraph/?noAutoLoad=1"
   ]
 }

@@ -19,6 +19,18 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- Starfield keyboard papercuts (#529). Typing a snapshot URL containing `w`,
+  `a`, `s`, `d`, `q` or `e` into the graph view's header field no longer flies
+  the camera away from the focused neuron, and a movement key held when the
+  window loses focus (tab switch, or focus moving into a text field) is now
+  released instead of leaving the camera drifting forever. The rules live in the
+  new, unit-tested `docs/shared/keyboard_nav.js`.
+- `scripts/verify_starfield_layout.ts` runs again (#529). Its browser-side
+  predicates were passed to `waitForFunction` as source strings, which the graph
+  view's `script-src 'self'` CSP blocks on every poll; they are now real
+  functions, so the starfield's manual acceptance gate works instead of aborting
+  with an `EvalError`.
+
 - Issues tab no longer mis-reports absent (JSON `null`) `value` entries as
   "NaN/Infinity (exploding gradients)" (#507). JSON cannot carry non-finite
   numbers, so a `null` only ever means the value was not recorded because the
@@ -29,6 +41,14 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Added
 
+- Inspectable folds in the Sankey view (#538). Selecting a folded "other" band
+  now lists what the per-layer fold swallowed, weakest contribution first, with
+  each member's share of the Score — and members carrying no flow at all are
+  marked _dead_ rather than merely minor, so dead-zone discovery survives the
+  readability fold. The ranking and paging are DOM-free
+  (`rankFoldedTail`/`pageFoldedTail` in `docs/shared/sankey_flow.js`); the panel
+  keeps one page of 50 in the DOM, so the published snapshot's 2,121-member fold
+  lists instantly on a phone.
 - Observation summary tooltips in every view (#521). Hovering an observation row
   now shows that input's `Tooltips.json` description alongside its label — in
   the Observation Contributions panel, the Observations dashboard, the

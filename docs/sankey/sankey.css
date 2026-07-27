@@ -1,0 +1,575 @@
+/*
+ * Sankey contribution-flow view styling (Issue #526).
+ *
+ * Self-contained and phone-first: a single-column layout on small screens, an
+ * SVG diagram that scales to the viewport, and light/dark themes driven by
+ * prefers-color-scheme. Kept independent of the WebGL graph styling so the two
+ * candidate views can evolve without coupling.
+ */
+
+:root {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-border: #d7deea;
+  --text: #1a2333;
+  --muted: #55617a;
+  --accent: #1565c0;
+  --accent-text: #ffffff;
+  --node-family: #f9a825;
+  --node-neuron: #2e7d32;
+  --node-output: #6a1b9a;
+  --node-collapsed: #90a4ae;
+  --band: #90a4ae;
+  --focus-ring: #1565c0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0e1a;
+    --panel: #141b2d;
+    --panel-border: #26304a;
+    --text: #e8edf7;
+    --muted: #9aa7c2;
+    --accent: #64b5f6;
+    --accent-text: #06111f;
+    --node-family: #ffb74d;
+    --node-neuron: #66bb6a;
+    --node-output: #ba68c8;
+    --node-collapsed: #78909c;
+    --band: #607d8b;
+    --focus-ring: #64b5f6;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+  min-height: 100vh;
+}
+
+.appHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.appHeader h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.headerControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.2rem;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.buttonSecondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+.input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  min-width: 12rem;
+  flex: 1 1 12rem;
+}
+
+.status {
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status.bad {
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status.bad {
+    color: #ef9a9a;
+  }
+}
+
+main {
+  padding: 0.5rem 1rem 2rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+/* --- Zoom controls (Issue #540) ----------------------------------------- */
+
+.zoomControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.zoomButton {
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.button[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.zoomLevel {
+  min-width: 3.2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.zoomHint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.diagramWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+svg.sankey {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 640px;
+  /*
+   * The diagram owns its touch gestures: one finger pans (once magnified) and
+   * two pinch to zoom. The page still scrolls from the chrome around it.
+   */
+  touch-action: none;
+}
+
+svg.sankey.isZoomed {
+  cursor: grab;
+}
+
+.sankeyNode {
+  cursor: pointer;
+}
+
+.sankeyNodeRect {
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+
+.sankeyNodeLabel {
+  fill: var(--text);
+  font-size: 12px;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.sankeyLink {
+  fill: none;
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.sankeyLink:hover,
+.sankeyLink.isHighlighted {
+  opacity: 0.85;
+}
+
+/* Path tracing (Issue #537): dim everything off the selected family's flow. */
+.sankeyLink.isDimmed {
+  opacity: 0.08;
+}
+
+.sankeyNode {
+  transition: opacity 0.15s ease;
+}
+
+.sankeyNode.isDimmed {
+  opacity: 0.28;
+}
+
+.sankeyNode.isOnPath .sankeyNodeRect {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.sankeyNode.isSelected .sankeyNodeRect {
+  stroke: var(--focus-ring);
+  stroke-width: 3;
+}
+
+.sankeyNode:focus-visible .sankeyNodeRect {
+  outline: 3px solid var(--focus-ring);
+}
+
+/* Custom tooltip panel — reused for touch, where SVG <title> is unreliable. */
+.tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: min(20rem, 80vw);
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.8rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  white-space: pre-line;
+  pointer-events: none;
+  display: none;
+}
+
+.tooltip.isVisible {
+  display: block;
+}
+
+/*
+ * Folded-tail inspector (Issue #538). Hidden until a folded "other" node is
+ * selected; scrolls within a bounded height so one page of a 2,132-member fold
+ * never pushes the diagram off the screen.
+ */
+.foldPanel {
+  display: none;
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.foldPanel.isVisible {
+  display: block;
+}
+
+.foldPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.foldPanelTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.foldPanelSummary {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.foldPanelList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.foldRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 0.82rem;
+}
+
+.foldRowLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foldRowShare {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A dead member carries no flow at all — the dead-zone signal, not a thin one. */
+.foldRow.isDead .foldRowLabel {
+  font-weight: 600;
+}
+
+.foldRow.isDead .foldRowShare {
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .foldRow.isDead .foldRowShare {
+    color: #ef9a9a;
+  }
+}
+
+.foldPanelPager {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.foldPanelPageInfo {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.metaLine {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.metaLine .warn {
+  color: #c62828;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .metaLine .warn {
+    color: #ef9a9a;
+  }
+}
+
+/* --- Selection details panel (Issue #537) ------------------------------- */
+
+.panel {
+  margin-top: 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.panelHeader {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panelTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.panelBody {
+  padding: 0.7rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.detailLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  min-height: 2.2rem;
+}
+
+.select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.selectWide {
+  width: 100%;
+}
+
+.detailsBody {
+  margin-top: 0.7rem;
+  color: var(--text);
+}
+
+.detailsTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.7rem;
+  margin: 0 0 0.6rem;
+}
+
+.detailsGrid dt {
+  color: var(--muted);
+}
+
+.detailsGrid dd {
+  margin: 0;
+}
+
+.detailsMembers {
+  margin: 0;
+  padding-left: 1.1rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.detailsMembers li {
+  margin-bottom: 0.15rem;
+}
+
+.detailsMore {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+}
+
+/* --- Phone layout (Issue #540) ------------------------------------------
+ *
+ * The 640px breakpoint mirrors `PHONE_MAX_WIDTH` in
+ * `docs/shared/sankey_responsive.js`, which is what the renderer uses to pick
+ * its per-layer budget, band floors and label threshold — the two must move
+ * together. Everything here reflows the page chrome so nothing overflows
+ * sideways; the diagram itself becomes a bounded, pinch-zoomable pane rather
+ * than a desktop canvas shrunk to fit.
+ */
+@media (max-width: 640px) {
+  .appHeader {
+    padding: 0.5rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .appHeader h1 {
+    font-size: 0.95rem;
+    flex: 1 1 100%;
+  }
+
+  .headerControls {
+    width: 100%;
+  }
+
+  .input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  main {
+    padding: 0.5rem 0.6rem 2rem;
+  }
+
+  .legend {
+    gap: 0.35rem 0.8rem;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .zoomHint {
+    flex: 1 1 100%;
+  }
+
+  /* No sideways scroll on a phone: the diagram pans instead. */
+  .diagramWrap {
+    overflow-x: hidden;
+    height: 62vh;
+  }
+
+  svg.sankey {
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sankeyNodeLabel {
+    font-size: 11px;
+  }
+
+  .metaLine {
+    font-size: 0.72rem;
+  }
+
+  .foldPanelList {
+    max-height: 12rem;
+  }
+
+  .detailsMembers {
+    max-height: 10rem;
+  }
+}

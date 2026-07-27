@@ -14,6 +14,7 @@
       "docs/app.js",
       "docs/graph/graph.js",
       "docs/starfield/starfield.js",
+      "docs/sankey/sankey.js",
       "docs/sw.js",
       "docs/shared/theme.js",
       "docs/vendor/**",

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Content-Security-Policy (Issue #218). See docs/index.html for the full
+      rationale, including why `frame-ancestors` is omitted (ignored when
+      delivered via a meta tag per CSP3 §3.4).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://stsoftwareau.github.io https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'none'"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>NEAT-AI Explore - Sankey contribution flow</title>
+
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="theme-color"
+      content="#0a0e1a"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <link rel="stylesheet" href="./sankey.css?v=__BUILD_ID__" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../favicon.ico" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="../icons/icon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="../icons/icon-16x16.png"
+    />
+    <link rel="apple-touch-icon" href="../icons/icon-192x192.png" />
+  </head>
+  <body>
+    <header class="appHeader">
+      <h1>Sankey contribution flow</h1>
+      <div class="headerControls" role="group" aria-label="Snapshot loader">
+        <input
+          id="fetchUrl"
+          class="input"
+          aria-label="Snapshot URL"
+          placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+        />
+        <button id="fetchBtn" class="button" type="button">Fetch</button>
+        <input
+          id="fileInput"
+          type="file"
+          accept="application/json, .json, .gz, application/gzip, application/x-gzip"
+          aria-label="Load snapshot file"
+          style="display: none"
+        />
+        <button id="fileBtn" class="button buttonSecondary" type="button">
+          Browse…
+        </button>
+        <a
+          class="button buttonSecondary"
+          href="../"
+          aria-label="Back to Trace explorer"
+        >Trace</a>
+        <a
+          class="button buttonSecondary"
+          href="../graph/"
+          aria-label="Open 3D graph explorer"
+        >Graph</a>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      Loading the default snapshot…
+    </p>
+
+    <main>
+      <div class="legend" aria-label="Legend">
+        <span>
+          <span class="swatch" style="background: var(--node-family)"></span>
+          Observation family
+        </span>
+        <span>
+          <span class="swatch" style="background: var(--node-neuron)"></span>
+          Hidden neuron
+        </span>
+        <span>
+          <span class="swatch" style="background: var(--node-collapsed)"></span>
+          Collapsed (low impact)
+        </span>
+        <span>
+          <span class="swatch" style="background: var(--node-output)"></span>
+          Output (Score)
+        </span>
+        <span>Band width ∝ contribution to the Score</span>
+      </div>
+
+      <!--
+        Zoom controls (Issue #540). The same view state the pinch gesture
+        drives, reachable by keyboard and assistive technology so magnifying
+        the diagram is never touch-only.
+      -->
+      <div class="zoomControls" role="group" aria-label="Diagram zoom">
+        <button
+          id="zoomOut"
+          class="button buttonSecondary zoomButton"
+          type="button"
+          aria-label="Zoom out"
+        >−</button>
+        <span id="zoomLevel" class="zoomLevel" aria-live="polite">100%</span>
+        <button
+          id="zoomIn"
+          class="button buttonSecondary zoomButton"
+          type="button"
+          aria-label="Zoom in"
+        >+</button>
+        <button
+          id="zoomReset"
+          class="button buttonSecondary"
+          type="button"
+        >Reset</button>
+        <span class="zoomHint">
+          Pinch or drag the diagram; +, − and 0 also work.
+        </span>
+      </div>
+
+      <div class="diagramWrap">
+        <div id="diagram" role="list"
+          aria-label="Contribution flow diagram"></div>
+      </div>
+
+      <aside id="detailsPanel" class="panel" aria-label="Selection details">
+        <div class="panelHeader">
+          <div class="panelTitle">Trace a family's flow</div>
+        </div>
+        <div class="panelBody">
+          <label class="detailLabel" for="nodePicker">
+            Trace family or neuron
+          </label>
+          <select id="nodePicker" class="select selectWide">
+            <option value="">Select a family or neuron…</option>
+          </select>
+          <div id="detailsBody" class="detailsBody"></div>
+        </div>
+      </aside>
+
+      <p id="meta" class="metaLine"></p>
+
+      <!--
+        Folded-tail inspector (Issue #538). Selecting an "other" node lists what
+        the per-layer fold swallowed, weakest first, so dead zones stay
+        discoverable instead of vanishing into one opaque band.
+      -->
+      <aside
+        id="foldPanel"
+        class="foldPanel"
+        aria-labelledby="foldPanelTitle"
+        aria-hidden="true"
+      >
+        <div class="foldPanelHeader">
+          <h2 id="foldPanelTitle" class="foldPanelTitle">Folded members</h2>
+          <button
+            id="foldPanelClose"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <p id="foldPanelSummary" class="foldPanelSummary"></p>
+        <ol id="foldPanelList" class="foldPanelList" aria-live="polite"></ol>
+        <div class="foldPanelPager">
+          <button
+            id="foldPanelPrev"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Previous
+          </button>
+          <span id="foldPanelPageInfo" class="foldPanelPageInfo"></span>
+          <button
+            id="foldPanelNext"
+            class="button buttonSecondary"
+            type="button"
+          >
+            Next
+          </button>
+        </div>
+      </aside>
+    </main>
+
+    <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <!--
+      Boot script extracted to ./boot.js so the page can declare a strict
+      Content-Security-Policy with `script-src 'self'` (no 'unsafe-inline').
+      See Issue #218.
+    -->
+    <script type="module" src="./boot.js?v=__BUILD_ID__"></script>
+  </body>
+</html>
