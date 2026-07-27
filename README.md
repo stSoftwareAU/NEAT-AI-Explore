@@ -431,6 +431,14 @@ to the output.
   per-layer "other" node (`maxNodesPerLayer`), so the diagram stays legible even
   when the snapshot's inputs explode into thousands of single-observation
   families (2,132 in the published snapshot).
+- **Inspectable folds (Issue #538)** — the fold is what keeps the diagram
+  readable, but it also hides the thin/absent flows a viewer hunting **dead
+  zones** is looking for. Selecting an "other" node lists what it swallowed,
+  **weakest first**, with each member's share of the Score; members carrying no
+  flow at all are marked _dead_ rather than merely minor. `rankFoldedTail` and
+  `pageFoldedTail` (`sankey_flow.js`) are DOM-free and unit-tested; the panel
+  (`docs/sankey/fold_panel.js`) keeps exactly one page in the DOM, so a
+  2,121-member fold does not lock up a phone.
 - **Tooltips** reuse the #521 observation-summary format
   (`buildObservationTooltip`).
 - **Touch tooltips (Issue #536)** — native SVG `<title>` only renders on hover,
@@ -454,6 +462,9 @@ flowchart LR
     F --> B["back-to-front flow split<br/>throughput ∝ contribution"]
     B --> R{"per-layer rank fold<br/>keep top-K, rest → other"}
     R --> V["SVG bands<br/>width ∝ contribution to Score"]
+    R --> O["other node keeps foldedNodes"]
+    O --> K["rankFoldedTail<br/>weakest first · dead flagged"]
+    K --> P["pageFoldedTail → one page<br/>docs/sankey/fold_panel.js"]
 ```
 
 ---
@@ -871,8 +882,9 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
 | `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
-| `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`                                                                                                            |
+| `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`, `rankFoldedTail`, `pageFoldedTail`                                                                        |
 | `docs/sankey/tooltip_panel.js`          | `clampTooltipPosition`, `anchorPoint`, `createTooltipController`, `attachTooltipTrigger`, `attachTooltipDismissers`                       |
+| `docs/sankey/fold_panel.js`             | `formatSharePercent`, `summariseFoldedTail`, `createFoldPanelController`, `attachFoldTrigger`, `attachFoldPanelDismissers`                |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based

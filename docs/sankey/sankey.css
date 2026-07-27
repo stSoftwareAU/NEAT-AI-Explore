@@ -255,6 +255,99 @@ svg.sankey {
   display: block;
 }
 
+/*
+ * Folded-tail inspector (Issue #538). Hidden until a folded "other" node is
+ * selected; scrolls within a bounded height so one page of a 2,132-member fold
+ * never pushes the diagram off the screen.
+ */
+.foldPanel {
+  display: none;
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.foldPanel.isVisible {
+  display: block;
+}
+
+.foldPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.foldPanelTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.foldPanelSummary {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.foldPanelList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.foldRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 0.82rem;
+}
+
+.foldRowLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foldRowShare {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A dead member carries no flow at all — the dead-zone signal, not a thin one. */
+.foldRow.isDead .foldRowLabel {
+  font-weight: 600;
+}
+
+.foldRow.isDead .foldRowShare {
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .foldRow.isDead .foldRowShare {
+    color: #ef9a9a;
+  }
+}
+
+.foldPanelPager {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.foldPanelPageInfo {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .metaLine {
   margin-top: 0.6rem;
   font-size: 0.78rem;

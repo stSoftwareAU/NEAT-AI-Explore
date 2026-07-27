@@ -119,6 +119,7 @@ function foldLowRankNodes(model, maxPerLayer, outputIds) {
         if (!otherByLayer.has(layer)) {
           otherByLayer.set(layer, {
             members: [],
+            foldedNodes: [],
             impact: 0,
             count: 0,
             families: 0,
@@ -129,6 +130,16 @@ function foldLowRankNodes(model, maxPerLayer, outputIds) {
         bucket.impact += node.impact ?? 0;
         bucket.count += 1;
         if (node.kind === "family") bucket.families += 1;
+        // Keep each folded node's own identity (not just its observation
+        // UUIDs) so the fold stays inspectable — without this the dead tail is
+        // indistinguishable from the merely out-ranked (Issue #538).
+        bucket.foldedNodes.push({
+          id: node.id,
+          kind: node.kind,
+          label: node.label,
+          impact: node.impact ?? 0,
+          memberCount: node.memberCount ?? 0,
+        });
         foldedNodeCount += 1;
       }
     }
@@ -149,6 +160,7 @@ function foldLowRankNodes(model, maxPerLayer, outputIds) {
       members: bucket.members.sort(),
       memberCount: bucket.members.length,
       otherCount: bucket.count,
+      foldedNodes: bucket.foldedNodes,
     });
   }
 
@@ -187,7 +199,8 @@ function foldLowRankNodes(model, maxPerLayer, outputIds) {
 /** Build the per-node tooltip, reusing the #521 observation-summary helper. */
 function buildNodeTooltip(node, labels, descriptions) {
   if (node.kind === "other") {
-    return `${node.label} (folded to keep the diagram readable)`;
+    return `${node.label} (folded to keep the diagram readable) — ` +
+      `select to list what was folded, weakest first`;
   }
   if (node.kind === "family") {
     const shown = node.members.slice(0, 6).map((uuid) =>
@@ -233,6 +246,160 @@ export function bandWidth(value, pxPerUnit, minPx = 1) {
   const scale = Number(pxPerUnit);
   if (!(v > 0) || !(scale > 0)) return 0;
   return Math.max(minPx, v * scale);
+}
+
+/** Members listed per page of a folded tail — a fold can hold thousands. */
+export const DEFAULT_FOLDED_TAIL_PAGE_SIZE = 50;
+
+/**
+ * A member carrying at most this share of the Score is **dead**, not merely
+ * minor. One part in a billion is far below anything a band could render, so
+ * anything under it contributes nothing a viewer could ever see.
+ */
+export const DEFAULT_DEAD_SHARE_EPSILON = 1e-9;
+
+/**
+ * @typedef {object} FoldedTailEntry
+ * @property {string} id — the folded node's original id.
+ * @property {"family"|"neuron"|"collapsed"} kind
+ * @property {string} label
+ * @property {number} impact — the model's impact for the folded node.
+ * @property {number} memberCount — observations behind the folded node.
+ * @property {number} value — flow it contributes through the folded band.
+ * @property {number} share — `value` as a fraction of the Score.
+ * @property {boolean} isDead — no measurable contribution: a dead zone.
+ */
+
+/**
+ * Rank what a folded "other" node swallowed, weakest contribution first.
+ *
+ * The fold keeps the diagram readable but hides precisely the thin/absent
+ * flows a viewer hunting dead zones is looking for (Issue #538). This is the
+ * DOM-free half of making the fold inspectable: the folded band's throughput
+ * is split across its members in proportion to their impact, so each member
+ * gets its own share of the Score and the shares sum back to the band — the
+ * same conservation contract the rest of the diagram keeps.
+ *
+ * When the fold carries flow but no member has any attributed impact there is
+ * no ranking signal at all; the throughput is then split evenly and `basis` is
+ * `"even"`, so a caller can say so rather than inventing a dead-zone verdict.
+ *
+ * Throws when handed anything but a folded node — asking a non-fold for its
+ * folded members is a caller bug, not an empty list (Issue #3234).
+ *
+ * @param {{ kind: string, value?: number, impact?: number, foldedNodes?: Array<object> }} node
+ * @param {{ totalScore?: number, deadShareEpsilon?: number }} [options]
+ * @returns {{
+ *   entries: FoldedTailEntry[],
+ *   total: number,
+ *   deadCount: number,
+ *   throughput: number,
+ *   totalScore: number,
+ *   basis: "impact"|"even",
+ * }}
+ */
+export function rankFoldedTail(node, options = {}) {
+  if (node?.kind !== "other" || !Array.isArray(node.foldedNodes)) {
+    throw new Error(
+      "rankFoldedTail requires a folded 'other' node carrying foldedNodes",
+    );
+  }
+  const {
+    totalScore = 0,
+    deadShareEpsilon = DEFAULT_DEAD_SHARE_EPSILON,
+  } = options ?? {};
+
+  const score = Math.abs(Number(totalScore) || 0);
+  const throughput = Number.isFinite(node.value)
+    ? Math.abs(node.value)
+    : Math.abs(Number(node.impact) || 0);
+
+  const folded = node.foldedNodes;
+  let impactTotal = 0;
+  for (const member of folded) impactTotal += Math.abs(member?.impact ?? 0);
+  const basis = impactTotal > 0 || throughput <= 0 ? "impact" : "even";
+
+  const entries = folded.map((member) => {
+    const impact = Number(member?.impact) || 0;
+    const value = basis === "even"
+      ? throughput / folded.length
+      : (impactTotal > 0 ? throughput * (Math.abs(impact) / impactTotal) : 0);
+    const share = score > 0 ? value / score : 0;
+    return {
+      id: String(member?.id ?? ""),
+      kind: member?.kind ?? "family",
+      label: String(member?.label ?? member?.id ?? ""),
+      impact,
+      memberCount: Number(member?.memberCount) || 0,
+      value,
+      share,
+      // An even split carries no evidence either way, so nothing is called dead.
+      isDead: basis === "impact" && share <= deadShareEpsilon,
+    };
+  });
+
+  entries.sort((a, b) =>
+    a.value - b.value ||
+    Math.abs(a.impact) - Math.abs(b.impact) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+
+  return {
+    entries,
+    total: entries.length,
+    deadCount: entries.filter((e) => e.isDead).length,
+    throughput,
+    totalScore: score,
+    basis,
+  };
+}
+
+/**
+ * Slice one page out of a ranked folded tail.
+ *
+ * The published snapshot folds 2,132 families into a single band; rendering
+ * them all would lock up a phone, so the view renders a page at a time and the
+ * work per page stays constant.
+ *
+ * @param {{ entries: FoldedTailEntry[] }|FoldedTailEntry[]} ranked — output of
+ *   {@link rankFoldedTail} (or its entries).
+ * @param {{ offset?: number, pageSize?: number }} [options]
+ * @returns {{
+ *   entries: FoldedTailEntry[],
+ *   offset: number, pageSize: number, total: number,
+ *   page: number, pageCount: number,
+ *   hasMore: boolean, hasPrevious: boolean,
+ *   nextOffset: number, previousOffset: number,
+ * }}
+ */
+export function pageFoldedTail(ranked, options = {}) {
+  const all = Array.isArray(ranked) ? ranked : ranked?.entries;
+  if (!Array.isArray(all)) {
+    throw new Error("pageFoldedTail requires a ranked folded tail");
+  }
+  const { offset = 0, pageSize = DEFAULT_FOLDED_TAIL_PAGE_SIZE } = options ??
+    {};
+
+  const size = Math.max(1, Math.floor(Number(pageSize) || 0));
+  const total = all.length;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  // Clamp to a real page rather than returning a confusing blank list.
+  const requested = Math.floor(Number(offset) || 0);
+  const start = Math.min(Math.max(requested, 0), (pageCount - 1) * size);
+  const end = Math.min(start + size, total);
+
+  return {
+    entries: all.slice(start, end),
+    offset: start,
+    pageSize: size,
+    total,
+    page: Math.floor(start / size) + 1,
+    pageCount,
+    hasMore: end < total,
+    hasPrevious: start > 0,
+    nextOffset: Math.min(start + size, (pageCount - 1) * size),
+    previousOffset: Math.max(start - size, 0),
+  };
 }
 
 /**
@@ -457,18 +624,26 @@ export function buildSankeyFlow(model, options = {}) {
     }
   }
 
-  const nodes = modelNodes.map((n) => ({
-    id: n.id,
-    kind: n.kind,
-    label: n.label,
-    layer: n.layer,
-    value: nodeFlow.get(n.id) ?? 0,
-    impact: n.impact,
-    members: Array.isArray(n.members) ? n.members : [],
-    memberCount: n.memberCount,
-    isOutput: outputIds.has(n.id),
-    tooltip: buildNodeTooltip(n, labels, descriptions),
-  }));
+  const nodes = modelNodes.map((n) => {
+    const node = {
+      id: n.id,
+      kind: n.kind,
+      label: n.label,
+      layer: n.layer,
+      value: nodeFlow.get(n.id) ?? 0,
+      impact: n.impact,
+      members: Array.isArray(n.members) ? n.members : [],
+      memberCount: n.memberCount,
+      isOutput: outputIds.has(n.id),
+      tooltip: buildNodeTooltip(n, labels, descriptions),
+    };
+    // A folded node carries what it swallowed, so the view can list it.
+    if (n.kind === "other") {
+      node.otherCount = n.otherCount ?? 0;
+      node.foldedNodes = n.foldedNodes ?? [];
+    }
+    return node;
+  });
 
   const links = modelEdges
     .map((edge) => ({

@@ -41,6 +41,14 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Added
 
+- Inspectable folds in the Sankey view (#538). Selecting a folded "other" band
+  now lists what the per-layer fold swallowed, weakest contribution first, with
+  each member's share of the Score — and members carrying no flow at all are
+  marked _dead_ rather than merely minor, so dead-zone discovery survives the
+  readability fold. The ranking and paging are DOM-free
+  (`rankFoldedTail`/`pageFoldedTail` in `docs/shared/sankey_flow.js`); the panel
+  keeps one page of 50 in the DOM, so the published snapshot's 2,121-member fold
+  lists instantly on a phone.
 - Observation summary tooltips in every view (#521). Hovering an observation row
   now shows that input's `Tooltips.json` description alongside its label — in
   the Observation Contributions panel, the Observations dashboard, the

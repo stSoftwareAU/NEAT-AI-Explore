@@ -45,6 +45,11 @@ import {
   attachTooltipTrigger,
   createTooltipController,
 } from "./tooltip_panel.js";
+import {
+  attachFoldPanelDismissers,
+  attachFoldTrigger,
+  createFoldPanelController,
+} from "./fold_panel.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEW_HEIGHT = 620;
@@ -108,6 +113,27 @@ function tooltipPanel() {
   return tooltipController;
 }
 
+let foldController = null;
+
+/**
+ * The folded-tail inspector (Issue #538).
+ *
+ * The fold keeps the diagram readable but hides the thin/absent flows a viewer
+ * hunting dead zones needs; this panel lists them. Created once, on first use.
+ */
+function foldPanel() {
+  if (foldController) return foldController;
+  try {
+    foldController = createFoldPanelController(document);
+  } catch (err) {
+    // Fail loud rather than leaving folds silently uninspectable (Issue #3234).
+    console.error("Fold panel unavailable:", err);
+    return null;
+  }
+  attachFoldPanelDismissers(document, foldController);
+  return foldController;
+}
+
 function nodeColour(node) {
   if (node.isOutput) return "var(--node-output)";
   if (node.kind === "family") return "var(--node-family)";
@@ -139,6 +165,8 @@ function render(flow) {
   // A panel left open would describe a node that no longer exists.
   const tip = tooltipPanel();
   tip?.hide();
+  const fold = foldPanel();
+  fold?.close();
 
   const visible = flow.nodes.filter((n) => n.value > 0);
   if (visible.length === 0) {
@@ -295,6 +323,13 @@ function render(flow) {
     group.appendChild(rect);
     group.appendChild(title);
     if (tip) attachTooltipTrigger(group, node.tooltip, tip);
+    // A folded node opens its member list — the fold stays inspectable (#538).
+    if (node.kind === "other") {
+      group.setAttribute("class", "sankeyNode isFolded");
+      if (fold) {
+        attachFoldTrigger(group, node, fold, { totalScore: flow.totalScore });
+      }
+    }
 
     if (h >= 8) {
       const isLeftColumn = x < PAD_X + innerW / 2;
