@@ -28,11 +28,19 @@ import {
 } from "../shared/config.js";
 import { buildAggregatedGraphModel } from "../shared/aggregated_graph_model.js";
 import {
-  bandWidth,
   buildSankeyFlow,
   traceLinkFlow,
   traceNodeFlow,
 } from "../shared/sankey_flow.js";
+import {
+  PHONE_MAX_WIDTH,
+  sankeyLayoutForWidth,
+} from "../shared/sankey_responsive.js";
+import {
+  computeSankeyGeometry,
+  truncateLabel,
+} from "../shared/sankey_layout.js";
+import { createDebounce } from "../shared/debounce.js";
 import {
   buildObservationTooltip,
   escapeHtml,
@@ -50,17 +58,15 @@ import {
   attachFoldTrigger,
   createFoldPanelController,
 } from "./fold_panel.js";
+import { attachZoomControls, createZoomPanController } from "./zoom_pan.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const VIEW_HEIGHT = 620;
-const NODE_WIDTH = 16;
-const NODE_GAP = 10;
-const PAD_X = 140;
-const PAD_Y = 24;
-const MIN_BAND = 1.5;
 
 /** Members listed in the details panel before the list is truncated. */
 const MAX_DETAIL_MEMBERS = 40;
+
+/** Settle time (ms) before a resize re-lays the diagram out. */
+const RESIZE_DEBOUNCE_MS = 150;
 
 // ---------------------------------------------------------------------------
 // View state (Issue #537). Selection lives at module scope so it survives a
@@ -75,6 +81,29 @@ let selection = null;
 let labels = {};
 /** @type {Record<string, string>} */
 let descriptions = {};
+/** The snapshot on screen, kept so a breakpoint change can re-lay it out. */
+let currentSnapshot = null;
+/** @type {"phone"|"desktop"|null} */
+let activeBreakpoint = null;
+/** Truncation length for the live layout — labels shorten on a phone. */
+let labelMaxChars = 22;
+
+/**
+ * The layout constants for the live viewport width.
+ *
+ * A viewport that reports no usable width is a browser fault, not a phone, so
+ * it is reported rather than silently rendering the desktop canvas (#3234).
+ */
+function currentLayout() {
+  const width = Number(globalThis.innerWidth);
+  if (!Number.isFinite(width) || width <= 0) {
+    console.error(
+      "Viewport width unavailable — falling back to the desktop Sankey layout.",
+    );
+    return sankeyLayoutForWidth(PHONE_MAX_WIDTH + 1);
+  }
+  return sankeyLayoutForWidth(width);
+}
 
 /** Create an SVG element with attributes. */
 function svg(name, attrs = {}) {
@@ -134,6 +163,64 @@ function foldPanel() {
   return foldController;
 }
 
+let zoomController = null;
+let zoomControls = null;
+
+/**
+ * The pinch/drag/keyboard zoom controller (Issue #540).
+ *
+ * A phone viewport cannot show every band at a legible size at once, so the
+ * viewer magnifies a region instead. Created once, on first render.
+ */
+function zoomPan() {
+  if (zoomController) return zoomController;
+  zoomController = createZoomPanController({
+    onChange: () => zoomControls?.update(),
+  });
+  try {
+    zoomControls = attachZoomControls(document, zoomController);
+  } catch (err) {
+    // Fail loud rather than shipping a diagram with no keyboard zoom route.
+    console.error("Zoom controls unavailable:", err);
+  }
+  return zoomController;
+}
+
+/**
+ * Point the zoom controller at a freshly rendered diagram.
+ *
+ * The published snapshot lays out as 33 layers, so on a phone the whole diagram
+ * is an illegible strip: the narrow layout instead opens on one full-height
+ * screenful of it, sized to the diagram pane, and pans from there. The desktop
+ * keeps its `height: auto` fit-to-width view untouched.
+ */
+function attachZoom(svgEl, geometry, layout) {
+  const content = {
+    width: geometry.viewWidth,
+    height: geometry.viewHeight,
+  };
+  if (!layout.isNarrow) {
+    zoomPan().attach(svgEl, content);
+    return;
+  }
+  const pane = document
+    .querySelector(".diagramWrap")
+    ?.getBoundingClientRect?.();
+  if (!pane || !(pane.width > 0) || !(pane.height > 0)) {
+    // Fail loud: without a measured pane the phone view silently reverts to
+    // the illegible fit-to-width strip (Issue #3234).
+    console.error(
+      "Diagram pane could not be measured — falling back to the fit-to-width view.",
+    );
+    zoomPan().attach(svgEl, content);
+    return;
+  }
+  zoomPan().attach(svgEl, content, {
+    aspect: pane.width / pane.height,
+    initial: "fit-height",
+  });
+}
+
 function nodeColour(node) {
   if (node.isOutput) return "var(--node-output)";
   if (node.kind === "family") return "var(--node-family)";
@@ -143,21 +230,22 @@ function nodeColour(node) {
   return "var(--node-neuron)";
 }
 
-/** Truncate a label so long observation names do not overrun the column gap. */
-function truncate(text, max = 22) {
-  const s = String(text ?? "");
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+/** Truncate a label to the live layout's width budget. */
+function truncate(text, max = labelMaxChars) {
+  return truncateLabel(text, max);
 }
 
 /**
- * Lay out and draw the conserved Sankey.
+ * Draw the conserved Sankey for a set of responsive layout constants.
  *
- * Node band height and link band width share one vertical scale, so a node's
- * inbound bands visually sum to its height — the diagram reads as conserved
- * flow, which is the whole point of the Score-composition view.
+ * Geometry lives in `shared/sankey_layout.js` so the layout decisions this
+ * renderer makes at a phone width — the per-layer budget, the band floor and
+ * the label-visibility threshold — are asserted in CI; this function only turns
+ * that geometry into SVG.
  */
-function render(flow) {
+function render(flow, layout) {
   currentFlow = flow;
+  labelMaxChars = layout.labelMaxChars;
   const wrap = document.getElementById("diagram");
   const meta = document.getElementById("meta");
   if (!wrap) return;
@@ -168,129 +256,39 @@ function render(flow) {
   const fold = foldPanel();
   fold?.close();
 
-  const visible = flow.nodes.filter((n) => n.value > 0);
-  if (visible.length === 0) {
+  const geometry = computeSankeyGeometry(flow, layout);
+  if (geometry.nodes.length === 0) {
     setStatus("No contribution flow to render for this snapshot.", true);
     return;
   }
 
-  // Group visible nodes into columns by layer (drop empty layers).
-  const byLayer = new Map();
-  for (const node of visible) {
-    if (!byLayer.has(node.layer)) byLayer.set(node.layer, []);
-    byLayer.get(node.layer).push(node);
-  }
-  const columns = Array.from(byLayer.keys())
-    .sort((a, b) => a - b)
-    .map((layer) =>
-      byLayer.get(layer).slice().sort((a, b) =>
-        b.value - a.value || (a.id < b.id ? -1 : 1)
-      )
-    );
-
-  // One vertical scale that fits the tallest column into the drawing area.
-  const avail = VIEW_HEIGHT - 2 * PAD_Y;
-  let vScale = Infinity;
-  for (const col of columns) {
-    const sum = col.reduce((acc, n) => acc + n.value, 0);
-    if (sum <= 0) continue;
-    const usable = avail - (col.length - 1) * NODE_GAP;
-    vScale = Math.min(vScale, usable / sum);
-  }
-  if (!Number.isFinite(vScale) || vScale <= 0) vScale = 1;
-
-  const viewWidth = Math.max(640, columns.length * 220);
-  const innerW = viewWidth - 2 * PAD_X - NODE_WIDTH;
-
-  // Position every node rectangle first — links need both endpoints placed.
-  const rectById = new Map();
-  columns.forEach((col, colIndex) => {
-    const x = columns.length > 1
-      ? PAD_X + (colIndex * innerW) / (columns.length - 1)
-      : PAD_X + innerW / 2;
-    const colHeight = col.reduce(
-      (acc, n) => acc + Math.max(n.value * vScale, MIN_BAND),
-      0,
-    ) + (col.length - 1) * NODE_GAP;
-    let cursor = (VIEW_HEIGHT - colHeight) / 2;
-    for (const node of col) {
-      const h = Math.max(node.value * vScale, MIN_BAND);
-      rectById.set(node.id, {
-        node,
-        x,
-        y: cursor,
-        h,
-        colIndex,
-        outCursor: cursor,
-        inCursor: cursor,
-      });
-      cursor += h + NODE_GAP;
-    }
-  });
-
   const svgEl = svg("svg", {
     class: "sankey",
-    viewBox: `0 0 ${viewWidth} ${VIEW_HEIGHT}`,
+    viewBox: `0 0 ${geometry.viewWidth} ${geometry.viewHeight}`,
     preserveAspectRatio: "xMidYMid meet",
     role: "img",
     "aria-label":
       "Sankey diagram of contribution flow from observation families to the output score",
   });
 
-  // Draw links first so nodes sit on top. Order each node's ports by the
-  // opposite endpoint's vertical position to minimise crossings.
-  const linksBySource = new Map();
-  const linksByTarget = new Map();
-  for (const link of flow.links) {
-    if (!rectById.has(link.source) || !rectById.has(link.target)) continue;
-    if (!linksBySource.has(link.source)) linksBySource.set(link.source, []);
-    if (!linksByTarget.has(link.target)) linksByTarget.set(link.target, []);
-    linksBySource.get(link.source).push(link);
-    linksByTarget.get(link.target).push(link);
-  }
-  const linkGeom = new Map();
-  for (const [sourceId, list] of linksBySource) {
-    const rect = rectById.get(sourceId);
-    list.sort((a, b) =>
-      (rectById.get(a.target)?.y ?? 0) - (rectById.get(b.target)?.y ?? 0)
-    );
-    for (const link of list) {
-      const thickness = Math.max(bandWidth(link.value, vScale), MIN_BAND);
-      const sy = rect.outCursor + thickness / 2;
-      rect.outCursor += thickness;
-      linkGeom.set(link.id, { thickness, sy, sx: rect.x + NODE_WIDTH });
-    }
-  }
-  for (const [targetId, list] of linksByTarget) {
-    const rect = rectById.get(targetId);
-    list.sort((a, b) =>
-      (rectById.get(a.source)?.y ?? 0) - (rectById.get(b.source)?.y ?? 0)
-    );
-    for (const link of list) {
-      const geom = linkGeom.get(link.id);
-      if (!geom) continue;
-      geom.ty = rect.inCursor + geom.thickness / 2;
-      rect.inCursor += geom.thickness;
-      geom.tx = rect.x;
-    }
-  }
+  const labelById = new Map(
+    geometry.nodes.map((geom) => [geom.id, geom.node.label || geom.id]),
+  );
 
-  for (const link of flow.links) {
-    const geom = linkGeom.get(link.id);
-    if (!geom || geom.tx === undefined) continue;
-    const midX = (geom.sx + geom.tx) / 2;
+  // Draw links first so nodes sit on top.
+  for (const band of geometry.links) {
     const path = svg("path", {
       class: "sankeyLink",
-      "data-link-id": link.id,
-      d: `M${geom.sx},${geom.sy} C${midX},${geom.sy} ${midX},${geom.ty} ${geom.tx},${geom.ty}`,
-      stroke: synapseWeightColourCss(link.weight),
-      "stroke-width": geom.thickness,
+      "data-link-id": band.id,
+      d: band.path,
+      stroke: synapseWeightColourCss(band.link.weight),
+      "stroke-width": band.thickness,
     });
     const pct = flow.totalScore > 0
-      ? ((link.value / flow.totalScore) * 100).toFixed(1)
+      ? ((band.link.value / flow.totalScore) * 100).toFixed(1)
       : "0.0";
-    const titleText = `${labelFor(rectById, link.source)} → ${
-      labelFor(rectById, link.target)
+    const titleText = `${labelFor(labelById, band.link.source)} → ${
+      labelFor(labelById, band.link.target)
     }\n${pct}% of the Score`;
     const title = svg("title");
     title.textContent = titleText;
@@ -301,7 +299,8 @@ function render(flow) {
   }
 
   // Nodes.
-  for (const { node, x, y, h } of rectById.values()) {
+  for (const geom of geometry.nodes) {
+    const node = geom.node;
     const group = svg("g", {
       class: "sankeyNode",
       "data-node-id": node.id,
@@ -311,10 +310,10 @@ function render(flow) {
     });
     const rect = svg("rect", {
       class: "sankeyNodeRect",
-      x,
-      y,
-      width: NODE_WIDTH,
-      height: h,
+      x: geom.x,
+      y: geom.y,
+      width: geom.width,
+      height: geom.h,
       rx: 3,
       fill: nodeColour(node),
     });
@@ -331,21 +330,21 @@ function render(flow) {
       }
     }
 
-    if (h >= 8) {
-      const isLeftColumn = x < PAD_X + innerW / 2;
+    if (geom.showLabel) {
       const label = svg("text", {
         class: "sankeyNodeLabel",
-        x: isLeftColumn ? x + NODE_WIDTH + 6 : x - 6,
-        y: y + h / 2,
-        "text-anchor": isLeftColumn ? "start" : "end",
+        x: geom.labelX,
+        y: geom.labelY,
+        "text-anchor": geom.labelAnchor,
       });
-      label.textContent = truncate(node.label || node.id);
+      label.textContent = geom.labelText;
       group.appendChild(label);
     }
     svgEl.appendChild(group);
   }
 
   wrap.appendChild(svgEl);
+  attachZoom(svgEl, geometry, layout);
 
   if (meta) renderMeta(meta, flow);
   // Re-populate the picker and re-apply any live selection so a re-render of the
@@ -358,8 +357,8 @@ function render(flow) {
   );
 }
 
-function labelFor(rectById, id) {
-  return truncate(rectById.get(id)?.node?.label || id, 30);
+function labelFor(labelById, id) {
+  return truncate(labelById.get(id) || id, 30);
 }
 
 function renderMeta(el, flow) {
@@ -576,6 +575,9 @@ function wireSelectionControls() {
   const picker = document.getElementById("nodePicker");
 
   wrap?.addEventListener("click", (event) => {
+    // A drag that panned the diagram is not a tap — it must not clear or
+    // change the selection when the finger lifts (Issue #540).
+    if (zoomController?.consumePan()) return;
     const nodeGroup = event.target?.closest?.(".sankeyNode");
     if (nodeGroup) {
       selectNode(nodeGroup.getAttribute("data-node-id"));
@@ -614,16 +616,56 @@ function wireSelectionControls() {
   });
 }
 
-/** Build the aggregated model, derive the Sankey flow, and render it. */
-function showSnapshot(snapshot) {
+/**
+ * Build the aggregated model, derive the Sankey flow for the live breakpoint,
+ * and render it.
+ *
+ * The per-layer fold budget is part of the responsive choice: a phone keeps
+ * half as many nodes per layer, so each surviving band is roughly twice as tall
+ * and its label clears the visibility threshold (Issue #540).
+ */
+function renderSnapshot(snapshot, { keepSelection = false } = {}) {
   const model = buildAggregatedGraphModel(snapshot);
   const tips = extractTooltips(snapshot);
   labels = tips.labels;
   descriptions = tips.descriptions;
-  // A new snapshot invalidates any prior selection (Issue #537).
-  selection = null;
-  const flow = buildSankeyFlow(model, { labels, descriptions });
-  render(flow);
+  if (!keepSelection) selection = null;
+  const layout = currentLayout();
+  activeBreakpoint = layout.isNarrow ? "phone" : "desktop";
+  const flow = buildSankeyFlow(model, {
+    labels,
+    descriptions,
+    maxNodesPerLayer: layout.maxNodesPerLayer,
+  });
+  // A different fold budget folds different nodes away, so a kept selection
+  // may no longer exist in the new diagram.
+  if (selection) {
+    const list = selection.type === "node" ? flow.nodes : flow.links;
+    if (!list.some((item) => item.id === selection.id)) selection = null;
+  }
+  render(flow, layout);
+}
+
+/** Load a new snapshot: a new snapshot invalidates any prior selection (#537). */
+function showSnapshot(snapshot) {
+  currentSnapshot = snapshot;
+  renderSnapshot(snapshot);
+}
+
+/**
+ * Re-lay the diagram out when the viewport crosses the phone breakpoint, so a
+ * rotation moves between the phone and desktop layouts rather than scaling one
+ * of them down.
+ */
+function wireBreakpointRerender() {
+  const debounced = createDebounce(() => {
+    if (!currentSnapshot) return;
+    const next = currentLayout().isNarrow ? "phone" : "desktop";
+    if (next === activeBreakpoint) return;
+    renderSnapshot(currentSnapshot, { keepSelection: true });
+  }, RESIZE_DEBOUNCE_MS);
+  globalThis.addEventListener("resize", () => debounced.call());
+  globalThis.addEventListener("orientationchange", () => debounced.call());
 }
 
 /** Resolve the snapshot URL from query parameters (mirrors the trace app). */
@@ -693,6 +735,7 @@ function wireControls() {
 async function main() {
   wireControls();
   wireSelectionControls();
+  wireBreakpointRerender();
   renderDetails();
   const params = new URLSearchParams(location.search);
 

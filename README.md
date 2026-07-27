@@ -453,12 +453,37 @@ to the output.
   inside the viewport, and dismisses on tap-away, `Escape`, or blur. Hover and
   the screen-reader `aria-label` are untouched — this is additive.
 
+- **Phone layout (Issue #540)** — a phone gets a _different_ layout, not the
+  desktop canvas shrunk: half the per-layer fold budget (so each band is roughly
+  twice as tall and its label survives), thicker band and node floors, shorter
+  labels, and width-based `@media` rules that reflow the header, legend and meta
+  line. The published snapshot lays out as 33 layers, so the phone opens on one
+  **full-height screenful** of that strip and pans, rather than fitting the
+  whole illegible thing on screen. Pinch, drag, wheel, the `+`/`−`/`Reset`
+  buttons and the `+`, `−`, `0` and arrow keys all drive the same `viewBox`
+  window (`docs/shared/viewbox_zoom.js`, `docs/sankey/zoom_pan.js`), so
+  magnifying is never touch-only. The desktop layout is unchanged.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Hidden
     Hidden --> Shown: tap / focus a node or band
     Shown --> Shown: tap another node or band
     Shown --> Hidden: tap away · Escape · blur · re-render
+```
+
+```mermaid
+flowchart TD
+    W["viewport width"] --> B{"≤ 640px?"}
+    B -->|yes| P["phone layout<br/>6 per layer · 3px bands · 12-char labels"]
+    B -->|no| D["desktop layout<br/>12 per layer · 1.5px bands · 22-char labels"]
+    P --> G["computeSankeyGeometry<br/>docs/shared/sankey_layout.js"]
+    D --> G
+    G --> S["SVG"]
+    P --> Z["open on a full-height screenful<br/>pinch · drag · +/−/0 · arrows"]
+    D --> F["open on the whole diagram"]
+    Z --> S
+    F --> S
 ```
 
 ```mermaid
@@ -891,6 +916,10 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`, `rankFoldedTail`, `pageFoldedTail`                                                                        |
 | `docs/sankey/tooltip_panel.js`          | `clampTooltipPosition`, `anchorPoint`, `createTooltipController`, `attachTooltipTrigger`, `attachTooltipDismissers`                       |
 | `docs/sankey/fold_panel.js`             | `formatSharePercent`, `summariseFoldedTail`, `createFoldPanelController`, `attachFoldTrigger`, `attachFoldPanelDismissers`                |
+| `docs/shared/sankey_responsive.js`      | `sankeyLayoutForWidth`, `sankeyViewWidth`                                                                                                 |
+| `docs/shared/sankey_layout.js`          | `computeSankeyGeometry`, `truncateLabel`                                                                                                  |
+| `docs/shared/viewbox_zoom.js`           | `fitWindow`, `fitHeightWindow`, `clampWindow`, `zoomWindow`, `panWindow`, `contentPointAt`, `contentDelta`, `zoomOf`, `maxZoomFor`        |
+| `docs/sankey/zoom_pan.js`               | `createZoomPanController`, `attachZoomControls`                                                                                           |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based
