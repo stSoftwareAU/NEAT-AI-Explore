@@ -452,6 +452,19 @@ to the output.
   on keyboard focus (`docs/sankey/tooltip_panel.js`). The panel is clamped
   inside the viewport, and dismisses on tap-away, `Escape`, or blur. Hover and
   the screen-reader `aria-label` are untouched — this is additive.
+- **Phone-friendly layout (Issue #540)** — a phone can no longer only shrink the
+  desktop canvas to fit. The diagram is wrapped in a transformed `<g>` that
+  **pinch-zoom**, **drag-pan**, wheel and the on-screen `− / + / Reset view`
+  buttons drive, so a viewer magnifies a region instead of squinting at an
+  illegible whole. Below a 640px viewport the header controls, legend and meta
+  line reflow so nothing overflows the page, the per-layer node budget drops
+  (`responsiveNodesPerLayer` → 6 instead of 12) so each band is tall enough to
+  label and touch, and the node picker gives a selection route that never
+  depends on hitting a 1.5px band. The width thresholds and the zoom transform
+  maths are DOM-free and unit-tested in `docs/shared/sankey_layout.js`
+  (`tests/sankey_layout_test.ts`), so a regression to the desktop-only layout
+  fails CI before merge; keyboard navigation (tab to a node, `Enter` to select)
+  is unchanged.
 
 - **Phone layout (Issue #540)** — a phone gets a _different_ layout, not the
   desktop canvas shrunk: half the per-layer fold budget (so each band is roughly
@@ -914,6 +927,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
 | `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
 | `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`, `rankFoldedTail`, `pageFoldedTail`                                                                        |
+| `docs/shared/sankey_layout.js`          | `responsiveNodesPerLayer`, `responsiveColumnWidth`, `isPhoneWidth`, `shouldDrawLabel`, `clampZoom`, `zoomAbout`                           |
 | `docs/sankey/tooltip_panel.js`          | `clampTooltipPosition`, `anchorPoint`, `createTooltipController`, `attachTooltipTrigger`, `attachTooltipDismissers`                       |
 | `docs/sankey/fold_panel.js`             | `formatSharePercent`, `summariseFoldedTail`, `createFoldPanelController`, `attachFoldTrigger`, `attachFoldPanelDismissers`                |
 | `docs/shared/sankey_responsive.js`      | `sankeyLayoutForWidth`, `sankeyViewWidth`                                                                                                 |
