@@ -236,6 +236,95 @@ export function bandWidth(value, pxPerUnit, minPx = 1) {
 }
 
 /**
+ * Trace a node's full contribution path through the conserved flow (Issue #537).
+ *
+ * Troubleshooting a Sankey means following one family's flow to the output: this
+ * walks every band that *feeds* the node back to its source families (upstream)
+ * and every band that *flows from* the node through to the output (downstream),
+ * returning the ids of every band and node on that path. The view highlights the
+ * returned ids and dims the rest — but the traversal is kept here, DOM-free, so
+ * it can be unit-tested and the view only toggles CSS classes.
+ *
+ * Only `flow.links` (`{ id, source, target }`) is read, so a hand-built fixture
+ * works as well as a real `buildSankeyFlow` result. An isolated node (no bands)
+ * traces to just itself with no links — the honest "nothing flows here" answer.
+ *
+ * @param {{ links?: SankeyLink[] }} flow
+ * @param {string} nodeId — the selected node's id.
+ * @returns {{
+ *   nodeIds: string[],
+ *   linkIds: string[],
+ *   upstreamLinkIds: string[],
+ *   downstreamLinkIds: string[],
+ * }} sorted for deterministic output.
+ */
+export function traceNodeFlow(flow, nodeId) {
+  const links = Array.isArray(flow?.links) ? flow.links : [];
+  /** @type {Map<string, SankeyLink[]>} inbound bands keyed by target node. */
+  const inbound = new Map();
+  /** @type {Map<string, SankeyLink[]>} outbound bands keyed by source node. */
+  const outbound = new Map();
+  for (const link of links) {
+    if (!inbound.has(link.target)) inbound.set(link.target, []);
+    inbound.get(link.target).push(link);
+    if (!outbound.has(link.source)) outbound.set(link.source, []);
+    outbound.get(link.source).push(link);
+  }
+
+  const nodeIds = new Set([nodeId]);
+
+  /** BFS along one direction, collecting the bands and nodes reached. */
+  const walk = (adjacency, nextKey) => {
+    const reachedLinks = new Set();
+    const seen = new Set([nodeId]);
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      for (const link of adjacency.get(current) ?? []) {
+        reachedLinks.add(link.id);
+        const next = link[nextKey];
+        nodeIds.add(next);
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return reachedLinks;
+  };
+
+  const upstreamLinkIds = walk(inbound, "source");
+  const downstreamLinkIds = walk(outbound, "target");
+  const linkIds = new Set([...upstreamLinkIds, ...downstreamLinkIds]);
+
+  const sorted = (set) => Array.from(set).sort();
+  return {
+    nodeIds: sorted(nodeIds),
+    linkIds: sorted(linkIds),
+    upstreamLinkIds: sorted(upstreamLinkIds),
+    downstreamLinkIds: sorted(downstreamLinkIds),
+  };
+}
+
+/**
+ * Trace a single band selection (Issue #537): the band and both its endpoints.
+ *
+ * @param {{ links?: SankeyLink[] }} flow
+ * @param {string} linkId — the selected band's id.
+ * @returns {{ nodeIds: string[], linkIds: string[] }} sorted; empty when the
+ *   band is unknown.
+ */
+export function traceLinkFlow(flow, linkId) {
+  const links = Array.isArray(flow?.links) ? flow.links : [];
+  const link = links.find((l) => l.id === linkId);
+  if (!link) return { nodeIds: [], linkIds: [] };
+  return {
+    nodeIds: [link.source, link.target].sort(),
+    linkIds: [linkId],
+  };
+}
+
+/**
  * @typedef {object} SankeyNode
  * @property {string} id
  * @property {"family"|"neuron"|"collapsed"} kind

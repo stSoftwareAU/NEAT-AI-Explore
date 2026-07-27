@@ -207,6 +207,29 @@ svg.sankey {
   opacity: 0.85;
 }
 
+/* Path tracing (Issue #537): dim everything off the selected family's flow. */
+.sankeyLink.isDimmed {
+  opacity: 0.08;
+}
+
+.sankeyNode {
+  transition: opacity 0.15s ease;
+}
+
+.sankeyNode.isDimmed {
+  opacity: 0.28;
+}
+
+.sankeyNode.isOnPath .sankeyNodeRect {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.sankeyNode.isSelected .sankeyNodeRect {
+  stroke: var(--focus-ring);
+  stroke-width: 3;
+}
+
 .sankeyNode:focus-visible .sankeyNodeRect {
   outline: 3px solid var(--focus-ring);
 }
@@ -247,4 +270,96 @@ svg.sankey {
   .metaLine .warn {
     color: #ef9a9a;
   }
+}
+
+/* --- Selection details panel (Issue #537) ------------------------------- */
+
+.panel {
+  margin-top: 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.panelHeader {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panelTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.panelBody {
+  padding: 0.7rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.detailLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  min-height: 2.2rem;
+}
+
+.select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.selectWide {
+  width: 100%;
+}
+
+.detailsBody {
+  margin-top: 0.7rem;
+  color: var(--text);
+}
+
+.detailsTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.7rem;
+  margin: 0 0 0.6rem;
+}
+
+.detailsGrid dt {
+  color: var(--muted);
+}
+
+.detailsGrid dd {
+  margin: 0;
+}
+
+.detailsMembers {
+  margin: 0;
+  padding-left: 1.1rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.detailsMembers li {
+  margin-bottom: 0.15rem;
+}
+
+.detailsMore {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
 }
