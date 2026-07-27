@@ -27,8 +27,18 @@ import {
   SNAPSHOT_FALLBACK_URLS,
 } from "../shared/config.js";
 import { buildAggregatedGraphModel } from "../shared/aggregated_graph_model.js";
-import { bandWidth, buildSankeyFlow } from "../shared/sankey_flow.js";
-import { extractTooltips } from "../shared/ui_helpers.js";
+import {
+  bandWidth,
+  buildSankeyFlow,
+  traceLinkFlow,
+  traceNodeFlow,
+} from "../shared/sankey_flow.js";
+import {
+  buildObservationTooltip,
+  escapeHtml,
+  extractTooltips,
+} from "../shared/ui_helpers.js";
+import { formatInteger } from "../shared/number_format.js";
 import { synapseWeightColourCss } from "../shared/colour_maps.js";
 import {
   attachTooltipDismissers,
@@ -43,6 +53,23 @@ const NODE_GAP = 10;
 const PAD_X = 140;
 const PAD_Y = 24;
 const MIN_BAND = 1.5;
+
+/** Members listed in the details panel before the list is truncated. */
+const MAX_DETAIL_MEMBERS = 40;
+
+// ---------------------------------------------------------------------------
+// View state (Issue #537). Selection lives at module scope so it survives a
+// re-render of the *same* snapshot, and is cleared when a new snapshot loads.
+// ---------------------------------------------------------------------------
+
+/** @type {ReturnType<typeof buildSankeyFlow>|null} */
+let currentFlow = null;
+/** @type {{ type: "node"|"link", id: string }|null} */
+let selection = null;
+/** @type {Record<string, string>} */
+let labels = {};
+/** @type {Record<string, string>} */
+let descriptions = {};
 
 /** Create an SVG element with attributes. */
 function svg(name, attrs = {}) {
@@ -104,6 +131,7 @@ function truncate(text, max = 22) {
  * flow, which is the whole point of the Score-composition view.
  */
 function render(flow) {
+  currentFlow = flow;
   const wrap = document.getElementById("diagram");
   const meta = document.getElementById("meta");
   if (!wrap) return;
@@ -225,6 +253,7 @@ function render(flow) {
     const midX = (geom.sx + geom.tx) / 2;
     const path = svg("path", {
       class: "sankeyLink",
+      "data-link-id": link.id,
       d: `M${geom.sx},${geom.sy} C${midX},${geom.sy} ${midX},${geom.ty} ${geom.tx},${geom.ty}`,
       stroke: synapseWeightColourCss(link.weight),
       "stroke-width": geom.thickness,
@@ -247,6 +276,7 @@ function render(flow) {
   for (const { node, x, y, h } of rectById.values()) {
     const group = svg("g", {
       class: "sankeyNode",
+      "data-node-id": node.id,
       tabindex: "0",
       role: "listitem",
       "aria-label": node.tooltip.replace(/\n/g, "; "),
@@ -283,6 +313,10 @@ function render(flow) {
   wrap.appendChild(svgEl);
 
   if (meta) renderMeta(meta, flow);
+  // Re-populate the picker and re-apply any live selection so a re-render of the
+  // same snapshot keeps the traced path highlighted (Issue #537).
+  renderNodePicker();
+  applySelection();
   setStatus(
     `Rendered ${flow.meta.nodeCount} nodes and ${flow.meta.linkCount} flows ` +
       `(from ${flow.meta.rawNeuronCount} neurons, ${flow.meta.rawSynapseCount} synapses).`,
@@ -322,10 +356,237 @@ function renderMeta(el, flow) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Selection & path tracing (Issue #537)
+//
+// The DOM-free traversal lives in `shared/sankey_flow.js`; this section only
+// turns a selection into CSS classes and a details panel. That split keeps the
+// path-tracing logic unit-tested and this file a thin DOM adapter.
+// ---------------------------------------------------------------------------
+
+/** Contribution of `value` as a percentage of the Score, one decimal place. */
+function pctOfScore(value) {
+  return currentFlow && currentFlow.totalScore > 0
+    ? ((value / currentFlow.totalScore) * 100).toFixed(1)
+    : "0.0";
+}
+
+/** The trace for the current selection, or null when nothing is selected. */
+function currentTrace() {
+  if (!currentFlow || !selection) return null;
+  return selection.type === "node"
+    ? traceNodeFlow(currentFlow, selection.id)
+    : traceLinkFlow(currentFlow, selection.id);
+}
+
+/**
+ * Toggle highlight/dim classes across the diagram for the live selection.
+ * With no selection every band and node returns to its neutral state.
+ */
+function applySelection() {
+  const wrap = document.getElementById("diagram");
+  const svgEl = wrap?.querySelector("svg.sankey");
+  if (!svgEl) return;
+  const trace = currentTrace();
+  const linkSet = trace ? new Set(trace.linkIds) : null;
+  const nodeSet = trace ? new Set(trace.nodeIds) : null;
+
+  for (const path of svgEl.querySelectorAll(".sankeyLink")) {
+    const on = !!linkSet && linkSet.has(path.getAttribute("data-link-id"));
+    path.classList.toggle("isHighlighted", !!trace && on);
+    path.classList.toggle("isDimmed", !!trace && !on);
+  }
+  for (const group of svgEl.querySelectorAll(".sankeyNode")) {
+    const id = group.getAttribute("data-node-id");
+    const onPath = !!nodeSet && nodeSet.has(id);
+    const isSelected = selection?.type === "node" && selection.id === id;
+    group.classList.toggle("isSelected", !!trace && isSelected);
+    group.classList.toggle("isOnPath", !!trace && onPath && !isSelected);
+    group.classList.toggle("isDimmed", !!trace && !onPath);
+  }
+  svgEl.classList.toggle("hasSelection", !!trace);
+  renderDetails();
+}
+
+/** Select a node by id and trace its full flow to the output. */
+function selectNode(nodeId) {
+  if (!currentFlow || !nodeId) return;
+  if (!currentFlow.nodes.some((n) => n.id === nodeId)) return;
+  selection = { type: "node", id: nodeId };
+  const picker = document.getElementById("nodePicker");
+  if (picker) picker.value = nodeId;
+  applySelection();
+}
+
+/** Select a single band and highlight it with both its endpoints. */
+function selectLink(linkId) {
+  if (!currentFlow || !linkId) return;
+  if (!currentFlow.links.some((l) => l.id === linkId)) return;
+  selection = { type: "link", id: linkId };
+  const picker = document.getElementById("nodePicker");
+  if (picker) picker.value = "";
+  applySelection();
+}
+
+/** Clear the selection and restore every band/node to its neutral state. */
+function clearSelection() {
+  if (!selection) return;
+  selection = null;
+  const picker = document.getElementById("nodePicker");
+  if (picker) picker.value = "";
+  applySelection();
+}
+
+/** Populate the node picker from the current flow, ranked by contribution. */
+function renderNodePicker() {
+  const picker = document.getElementById("nodePicker");
+  if (!picker || !currentFlow) return;
+  const options = currentFlow.nodes
+    .filter((n) => n.value > 0)
+    .slice()
+    .sort((a, b) => b.value - a.value || (a.id < b.id ? -1 : 1))
+    .map((node) =>
+      `<option value="${escapeHtml(node.id)}">${
+        escapeHtml(node.label || node.id)
+      } (${pctOfScore(node.value)}% of Score)</option>`
+    );
+  picker.innerHTML = `<option value="">Select a family or neuron…</option>${
+    options.join("")
+  }`;
+  picker.value = selection?.type === "node" ? selection.id : "";
+}
+
+/** Render the details panel for the current node/band selection. */
+function renderDetails() {
+  const body = document.getElementById("detailsBody");
+  if (!body) return;
+  if (!currentFlow || !selection) {
+    body.textContent =
+      "Select a family or neuron (tap it, or focus it and press Enter) to " +
+      "trace its flow through to the Score.";
+    return;
+  }
+  body.innerHTML = selection.type === "link"
+    ? renderLinkDetails()
+    : renderNodeDetails();
+}
+
+function renderNodeDetails() {
+  const node = currentFlow.nodes.find((n) => n.id === selection.id);
+  if (!node) return "This node is no longer in the diagram.";
+  const kindLabel = {
+    family: "Observation family",
+    neuron: "Hidden neuron",
+    other: "Folded pathways",
+    collapsed: "Collapsed (low impact)",
+  }[node.kind] ?? node.kind;
+  const displayKind = node.isOutput ? "Output (Score)" : kindLabel;
+  const memberCount = node.memberCount ?? 0;
+
+  const rows = [
+    `<h3 class="detailsTitle">${escapeHtml(node.label || node.id)}</h3>`,
+    `<dl class="detailsGrid">`,
+    `<dt>Kind</dt><dd>${escapeHtml(displayKind)}</dd>`,
+    `<dt>Throughput</dt><dd>${node.value.toPrecision(3)}</dd>`,
+    `<dt>Share of Score</dt><dd>${pctOfScore(node.value)}%</dd>`,
+    `<dt>Members</dt><dd>${formatInteger(memberCount)} observation${
+      memberCount === 1 ? "" : "s"
+    }</dd>`,
+    `</dl>`,
+  ];
+
+  // For a family, list the #521 observation summaries so troubleshooting a
+  // traced flow shows *which* observations drive it.
+  const members = Array.isArray(node.members)
+    ? node.members.slice(0, MAX_DETAIL_MEMBERS)
+    : [];
+  if (members.length > 0) {
+    rows.push(`<ul class="detailsMembers">`);
+    for (const uuid of members) {
+      const text = buildObservationTooltip({
+        uuid,
+        label: labels[uuid] ?? null,
+        description: descriptions[uuid] ?? null,
+      });
+      rows.push(`<li>${escapeHtml(text || uuid)}</li>`);
+    }
+    rows.push(`</ul>`);
+    const rest = memberCount - members.length;
+    if (rest > 0) {
+      rows.push(`<p class="detailsMore">…and ${formatInteger(rest)} more</p>`);
+    }
+  }
+  return rows.join("");
+}
+
+function renderLinkDetails() {
+  const link = currentFlow.links.find((l) => l.id === selection.id);
+  if (!link) return "This flow is no longer in the diagram.";
+  const source = currentFlow.nodes.find((n) => n.id === link.source);
+  const target = currentFlow.nodes.find((n) => n.id === link.target);
+  return [
+    `<h3 class="detailsTitle">${escapeHtml(source?.label || link.source)} → ${
+      escapeHtml(target?.label || link.target)
+    }</h3>`,
+    `<dl class="detailsGrid">`,
+    `<dt>Flow</dt><dd>${link.value.toPrecision(3)}</dd>`,
+    `<dt>Share of Score</dt><dd>${pctOfScore(link.value)}%</dd>`,
+    `</dl>`,
+  ].join("");
+}
+
+/** Wire click/tap, keyboard, picker and Escape handlers for selection. */
+function wireSelectionControls() {
+  const wrap = document.getElementById("diagram");
+  const picker = document.getElementById("nodePicker");
+
+  wrap?.addEventListener("click", (event) => {
+    const nodeGroup = event.target?.closest?.(".sankeyNode");
+    if (nodeGroup) {
+      selectNode(nodeGroup.getAttribute("data-node-id"));
+      return;
+    }
+    const link = event.target?.closest?.(".sankeyLink");
+    if (link) {
+      selectLink(link.getAttribute("data-link-id"));
+      return;
+    }
+    // Tapping the diagram background clears the selection (tap-away).
+    clearSelection();
+  });
+
+  wrap?.addEventListener("keydown", (event) => {
+    if (
+      event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar"
+    ) {
+      return;
+    }
+    const nodeGroup = event.target?.closest?.(".sankeyNode");
+    if (nodeGroup) {
+      event.preventDefault();
+      selectNode(nodeGroup.getAttribute("data-node-id"));
+    }
+  });
+
+  picker?.addEventListener("change", () => {
+    const id = picker.value ?? "";
+    if (id) selectNode(id);
+    else clearSelection();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") clearSelection();
+  });
+}
+
 /** Build the aggregated model, derive the Sankey flow, and render it. */
 function showSnapshot(snapshot) {
   const model = buildAggregatedGraphModel(snapshot);
-  const { labels, descriptions } = extractTooltips(snapshot);
+  const tips = extractTooltips(snapshot);
+  labels = tips.labels;
+  descriptions = tips.descriptions;
+  // A new snapshot invalidates any prior selection (Issue #537).
+  selection = null;
   const flow = buildSankeyFlow(model, { labels, descriptions });
   render(flow);
 }
@@ -396,6 +657,8 @@ function wireControls() {
 
 async function main() {
   wireControls();
+  wireSelectionControls();
+  renderDetails();
   const params = new URLSearchParams(location.search);
 
   // pa11y and offline previews open the page without a network fetch.

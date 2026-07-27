@@ -26,6 +26,8 @@ import {
   DEFAULT_MAX_NODES_PER_LAYER,
   DEFAULT_MAX_SANKEY_LINKS,
   DEFAULT_MAX_SANKEY_NODES,
+  traceLinkFlow,
+  traceNodeFlow,
 } from "../docs/shared/sankey_flow.js";
 
 // deno-lint-ignore no-explicit-any
@@ -419,6 +421,99 @@ Deno.test("the flow model is deterministic for identical input", () => {
   const first = flowFrom(scaledSnapshot(30));
   const second = flowFrom(scaledSnapshot(30));
   assertEquals(JSON.stringify(first), JSON.stringify(second));
+});
+
+// ---------------------------------------------------------------------------
+// Path tracing (Issue #537) — the DOM-free helper behind click/tap-to-trace.
+// ---------------------------------------------------------------------------
+
+/**
+ * A tiny hand-checkable flow: two families A and B feed hidden H, which feeds
+ * the output OUT; ISO is an isolated node with no bands. Only `links` is read by
+ * the trace helper, so a synthetic flow gives exact, deterministic control.
+ */
+function fixtureFlow(): Any {
+  return {
+    nodes: [
+      { id: "A" },
+      { id: "B" },
+      { id: "H" },
+      { id: "OUT" },
+      { id: "ISO" },
+    ],
+    links: [
+      { id: "A->H", source: "A", target: "H" },
+      { id: "B->H", source: "B", target: "H" },
+      { id: "H->OUT", source: "H", target: "OUT" },
+    ],
+  };
+}
+
+const json = (v: unknown) => JSON.stringify(v);
+
+Deno.test("traceNodeFlow returns exactly the reachable upstream and downstream bands", () => {
+  const trace = traceNodeFlow(fixtureFlow(), "H");
+  // Upstream: both feeder bands. Downstream: the single band to the output.
+  assertEquals(json(trace.upstreamLinkIds), json(["A->H", "B->H"]));
+  assertEquals(json(trace.downstreamLinkIds), json(["H->OUT"]));
+  assertEquals(json(trace.linkIds), json(["A->H", "B->H", "H->OUT"]));
+  // Every node on the path, including H itself and the output.
+  assertEquals(json(trace.nodeIds), json(["A", "B", "H", "OUT"]));
+});
+
+Deno.test("traceNodeFlow follows a family all the way to the output", () => {
+  const trace = traceNodeFlow(fixtureFlow(), "A");
+  // A has no upstream; downstream reaches H then OUT — the full flow to output.
+  assertEquals(json(trace.upstreamLinkIds), json([]));
+  assertEquals(json(trace.downstreamLinkIds), json(["A->H", "H->OUT"]));
+  assertEquals(json(trace.nodeIds), json(["A", "H", "OUT"]));
+});
+
+Deno.test("traceNodeFlow traces an isolated node to itself with no bands", () => {
+  const trace = traceNodeFlow(fixtureFlow(), "ISO");
+  assertEquals(json(trace.linkIds), json([]));
+  assertEquals(json(trace.upstreamLinkIds), json([]));
+  assertEquals(json(trace.downstreamLinkIds), json([]));
+  assertEquals(json(trace.nodeIds), json(["ISO"]));
+});
+
+Deno.test("traceNodeFlow on a real snapshot: the output pulls in every band", () => {
+  const flow = flowFrom(smallSnapshot());
+  const outputId = flow.meta.outputNodeIds[0];
+  const trace = traceNodeFlow(flow, outputId);
+  // Everything that reaches the Score is upstream of the output; nothing is
+  // downstream of it.
+  const allLinkIds = flow.links.map((l: Any) => l.id).sort();
+  assertEquals(json(trace.upstreamLinkIds), json(allLinkIds));
+  assertEquals(json(trace.downstreamLinkIds), json([]));
+});
+
+Deno.test("traceLinkFlow highlights a band and both its endpoints", () => {
+  const trace = traceLinkFlow(fixtureFlow(), "A->H");
+  assertEquals(json(trace.linkIds), json(["A->H"]));
+  assertEquals(json(trace.nodeIds), json(["A", "H"]));
+});
+
+Deno.test("traceLinkFlow returns an empty trace for an unknown band", () => {
+  const trace = traceLinkFlow(fixtureFlow(), "does-not-exist");
+  assertEquals(json(trace.linkIds), json([]));
+  assertEquals(json(trace.nodeIds), json([]));
+});
+
+Deno.test("the trace helpers tolerate a flow with no links", () => {
+  assertEquals(
+    json(traceNodeFlow({}, "X")),
+    json({
+      nodeIds: ["X"],
+      linkIds: [],
+      upstreamLinkIds: [],
+      downstreamLinkIds: [],
+    }),
+  );
+  assertEquals(
+    json(traceLinkFlow({}, "X")),
+    json({ nodeIds: [], linkIds: [] }),
+  );
 });
 
 Deno.test("buildSankeyFlow fails loudly on a missing or malformed model", () => {
