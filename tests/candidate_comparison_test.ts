@@ -25,7 +25,7 @@ import {
 import { resolveSnapshotUrlFromParams } from "../docs/shared/snapshot_loader.js";
 import { buildAggregatedGraphModel } from "../docs/shared/aggregated_graph_model.js";
 import { buildSankeyFlow } from "../docs/shared/sankey_flow.js";
-import { buildTopImpactSubgraph } from "../docs/shared/subgraph_model.js";
+import { extractTopImpactSubgraph } from "../docs/shared/subgraph_model.js";
 
 // deno-lint-ignore no-explicit-any
 type Any = any;
@@ -133,7 +133,8 @@ Deno.test("all three candidate views mount against the same snapshot fixture wit
   const sankey = buildSankeyFlow(model);
   assert(sankey.nodes.length > 0, "sankey must render nodes");
 
-  const subgraph = buildTopImpactSubgraph(model);
+  // The subgraph candidate prepares its own source from the snapshot.
+  const subgraph = extractTopImpactSubgraph(fixtureSnapshot());
   assert(subgraph.nodes.length > 0, "subgraph must render nodes");
 
   // The DAG view consumes the aggregated model's layers directly.
