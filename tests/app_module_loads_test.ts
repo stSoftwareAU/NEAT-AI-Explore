@@ -29,7 +29,12 @@ function makeStub(): any {
   });
 }
 
-Deno.test("docs/app.js loads without SyntaxError (Issue #200)", async () => {
+/**
+ * Import an entry module with browser globals stubbed, returning whatever it
+ * threw (or null). Only a SyntaxError matters — anything else is a limit of
+ * the stubs, not a defect in the module.
+ */
+async function importWithBrowserStubs(relativePath: string): Promise<unknown> {
   // deno-lint-ignore no-explicit-any
   const g = globalThis as any;
   const saved = {
@@ -66,7 +71,7 @@ Deno.test("docs/app.js loads without SyntaxError (Issue #200)", async () => {
     // Cache-bust so retries inside the same test process do not reuse a stale
     // failed module record.
     const url = new URL(
-      `../docs/app.js?test=${Date.now()}`,
+      `${relativePath}?test=${Date.now()}`,
       import.meta.url,
     ).href;
     await import(url);
@@ -78,16 +83,30 @@ Deno.test("docs/app.js loads without SyntaxError (Issue #200)", async () => {
       else g[k] = v;
     }
   }
+  return caught;
+}
 
-  // A SyntaxError means the module itself is malformed (e.g. duplicate import
-  // identifier) — that is the regression we care about. Any other error type
-  // is a stubbing limitation and is ignored.
-  if (caught instanceof SyntaxError) {
-    throw new Error(
-      `docs/app.js failed to parse: ${caught.message}`,
-    );
-  }
+// Entry modules whose parse/link failure would leave the page stuck on
+// "Loading…" in the browser. docs/dag/dag.js was added with Issue #525.
+const ENTRY_MODULES = [
+  "../docs/app.js",
+  "../docs/dag/dag.js",
+];
 
-  // Always-true sanity check so the test reports as having run an assertion.
-  assert(true);
-});
+for (const relativePath of ENTRY_MODULES) {
+  Deno.test(`${relativePath} loads without SyntaxError (Issue #200)`, async () => {
+    const caught = await importWithBrowserStubs(relativePath);
+
+    // A SyntaxError means the module itself is malformed (e.g. duplicate
+    // import identifier) — that is the regression we care about. Any other
+    // error type is a stubbing limitation and is ignored.
+    if (caught instanceof SyntaxError) {
+      throw new Error(
+        `${relativePath} failed to parse: ${caught.message}`,
+      );
+    }
+
+    // Always-true sanity check so the test reports as having run an assertion.
+    assert(true);
+  });
+}

@@ -410,6 +410,44 @@ flowchart LR
 
 ---
 
+## 🕸️ Layered DAG view (`/dag/`)
+
+`docs/dag/` renders the aggregated model above as a left-to-right diagram —
+observation families on the left, hidden layers in topological order, the output
+on the right. It ships **alongside** the 3D starfield (`/graph/`), which is
+unchanged; reach it from the Trace explorer's ⋯ menu.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> A["buildAggregatedGraphModel<br/>shared/aggregated_graph_model.js"]
+    A --> C["assignDagColumns<br/>families left · output right"]
+    C --> F["fold weakest per column<br/>maxNodesPerColumn"]
+    F --> G["computeDagLayout<br/>size · colour · link width"]
+    G --> V["dagLayoutToSvgString → SVG"]
+    T["extractTooltips<br/>shared/ui_helpers.js"] --> G
+```
+
+- **Impact encodings** — node radius and colour intensity scale with per-node
+  impact; link width scales with the contribution the merged synapses carry.
+  Both reuse `TOPO_MIN/MAX_NODE_R` and `TOPO_MIN/MAX_LINK_W` from
+  `shared/topology_diagram.js`, and link colour reuses the diverging weight-sum
+  map from `shared/colour_maps.js`.
+- **Tooltips** — the same observation summaries as the trace explorer, from
+  `extractTooltips` (Issue #521), rendered as SVG `<title>` text and expanded in
+  the Details panel.
+- **Readability at full scale** — each column draws its strongest nodes and
+  folds the remainder into a single grey aggregate. Nothing is dropped silently:
+  the summary line states how many neurons are dead, how many the model
+  collapsed, and how many the view folded.
+- **Detail** — the header control trades readability for completeness (Coarse 8
+  rows / Fine 20 rows per column).
+
+![Layered DAG view, desktop](docs/evidence/issue-525-dag-desktop.png)
+
+![Layered DAG view, phone](docs/evidence/issue-525-dag-phone.png)
+
+---
+
 ## 🧭 Direction terminology (to avoid confusion)
 
 The NEAT network computation direction and the explorer navigation direction are

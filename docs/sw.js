@@ -37,6 +37,11 @@ const STATIC_FILES = [
   `./graph/graph.js?v=${VERSION}`,
   `./graph/graph.css?v=${VERSION}`,
   `./graph/boot.js?v=${VERSION}`,
+  // Layered DAG view (Issue #525): cached so the DAG view works offline.
+  "./dag/index.html",
+  `./dag/dag.js?v=${VERSION}`,
+  `./dag/dag.css?v=${VERSION}`,
+  `./dag/boot.js?v=${VERSION}`,
   // Starfield view (Issue #129): cached so starfield works offline.
   "./starfield/index.html",
   `./starfield/starfield.js?v=${VERSION}`,
@@ -79,6 +84,9 @@ const STATIC_FILES = [
   "./shared/scale.js",
   "./shared/topology_diagram.js",
   "./shared/topo_modal.js",
+  "./shared/aggregated_graph_model.js",
+  "./shared/observation_families.js",
+  "./shared/dag_layout.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
@@ -240,10 +248,13 @@ self.addEventListener("fetch", (event) => {
     })();
     const isGraphNav = /\/graph(\/|$)/.test(path);
     const isStarfieldNav = /\/starfield(\/|$)/.test(path);
+    const isDagNav = /\/dag(\/|$)/.test(path);
     const shell = isGraphNav
       ? "./graph/index.html"
       : isStarfieldNav
       ? "./starfield/index.html"
+      : isDagNav
+      ? "./dag/index.html"
       : "./index.html";
     event.respondWith(cacheFirst(shell));
     return;
