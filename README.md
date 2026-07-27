@@ -374,6 +374,40 @@ NEAT networks.
 
 ![Graph explorer tilt](docs/screenshots/graph-desktop-tilt.png)
 
+### Aggregated layered graph model (data foundation)
+
+`docs/shared/aggregated_graph_model.js` is the DOM-free model that new graph
+views consume instead of the raw graph. At the default snapshot scale (2,461
+inputs, 1,655 hidden neurons, 21,492 synapses) a node-per-neuron rendering is
+unreadable, so the model aggregates first and returns
+`{ nodes, edges, layers, families, meta }`.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> N[normaliseCreature]
+    N --> R["computeReachableToOutputs<br/>drop dead neurons"]
+    R --> L["assignNeuronLayers<br/>topological ranks"]
+    L --> I["impact_attribution<br/>per-node + per-edge impact"]
+    I --> F["observation_families<br/>group the inputs"]
+    F --> C{"impact ≥<br/>collapseThreshold?"}
+    C -- yes --> K["neuron:UUID"]
+    C -- no --> X["collapsed:layer-N"]
+    K --> M["{ nodes, edges, layers, families }"]
+    X --> M
+```
+
+- **Families** — inputs bucket by their tooltip `group`, falling back to the
+  label's leading segment, then to `ungrouped`.
+- **Layers** — a longest-path Kahn sweep; recurrent networks still terminate,
+  and output neurons are pinned to the final layer.
+- **Impact** — exported `derived.impactsByNeuronUuid` values win; anything
+  missing (inputs, typically) is propagated back from the outputs through the
+  inbound allocation shares.
+- **Collapse** — `collapseThreshold` (default 1% of the strongest neuron) folds
+  weak neurons into a per-layer aggregate. Every aggregate node keeps its
+  `members` and a stable `id`, so a later per-stock view can re-expand or
+  re-weight it without a rewrite.
+
 ---
 
 ## 🧭 Direction terminology (to avoid confusion)
@@ -691,26 +725,28 @@ assert(src.includes("Math.pow"));
 
 Only pure, DOM-free modules can be tested in Deno:
 
-| Module                                 | Testable functions                                                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/impact_attribution.js`           | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
-| `docs/impact_diagnostics.js`           | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
-| `docs/shared/config.js`                | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`, `ALLOWED_SNAPSHOT_ORIGINS`                                                              |
-| `docs/shared/graph_analysis.js`        | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
-| `docs/shared/snapshot_loader.js`       | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`, `normaliseCreature`                                              |
-| `docs/shared/colour_maps.js`           | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
-| `docs/shared/creature_overview.js`     | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
-| `docs/shared/transitions.js`           | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
-| `docs/shared/touch_gestures.js`        | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
-| `docs/shared/sparkline.js`             | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
-| `docs/shared/correlation.js`           | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
-| `docs/shared/discovery.js`             | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
-| `docs/shared/diagnostics_scan.js`      | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
-| `docs/shared/theme.js`                 | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
-| `docs/shared/panel_resize.js`          | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
-| `docs/shared/ui_helpers.js`            | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
-| `docs/shared/tooltips_fallback.js`     | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
-| `docs/shared/selection_attribution.js` | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
+| Module                                  | Testable functions                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/impact_attribution.js`            | `computeImpactBreakdownToOutputs`, `computeInboundSynapseImpactAllocation`                                                                |
+| `docs/impact_diagnostics.js`            | `squashDerivative`, `computeGradientProxyImpact`, `summariseSeriesStats`, etc.                                                            |
+| `docs/shared/config.js`                 | `DEFAULT_SNAPSHOT_URL`, `SNAPSHOT_FALLBACK_URLS`, `ALLOWED_SNAPSHOT_ORIGINS`                                                              |
+| `docs/shared/graph_analysis.js`         | `buildGraphIndex`, `computeReachableToOutputs`, `computeTopContributingInputs`                                                            |
+| `docs/shared/snapshot_loader.js`        | `normaliseSnapshotUrl`, `decodeBase64UrlToUtf8`, `isDangerousUrlScheme`, `normaliseCreature`                                              |
+| `docs/shared/colour_maps.js`            | `hash32`, `u01ToSigned`, `u32ToU01`, `neuronColourRgb01`, `synapseWeightStrength01`, `synapseWeightColourRgb01`, `synapseWeightColourCss` |
+| `docs/shared/creature_overview.js`      | `computeNeuronBreakdown`, `computeSynapseStats`, `computeNetworkDepth`, `computeActivationDistribution`, `computeLayerTopology`           |
+| `docs/shared/transitions.js`            | `prefersReducedMotion`, `synapseStaggerDelay`, duration constants                                                                         |
+| `docs/shared/touch_gestures.js`         | `classifyTouch`, `detectSwipeDirection`, `momentumStep`, `clampMomentum`, `pinchZoomToward`, `clampZoomDistance`                          |
+| `docs/shared/sparkline.js`              | `computeSparklinePoints`, `computeErrorHistogram`, `squashBadge`, `flattenErrors`                                                         |
+| `docs/shared/correlation.js`            | `pearsonCorrelation`, `sampleSeries`, `computeTopInputCorrelations`                                                                       |
+| `docs/shared/discovery.js`              | `normaliseCandidate`, `extractDiscoveryCandidates`                                                                                        |
+| `docs/shared/diagnostics_scan.js`       | `scan1d`, `scan2d`, `computeNonFiniteIssues`, `computeNotRecordedIssues`, `computeErrorConcentrationIssues`                               |
+| `docs/shared/theme.js`                  | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
+| `docs/shared/panel_resize.js`           | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
+| `docs/shared/ui_helpers.js`             | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
+| `docs/shared/tooltips_fallback.js`      | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
+| `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
+| `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
+| `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
 
 > **💡 Tip:** Browser-only code (DOM, WebGL, Service Worker) cannot be
 > unit-tested in Deno — skip it rather than faking it with grep-based
