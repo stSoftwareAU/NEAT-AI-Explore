@@ -68,3 +68,26 @@ export function extractTooltips(snapshot) {
 
   return { labels, descriptions, groups };
 }
+
+/**
+ * Build the hover tooltip text for an observation row (Issue #521).
+ *
+ * Observation rows are labelled with an alias/UUID, which on its own tells a
+ * user nothing they cannot already read. When the snapshot (or the bundled
+ * fallback) carries a Tooltips.json `description`, the hover text becomes
+ * "label — description" so the summary is visible on mouse-over. Without a
+ * description the label alone is returned, preserving prior behaviour.
+ *
+ * @param {{ uuid?: string, label?: string|null, description?: string|null }} [row]
+ * @returns {string} tooltip text (never null; empty when nothing is known).
+ */
+export function buildObservationTooltip(row = {}) {
+  const { uuid, label, description } = row ?? {};
+  const name = (typeof label === "string" ? label.trim() : "") ||
+    (typeof uuid === "string" ? uuid.trim() : "");
+  const desc = typeof description === "string" ? description.trim() : "";
+
+  if (!desc) return name;
+  if (!name) return desc;
+  return `${name} — ${desc}`;
+}

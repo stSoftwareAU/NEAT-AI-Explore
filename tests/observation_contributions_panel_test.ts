@@ -773,3 +773,71 @@ Deno.test("buildObservationContributionsHtml (#273): note text mentions the pre-
     "panel note must explain the pre-gate badge to the user",
   );
 });
+
+// ============================================================================
+// Observation summary tooltips (Issue #521)
+// ============================================================================
+
+Deno.test("buildObservationContributionsRow: hover title shows the observation description", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-0", score: 0.5 },
+    {
+      getAlias: () => "divYieldYr-0",
+      getDescription: () => "Dividend yield for the current year",
+    },
+  );
+  assert(
+    html.includes(
+      'title="divYieldYr-0 (input-0) — Dividend yield for the current year"',
+    ),
+    "row must show the Tooltips.json description on hover",
+  );
+});
+
+Deno.test("buildObservationContributionsRow: keeps the label as title when no description exists", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-9", score: 0.5 },
+    { getAlias: () => "unknown-input", getDescription: () => null },
+  );
+  assert(
+    html.includes('title="unknown-input (input-9)"'),
+    "rows without a description keep the label-only tooltip",
+  );
+});
+
+Deno.test("buildObservationContributionsRow: escapes the description in the title", () => {
+  const html = buildObservationContributionsRow(
+    { uuid: "input-0", score: 0.5 },
+    { getAlias: () => "price", getDescription: () => '"><img src=x>' },
+  );
+  assert(
+    !html.includes("<img src=x>"),
+    "description must be HTML-escaped inside the title attribute",
+  );
+  assert(
+    html.includes("&quot;&gt;&lt;img src=x&gt;"),
+    "escaped description must still be present in the title",
+  );
+});
+
+Deno.test("buildObservationContributionsHtml: passes getDescription through to every row", () => {
+  const html = buildObservationContributionsHtml({
+    uuid: "output-0",
+    neuronType: "output",
+    inputs: [
+      { uuid: "input-0", score: 0.6 },
+      { uuid: "input-1", score: 0.4 },
+    ],
+    getAlias: (u: string) => (u === "input-0" ? "alpha" : "beta"),
+    getDescription: (u: string) =>
+      u === "input-0" ? "First observation" : "Second observation",
+  });
+  assert(
+    html.includes("alpha (input-0) — First observation"),
+    "first row must carry its description",
+  );
+  assert(
+    html.includes("beta (input-1) — Second observation"),
+    "second row must carry its description",
+  );
+});

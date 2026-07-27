@@ -20,6 +20,11 @@ import {
 } from "../shared/snapshot_loader.js";
 import { escapeHtml, extractTooltips } from "../shared/ui_helpers.js";
 import {
+  loadFallbackTooltips,
+  mergeTooltipMaps,
+  needsFallbackTooltips,
+} from "../shared/tooltips_fallback.js";
+import {
   hash32,
   neuronColourRgb01,
   synapseWeightColourRgb01,
@@ -271,6 +276,27 @@ function loadLabelsFromSnapshot(snapshot) {
   const result = extractTooltips(snapshot);
   uuidToLabel = result.labels;
   uuidToDescription = result.descriptions;
+}
+
+/**
+ * Issue #521 — older snapshots carry no embedded Tooltips.json. Merge in the
+ * bundled copy so observation hovers still show a summary. The snapshot always
+ * wins where it has data.
+ */
+async function applyFallbackTooltips() {
+  if (!needsFallbackTooltips({ descriptions: uuidToDescription })) return;
+  try {
+    const fallback = await loadFallbackTooltips();
+    uuidToDescription = mergeTooltipMaps(
+      uuidToDescription,
+      fallback.descriptions,
+    );
+  } catch (e) {
+    // The bundle is committed to this repo, so a failure here is a real
+    // deploy/serving fault — surface it loudly rather than silently dropping
+    // the summaries.
+    console.error("Bundled observation tooltips unavailable:", e);
+  }
 }
 
 function getAlias(uuid) {
@@ -3664,6 +3690,7 @@ async function loadSnapshot(source, label) {
     graph = normaliseCreature(obj);
     impactsByUuid = getImpacts(obj);
     loadLabelsFromSnapshot(obj);
+    await applyFallbackTooltips();
     const adjPack = buildAdjacency(graph.neuronsByUuid, graph.synapses);
     adjacency = adjPack.adj;
     edgeByDir = adjPack.edgeByDir;

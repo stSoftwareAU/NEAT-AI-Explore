@@ -29,6 +29,13 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Added
 
+- Observation summary tooltips in every view (#521). Hovering an observation row
+  now shows that input's `Tooltips.json` description alongside its label — in
+  the Observation Contributions panel, the Observations dashboard, the
+  impact/inbound breakdown rows and the graph explorer. Snapshot-embedded
+  tooltips remain the source of truth; snapshots without them lazily fall back
+  to the bundled `docs/tooltips.json`. Rows with no description keep their
+  label-only tooltip.
 - `SECURITY.md` supply-chain readiness runbook (#356) with a private disclosure
   contact (`security@stsoftware.com.au` / GitHub "Report a vulnerability") and
   an emergency dependency-bump procedure, plus a `tests/security_policy_test.ts`

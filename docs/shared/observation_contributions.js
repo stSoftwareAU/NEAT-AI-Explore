@@ -12,7 +12,7 @@
  * `computeTopContributingInputs`.
  */
 
-import { escapeHtml } from "./ui_helpers.js";
+import { buildObservationTooltip, escapeHtml } from "./ui_helpers.js";
 
 /** Maximum number of rows the panel renders inline. */
 export const MAX_OBSERVATION_ROWS = 50;
@@ -111,15 +111,25 @@ export function formatSharePercent(share, sigFigs = 4) {
  * the full panel.
  *
  * @param {ObservationContribution} row
- * @param {{ getAlias?: (uuid: string) => (string | null), getGroup?: (uuid: string) => (string | null) }} [lookups]
+ * @param {{ getAlias?: (uuid: string) => (string | null), getGroup?: (uuid: string) => (string | null), getDescription?: (uuid: string) => (string | null) }} [lookups]
  * @returns {string}
  */
 export function buildObservationContributionsRow(row, lookups = {}) {
-  const { getAlias, getGroup, isTopInfluencer = false } = lookups;
+  const {
+    getAlias,
+    getGroup,
+    getDescription,
+    isTopInfluencer = false,
+  } = lookups;
   const uuid = String(row?.uuid ?? "");
   const alias = typeof getAlias === "function" ? getAlias(uuid) : null;
   const group = typeof getGroup === "function" ? getGroup(uuid) : null;
+  const description = typeof getDescription === "function"
+    ? getDescription(uuid)
+    : null;
   const label = alias ? `${alias} (${uuid})` : uuid;
+  // Issue #521 — hovering an observation shows its Tooltips.json summary.
+  const hoverTitle = buildObservationTooltip({ uuid, label, description });
   // Issue #273 — when the calc layer supplied gate-aware values we prefer
   // `effectiveShare` for the primary number. Fall back to `score` (which
   // is what the multi-hop walk already collapses gating into) so callers
@@ -161,7 +171,7 @@ export function buildObservationContributionsRow(row, lookups = {}) {
     escapeHtml(uuid)
   }"${topAttr}>
         <div class="observationContributionsLabelWrap">
-          <div class="impactBreakdownOut" title="${escapeHtml(label)}">${
+          <div class="impactBreakdownOut" title="${escapeHtml(hoverTitle)}">${
     escapeHtml(label)
   }</div>
           ${subtitle}
@@ -217,6 +227,9 @@ export function isObservationContributionsOpen(opts = {}) {
  *   pre-sorted or unsorted input (Issue #243).
  * @param {(uuid: string) => (string | null)} [params.getAlias]
  * @param {(uuid: string) => (string | null)} [params.getGroup]
+ * @param {(uuid: string) => (string | null)} [params.getDescription] — the
+ *   observation's Tooltips.json summary, shown as the row's hover tooltip
+ *   (Issue #521).
  * @param {number} [params.max=MAX_OBSERVATION_ROWS] — hard safety ceiling on
  *   the number of rendered rows. The effective render count is
  *   `min(clampedTopN, max, inputs.length)`.
@@ -237,6 +250,7 @@ export function buildObservationContributionsHtml(params) {
     inputs,
     getAlias,
     getGroup,
+    getDescription,
     max = MAX_OBSERVATION_ROWS,
     topN,
     isPhone = false,
@@ -283,6 +297,7 @@ export function buildObservationContributionsHtml(params) {
       buildObservationContributionsRow(row, {
         getAlias,
         getGroup,
+        getDescription,
         isTopInfluencer: idx < clampedTopN,
       })
     )
