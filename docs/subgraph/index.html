@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Content-Security-Policy (Issue #218). See docs/index.html for the full
+      rationale, including why `frame-ancestors` is omitted (ignored when
+      delivered via a meta tag per CSP3 §3.4).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://stsoftwareau.github.io https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'none'"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>NEAT-AI Explore - Top-impact subgraph view</title>
+
+    <!-- Match the default (light) and override via prefers-colour-scheme. -->
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="theme-color"
+      content="#0a0e1a"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <link rel="stylesheet" href="./subgraph.css?v=__BUILD_ID__" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../favicon.ico" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="../icons/icon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="../icons/icon-16x16.png"
+    />
+    <link rel="apple-touch-icon" href="../icons/icon-192x192.png" />
+  </head>
+  <body>
+    <header class="appHeader">
+      <h1>NEAT-AI Subgraph</h1>
+      <div class="headerControls">
+        <details id="snapshotDetails" class="snapshotDetails">
+          <summary
+            class="button buttonSecondary buttonSmall snapshotSummary"
+            aria-label="Snapshot loader"
+            title="Snapshot loader"
+          >
+            Snapshot
+          </summary>
+          <div class="snapshotPanel" role="group" aria-label="Snapshot loader">
+            <input
+              id="fetchUrl"
+              class="input"
+              aria-label="Snapshot URL"
+              placeholder="https://stsoftwareau.github.io/NEAT-AI-Snapshot/snapshot.json.gz"
+            />
+            <button id="fetchBtn" class="button" type="button">Fetch</button>
+            <input
+              id="fileInput"
+              type="file"
+              accept="application/json, .json, .gz, application/gzip, application/x-gzip"
+              aria-label="Load snapshot file"
+              style="display: none"
+            />
+            <button id="fileBtn" class="button" type="button">Browse…</button>
+          </div>
+        </details>
+
+        <div class="browseGroup">
+          <label class="detailLabel" for="topPaths">Top paths</label>
+          <select id="topPaths" class="select">
+            <option value="5">5</option>
+            <option value="12" selected>12</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+          <label class="detailLabel" for="impactThreshold">Min share</label>
+          <select id="impactThreshold" class="select">
+            <option value="0">0%</option>
+            <option value="0.005" selected>0.5%</option>
+            <option value="0.01">1%</option>
+            <option value="0.02">2%</option>
+            <option value="0.05">5%</option>
+          </select>
+          <a
+            class="button buttonSecondary"
+            href="../"
+            aria-label="Back to Trace explorer"
+            title="Back to Trace explorer"
+          >Trace</a>
+          <a
+            class="button buttonSecondary"
+            href="../dag/"
+            aria-label="Open the layered DAG view"
+            title="Open the layered DAG view"
+          >DAG</a>
+        </div>
+        <div
+          id="progressContainer"
+          class="progressContainer"
+          style="display: none"
+        >
+          <div id="progressBar" class="progressBar"></div>
+        </div>
+        <span id="status" class="statusInline" role="status" aria-live="polite"
+        >Loading…</span>
+      </div>
+    </header>
+
+    <main class="stage">
+      <p id="summaryLine" class="summaryLine">
+        Load a snapshot to extract the top-impact paths to the Score.
+      </p>
+      <div
+        id="diagram"
+        class="diagram"
+        aria-label="Top-impact subgraph diagram"
+        tabindex="0"
+      ></div>
+
+      <div class="panels">
+        <aside id="pathsPanel" class="panel" aria-label="Top-impact paths">
+          <div class="panelHeader">
+            <div class="panelTitle">Top paths</div>
+          </div>
+          <div class="panelBody">
+            <label class="detailLabel" for="pathPicker">
+              Inspect path
+            </label>
+            <select id="pathPicker" class="select selectWide">
+              <option value="">Select a path…</option>
+            </select>
+            <div id="pathBody" class="detailsBody">
+              Pick a path (or tap a node in the diagram) to see how an
+              observation reaches the Score.
+            </div>
+          </div>
+        </aside>
+
+        <aside id="deadZonePanel" class="panel" aria-label="Dead zones">
+          <div class="panelHeader">
+            <div class="panelTitle">Dead zones</div>
+          </div>
+          <div id="deadZoneBody" class="panelBody">
+            Everything excluded from the subgraph is a candidate dead zone.
+          </div>
+        </aside>
+
+        <aside id="legendPanel" class="panel" aria-label="Diagram legend">
+          <div class="panelHeader">
+            <div class="panelTitle">Legend</div>
+          </div>
+          <div id="legendBody" class="panelBody"></div>
+        </aside>
+      </div>
+    </main>
+
+    <!--
+      Boot script extracted to ./boot.js so the page can declare a strict
+      Content-Security-Policy with `script-src 'self'` (no 'unsafe-inline').
+      See Issue #218.
+    -->
+    <script type="module" src="./boot.js?v=__BUILD_ID__"></script>
+  </body>
+</html>

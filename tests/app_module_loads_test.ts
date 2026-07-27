@@ -91,6 +91,7 @@ async function importWithBrowserStubs(relativePath: string): Promise<unknown> {
 const ENTRY_MODULES = [
   "../docs/app.js",
   "../docs/dag/dag.js",
+  "../docs/subgraph/subgraph.js",
 ];
 
 for (const relativePath of ENTRY_MODULES) {

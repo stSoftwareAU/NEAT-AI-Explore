@@ -42,6 +42,12 @@ const STATIC_FILES = [
   `./dag/dag.js?v=${VERSION}`,
   `./dag/dag.css?v=${VERSION}`,
   `./dag/boot.js?v=${VERSION}`,
+  // Top-impact subgraph view (Issue #527): cached so the subgraph view works
+  // offline.
+  "./subgraph/index.html",
+  `./subgraph/subgraph.js?v=${VERSION}`,
+  `./subgraph/subgraph.css?v=${VERSION}`,
+  `./subgraph/boot.js?v=${VERSION}`,
   // Starfield view (Issue #129): cached so starfield works offline.
   "./starfield/index.html",
   `./starfield/starfield.js?v=${VERSION}`,
@@ -87,6 +93,7 @@ const STATIC_FILES = [
   "./shared/aggregated_graph_model.js",
   "./shared/observation_families.js",
   "./shared/dag_layout.js",
+  "./shared/subgraph_model.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
@@ -249,12 +256,15 @@ self.addEventListener("fetch", (event) => {
     const isGraphNav = /\/graph(\/|$)/.test(path);
     const isStarfieldNav = /\/starfield(\/|$)/.test(path);
     const isDagNav = /\/dag(\/|$)/.test(path);
+    const isSubgraphNav = /\/subgraph(\/|$)/.test(path);
     const shell = isGraphNav
       ? "./graph/index.html"
       : isStarfieldNav
       ? "./starfield/index.html"
       : isDagNav
       ? "./dag/index.html"
+      : isSubgraphNav
+      ? "./subgraph/index.html"
       : "./index.html";
     event.respondWith(cacheFirst(shell));
     return;

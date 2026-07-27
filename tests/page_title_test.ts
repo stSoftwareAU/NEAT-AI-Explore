@@ -29,6 +29,10 @@ const PAGES: Array<{ path: string; title: string }> = [
     path: repoPath("docs", "starfield", "index.html"),
     title: "NEAT-AI Explore - Starfield view",
   },
+  {
+    path: repoPath("docs", "subgraph", "index.html"),
+    title: "NEAT-AI Explore - Top-impact subgraph view",
+  },
 ];
 
 /** Extract the trimmed text content of the first <title> element. */

@@ -483,6 +483,44 @@ flowchart LR
 
 ---
 
+## 🎯 Top-impact subgraph view (`/subgraph/`)
+
+`docs/subgraph/` is the third candidate. Instead of drawing the whole network it
+extracts only the **highest-contributing paths to the Score** and states how
+much of the network that leaves out. On the default snapshot the default
+settings draw 12 paths — 25 nodes and 24 links out of 4,120 neurons.
+
+```mermaid
+flowchart LR
+    S[snapshot] --> A["buildAggregatedGraphModel<br/>families · layers · impact"]
+    S --> W["computeTopContributingInputs<br/>squash-aware upstream walk"]
+    A --> R["buildSubgraphSource<br/>ranked paths, once per snapshot"]
+    W --> R
+    R --> E["extractTopImpactSubgraph<br/>top N · min share"]
+    E --> G["computeDagLayout → SVG<br/>shared/dag_layout.js"]
+    E --> D["dead-zone summary<br/>excluded = total − subgraph"]
+```
+
+- **Extraction** — `computeTopContributingInputs` (`shared/graph_analysis.js`)
+  ranks every observation by its squash-aware contribution to the output; the
+  view keeps the top N that clear the minimum share and carves the matching
+  nodes and edges out of the aggregated model.
+- **Controls** — **Top paths** (5–50) and **Min share** (0–5%) re-extract from
+  the cached ranking, so changing either is instant.
+- **Rendering** — the same layered layout, impact encodings and Issue #521
+  observation tooltips as the DAG view, so the two candidates read alike.
+- **Dead zones** — every observation, neuron and aggregate node excluded from
+  the subgraph is counted in the Dead zones panel, alongside the neurons with no
+  path to the Score at all. Excluded is always exactly total minus subgraph.
+- **Troubleshooting** — picking a path (or tapping a node) shows the observation
+  summary, the share of the Score it carries, and the full neuron chain.
+
+![Top-impact subgraph view, desktop](docs/evidence/issue-527-subgraph-desktop.png)
+
+![Top-impact subgraph view, phone](docs/evidence/issue-527-subgraph-phone.png)
+
+---
+
 ## 🧭 Direction terminology (to avoid confusion)
 
 The NEAT network computation direction and the explorer navigation direction are
