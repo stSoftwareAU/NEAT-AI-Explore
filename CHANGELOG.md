@@ -19,6 +19,18 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- Starfield keyboard papercuts (#529). Typing a snapshot URL containing `w`,
+  `a`, `s`, `d`, `q` or `e` into the graph view's header field no longer flies
+  the camera away from the focused neuron, and a movement key held when the
+  window loses focus (tab switch, or focus moving into a text field) is now
+  released instead of leaving the camera drifting forever. The rules live in the
+  new, unit-tested `docs/shared/keyboard_nav.js`.
+- `scripts/verify_starfield_layout.ts` runs again (#529). Its browser-side
+  predicates were passed to `waitForFunction` as source strings, which the graph
+  view's `script-src 'self'` CSP blocks on every poll; they are now real
+  functions, so the starfield's manual acceptance gate works instead of aborting
+  with an `EvalError`.
+
 - Issues tab no longer mis-reports absent (JSON `null`) `value` entries as
   "NaN/Infinity (exploding gradients)" (#507). JSON cannot carry non-finite
   numbers, so a `null` only ever means the value was not recorded because the

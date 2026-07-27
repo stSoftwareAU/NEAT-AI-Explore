@@ -53,6 +53,10 @@ import {
   prefersReducedMotion,
 } from "../shared/transitions.js";
 import {
+  createFlyKeyState,
+  isEditableEventTarget,
+} from "../shared/keyboard_nav.js";
+import {
   clampMomentum,
   classifyTouch,
   detectSwipeDirection,
@@ -1700,7 +1704,9 @@ class StarfieldRenderer {
     };
     // Momentum state for two-finger pan inertia (#106).
     this.momentum = { vx: 0, vy: 0, active: false, rafId: null };
-    this.keys = new Set();
+    // Held camera keys. Ignores keystrokes aimed at text fields and can be
+    // cleared wholesale when a keyup goes missing (Issue #529).
+    this.keys = createFlyKeyState();
     this.focusIndex = -1;
     // Glyph style: 0=abstract (v1), 1=neuron silhouette.
     this.glyphStyle01 = 1;
@@ -2111,19 +2117,31 @@ class StarfieldRenderer {
       // Support discrete zoom steps on key press. This helps users who don't
       // have a wheel/trackpad handy (or are using keyboard-only navigation).
       // Note: zoomBy() is along the current view direction.
-      const t = /** @type {any} */ (e.target);
-      const tag = String(t?.tagName ?? "").toLowerCase();
-      if (tag !== "input" && tag !== "textarea") {
+      if (!isEditableEventTarget(e.target)) {
         const k = String(e.key ?? "").toLowerCase();
         // Larger step so a single key press is visible.
         if (k === "+" || k === "=" || k === "]") this.zoomBy(-180);
         if (k === "-" || k === "_" || k === "[") this.zoomBy(180);
         if (k === "z") this.zoomToFocus(70);
       }
-      this.keys.add(e.key.toLowerCase());
+      // Skips text fields, so typing a snapshot URL no longer flies the
+      // camera (Issue #529).
+      this.keys.press(e.key, e.target);
     });
     window.addEventListener("keyup", (e) => {
-      this.keys.delete(e.key.toLowerCase());
+      this.keys.release(e.key);
+    });
+
+    // Release every held key when the keyup can't be delivered — switching
+    // tab/window, or moving focus into a text field, otherwise leaves the
+    // camera flying indefinitely (Issue #529).
+    const releaseAllKeys = () => this.keys.clear();
+    window.addEventListener("blur", releaseAllKeys);
+    window.addEventListener("focusin", (e) => {
+      if (isEditableEventTarget(e.target)) releaseAllKeys();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) releaseAllKeys();
     });
 
     c.addEventListener("wheel", (e) => {
@@ -3081,6 +3099,13 @@ function exposeDebugApi() {
         }
         return best;
       },
+      // Camera state, so automation can prove that typing in a text field or
+      // losing window focus doesn't fly the camera (Issue #529).
+      getCameraPosition: () => {
+        const p = renderer?.pos;
+        return p ? { x: p.x, y: p.y, z: p.z } : null;
+      },
+      getHeldKeyCount: () => renderer?.keys?.size ?? 0,
       getFocusTrail: () => focusTrail.slice(),
       goBack: () => navigateBack(),
       getOutputPathToFocus: () => outputPathToFocus.slice(),

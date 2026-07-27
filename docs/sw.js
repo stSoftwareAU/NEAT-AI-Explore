@@ -63,6 +63,7 @@ const STATIC_FILES = [
   "./shared/transitions.js",
   "./shared/sparkline.js",
   "./shared/touch_gestures.js",
+  "./shared/keyboard_nav.js",
   "./shared/theme.js",
   "./shared/trace_score.js",
   "./shared/colour_maps.js",
