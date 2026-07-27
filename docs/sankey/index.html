@@ -99,6 +99,35 @@
         <span>Band width ∝ contribution to the Score</span>
       </div>
 
+      <!--
+        Zoom controls (Issue #540). The same view state the pinch gesture
+        drives, reachable by keyboard and assistive technology so magnifying
+        the diagram is never touch-only.
+      -->
+      <div class="zoomControls" role="group" aria-label="Diagram zoom">
+        <button
+          id="zoomOut"
+          class="button buttonSecondary zoomButton"
+          type="button"
+          aria-label="Zoom out"
+        >−</button>
+        <span id="zoomLevel" class="zoomLevel" aria-live="polite">100%</span>
+        <button
+          id="zoomIn"
+          class="button buttonSecondary zoomButton"
+          type="button"
+          aria-label="Zoom in"
+        >+</button>
+        <button
+          id="zoomReset"
+          class="button buttonSecondary"
+          type="button"
+        >Reset</button>
+        <span class="zoomHint">
+          Pinch or drag the diagram; +, − and 0 also work.
+        </span>
+      </div>
+
       <div class="diagramWrap">
         <div id="diagram" role="list"
           aria-label="Contribution flow diagram"></div>

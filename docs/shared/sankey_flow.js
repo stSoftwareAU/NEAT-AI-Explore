@@ -533,6 +533,7 @@ export function traceLinkFlow(flow, linkId) {
  *   descriptions?: Record<string, string>,
  *   maxNodes?: number,
  *   maxLinks?: number,
+ *   maxNodesPerLayer?: number,
  * }} [options]
  * @returns {{
  *   nodes: SankeyNode[],
