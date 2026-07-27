@@ -20,6 +20,7 @@ import {
 import {
   fetchSnapshotJson,
   readSnapshotFile,
+  resolveSnapshotUrlFromParams,
 } from "../shared/snapshot_loader.js";
 import { buildAggregatedGraphModel } from "../shared/aggregated_graph_model.js";
 import {
@@ -387,7 +388,16 @@ const bootParams = new URLSearchParams(
   typeof location !== "undefined" ? location.search : "",
 );
 if (bootParams.get("noAutoLoad") !== "1") {
-  autoLoadWithRetry(DEFAULT_SNAPSHOT_URL).catch((e) => {
+  // Honour the shared `snapshotUrl` contract so the comparison page (#528) can
+  // open every candidate view on the *same* snapshot. Falls back to the default.
+  let bootUrl = DEFAULT_SNAPSHOT_URL;
+  try {
+    bootUrl = resolveSnapshotUrlFromParams(bootParams) ?? DEFAULT_SNAPSHOT_URL;
+  } catch (e) {
+    setStatus(e?.message ?? "Invalid snapshot URL", "bad");
+  }
+  if (el.fetchUrl) el.fetchUrl.value = bootUrl;
+  autoLoadWithRetry(bootUrl).catch((e) => {
     setStatus(e?.message ?? "Auto-load failed", "bad");
     console.error("Auto-load failed:", e);
   });

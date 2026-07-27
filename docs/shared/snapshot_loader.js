@@ -58,6 +58,44 @@ export function isDangerousUrlScheme(s) {
 }
 
 /**
+ * Resolve a snapshot URL from a page's query parameters.
+ *
+ * A single source of truth for the `snapshotUrl` / `snapshotUrlB64` / `file`
+ * contract so every candidate view (DAG, Sankey, top-impact subgraph) and the
+ * side-by-side comparison page open the *same* snapshot when linked with one.
+ * Returns `null` when no snapshot parameter is present so the caller can fall
+ * back to the default. Throws on a dangerous URL scheme rather than returning
+ * one silently (Issue #3234 — fail loud).
+ *
+ * @param {URLSearchParams} params
+ * @returns {string|null}
+ */
+export function resolveSnapshotUrlFromParams(params) {
+  const get = typeof params?.get === "function"
+    ? (key) => params.get(key)
+    : () => null;
+
+  const b64 = get("snapshotUrlB64");
+  if (b64) {
+    const decoded = decodeBase64UrlToUtf8(b64);
+    if (decoded == null) throw new Error("Could not decode snapshotUrlB64.");
+    if (isDangerousUrlScheme(decoded)) {
+      throw new Error("Refusing to load a dangerous URL scheme.");
+    }
+    return normaliseSnapshotUrl(decoded);
+  }
+
+  const raw = get("snapshotUrl") ?? get("url") ?? get("file");
+  if (raw) {
+    if (isDangerousUrlScheme(raw)) {
+      throw new Error("Refusing to load a dangerous URL scheme.");
+    }
+    return normaliseSnapshotUrl(raw);
+  }
+  return null;
+}
+
+/**
  * @param {Uint8Array} gzBytes
  * @returns {Promise<string>}
  */
