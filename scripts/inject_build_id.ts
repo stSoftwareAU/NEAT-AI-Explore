@@ -30,6 +30,8 @@ const files = [
   "./docs/boot.js",
   "./docs/graph/index.html",
   "./docs/graph/boot.js",
+  "./docs/dag/index.html",
+  "./docs/dag/boot.js",
   "./docs/starfield/index.html",
   "./docs/starfield/boot.js",
   "./docs/sw.js",

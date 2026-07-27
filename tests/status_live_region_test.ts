@@ -18,6 +18,7 @@ const ENTRY_HTMLS = [
   "docs/index.html",
   "docs/graph/index.html",
   "docs/starfield/index.html",
+  "docs/dag/index.html",
 ];
 
 for (const rel of ENTRY_HTMLS) {
