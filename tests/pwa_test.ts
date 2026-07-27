@@ -47,6 +47,10 @@ Deno.test("docs PWA files exist", async () => {
     repoPath("docs", "dag", "dag.js"),
     repoPath("docs", "dag", "dag.css"),
     repoPath("docs", "dag", "boot.js"),
+    repoPath("docs", "subgraph", "index.html"),
+    repoPath("docs", "subgraph", "subgraph.js"),
+    repoPath("docs", "subgraph", "subgraph.css"),
+    repoPath("docs", "subgraph", "boot.js"),
   ];
   for (const p of paths) {
     await Deno.stat(p);
@@ -111,6 +115,11 @@ Deno.test("sw.js navigation handler routes each entry point to its app shell", a
     "navigating under /dag/ should serve the layered DAG shell",
   );
   assertEquals(
+    await sw.resolveNavigation("/subgraph/"),
+    "./subgraph/index.html",
+    "navigating under /subgraph/ should serve the top-impact subgraph shell",
+  );
+  assertEquals(
     await sw.resolveNavigation("/graph/"),
     "./graph/index.html",
     "navigating under /graph/ should serve the graph shell",
@@ -133,6 +142,7 @@ Deno.test("sw.js STATIC_FILES precaches the per-page boot.js scripts (#218)", as
     "./graph/boot.js",
     "./starfield/boot.js",
     "./dag/boot.js",
+    "./subgraph/boot.js",
   ];
   for (const file of bootFiles) {
     assert(
@@ -157,6 +167,8 @@ Deno.test("inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#21
     "docs/starfield/boot.js",
     "docs/dag/index.html",
     "docs/dag/boot.js",
+    "docs/subgraph/index.html",
+    "docs/subgraph/boot.js",
     "docs/sw.js",
   ];
 

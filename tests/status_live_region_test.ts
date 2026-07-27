@@ -19,6 +19,7 @@ const ENTRY_HTMLS = [
   "docs/graph/index.html",
   "docs/starfield/index.html",
   "docs/dag/index.html",
+  "docs/subgraph/index.html",
 ];
 
 for (const rel of ENTRY_HTMLS) {

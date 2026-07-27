@@ -26,6 +26,7 @@ const ENTRY_HTMLS = [
   repoPath("docs", "graph", "index.html"),
   repoPath("docs", "starfield", "index.html"),
   repoPath("docs", "dag", "index.html"),
+  repoPath("docs", "subgraph", "index.html"),
 ];
 
 /**
