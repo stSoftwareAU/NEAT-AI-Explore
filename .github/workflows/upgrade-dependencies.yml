@@ -83,12 +83,14 @@ jobs:
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
-        # peter-evans/create-pull-request@v7.0.11 — pinned to a 40-char
+        # peter-evans/create-pull-request@v8.1.1 — pinned to a 40-char
         # commit SHA. This third-party action runs weekly with
-        # contents:write + pull-requests:write, so a hijacked v7 tag could
+        # contents:write + pull-requests:write, so a hijacked v8 tag could
         # push to Develop and have deploy.yml publish attacker content
-        # (#190).
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676
+        # (#190). v8 runs on the supported node24 runtime; v7.0.11 was
+        # still on the deprecated node20 runtime GitHub removes on
+        # 2026-09-16 (#556).
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
         with:
           # Prefer the org-level PAT so GitHub fires downstream workflow
           # triggers (CI, labels, reviewer automation) on the created PR;
