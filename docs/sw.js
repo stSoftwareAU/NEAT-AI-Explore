@@ -48,6 +48,9 @@ const STATIC_FILES = [
   `./subgraph/subgraph.js?v=${VERSION}`,
   `./subgraph/subgraph.css?v=${VERSION}`,
   `./subgraph/boot.js?v=${VERSION}`,
+  // Off-main-thread derivation worker (Issue #560): precached so the subgraph
+  // page derives off the main thread offline too.
+  `./subgraph/subgraph_worker.js?v=${VERSION}`,
   // Starfield view (Issue #129): cached so starfield works offline.
   "./starfield/index.html",
   `./starfield/starfield.js?v=${VERSION}`,
@@ -108,6 +111,11 @@ const STATIC_FILES = [
   "./shared/observation_families.js",
   "./shared/dag_layout.js",
   "./shared/subgraph_model.js",
+  // Off-main-thread subgraph derivation (Issue #560).
+  "./shared/subgraph_derivation.js",
+  "./shared/subgraph_worker_client.js",
+  // On-device derived-subgraph cache (Issue #561).
+  "./shared/subgraph_cache.js",
   "./shared/candidate_views.js",
   "./shared/sankey_flow.js",
   "./shared/sankey_layout.js",

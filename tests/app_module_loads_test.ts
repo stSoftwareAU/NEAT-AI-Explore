@@ -92,6 +92,9 @@ const ENTRY_MODULES = [
   "../docs/app.js",
   "../docs/dag/dag.js",
   "../docs/subgraph/subgraph.js",
+  // Off-main-thread derivation worker (Issue #560): a broken worker script URL
+  // or import failure would leave the subgraph page unable to derive.
+  "../docs/subgraph/subgraph_worker.js",
 ];
 
 for (const relativePath of ENTRY_MODULES) {

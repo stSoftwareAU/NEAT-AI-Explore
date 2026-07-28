@@ -152,12 +152,14 @@ const FETCH_RETRY_DELAY_MS = 500;
  * @param {string} url
  * @param {{
  *   onProgress?: (p: FetchProgress) => void,
+ *   onPhase?: (phase: "download"|"gunzip"|"parse") => void,
  * }} [opts]
  * @returns {Promise<any>}
  */
 export async function fetchSnapshotJson(url, opts = {}) {
   const u = normaliseSnapshotUrl(url);
   const onProgress = opts?.onProgress ?? null;
+  const onPhase = opts?.onPhase ?? null;
 
   /** @type {(p: FetchProgress) => void} */
   const report = (p) => {
@@ -165,6 +167,18 @@ export async function fetchSnapshotJson(url, opts = {}) {
       if (onProgress) onProgress(p);
     } catch (_e) {
       // Non-fatal: progress callbacks should not break loading.
+    }
+  };
+
+  // Announce the current phase (download → gunzip → parse) so an off-main-thread
+  // caller can advance an honest progress bar rather than a frozen spinner
+  // (Issue #560). Never fatal — a throwing callback must not break loading.
+  /** @type {(phase: "download"|"gunzip"|"parse") => void} */
+  const phase = (name) => {
+    try {
+      if (onPhase) onPhase(name);
+    } catch (_e) {
+      // Non-fatal.
     }
   };
 
@@ -208,6 +222,7 @@ export async function fetchSnapshotJson(url, opts = {}) {
     const chunks = [];
     let receivedBytes = 0;
 
+    phase("download");
     report({
       totalBytes,
       receivedBytes: 0,
@@ -235,21 +250,27 @@ export async function fetchSnapshotJson(url, opts = {}) {
     }
 
     if (needsClientDecompress) {
+      phase("gunzip");
       const text = await gunzipToText(allChunks);
+      phase("parse");
       return JSON.parse(text);
     }
 
+    phase("parse");
     const text = new TextDecoder().decode(allChunks);
     return JSON.parse(text);
   }
 
   // Fallback: no streaming (e.g., body unavailable)
   if (looksGz && !ce.includes("gzip")) {
+    phase("gunzip");
     const buf = new Uint8Array(await res.arrayBuffer());
     const text = await gunzipToText(buf);
+    phase("parse");
     return JSON.parse(text);
   }
 
+  phase("parse");
   return await res.json();
 }
 
@@ -315,15 +336,27 @@ export function normaliseCreature(snapshot) {
  * Supports .gz via gunzip.
  *
  * @param {File} file
+ * @param {{ onPhase?: (phase: "gunzip"|"parse") => void }} [opts]
  * @returns {Promise<any>}
  */
-export async function readSnapshotFile(file) {
+export async function readSnapshotFile(file, opts = {}) {
+  const onPhase = opts?.onPhase ?? null;
+  const phase = (name) => {
+    try {
+      if (onPhase) onPhase(name);
+    } catch (_e) {
+      // Non-fatal.
+    }
+  };
   const name = String(file?.name ?? "");
   if (name.toLowerCase().endsWith(".gz")) {
     const buf = new Uint8Array(await file.arrayBuffer());
+    phase("gunzip");
     const text = await gunzipToText(buf);
+    phase("parse");
     return JSON.parse(text);
   }
+  phase("parse");
   const text = await file.text();
   return JSON.parse(text);
 }
