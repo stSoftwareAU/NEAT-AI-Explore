@@ -54,7 +54,7 @@ export function truncateLabel(text, max) {
  * @property {number} tx
  * @property {number} ty
  * @property {number} thickness
- * @property {string} path — the SVG cubic path `d` attribute.
+ * @property {string} path — the SVG `d` for a closed, filled ribbon polygon.
  */
 
 /**
@@ -112,6 +112,45 @@ export function computeSankeyGeometry(flow, layout) {
     };
   }
 
+  // Per-node inbound / outbound band values, restricted to links whose both
+  // endpoints are drawn. A node's height must cover its stacked ports, so the
+  // geometry needs these before it can pick a vertical scale.
+  const visibleIds = new Set(visible.map((n) => n.id));
+  const inboundValues = new Map();
+  const outboundValues = new Map();
+  for (const link of flow.links) {
+    if (!visibleIds.has(link.source) || !visibleIds.has(link.target)) continue;
+    if (!outboundValues.has(link.source)) outboundValues.set(link.source, []);
+    if (!inboundValues.has(link.target)) inboundValues.set(link.target, []);
+    outboundValues.get(link.source).push(link.value);
+    inboundValues.get(link.target).push(link.value);
+  }
+
+  // A port stack is the sum of its floored band thicknesses. Because each band
+  // is floored at `minBand`, a hub's stacked ports can be far taller than its
+  // raw value*scale — the overflow Issue #552 fixes.
+  const portSpan = (values, scale) => {
+    let sum = 0;
+    for (const v of values) {
+      sum += Math.max(bandWidth(v, scale), layout.minBand);
+    }
+    return sum;
+  };
+  const nodeHeight = (node, scale) =>
+    Math.max(
+      node.value * scale,
+      layout.minBand,
+      inboundValues.has(node.id)
+        ? portSpan(inboundValues.get(node.id), scale)
+        : 0,
+      outboundValues.has(node.id)
+        ? portSpan(outboundValues.get(node.id), scale)
+        : 0,
+    );
+  const columnHeight = (col, scale) =>
+    col.reduce((acc, n) => acc + nodeHeight(n, scale), 0) +
+    (col.length - 1) * layout.nodeGap;
+
   // One vertical scale that fits the tallest column into the drawing area.
   const avail = viewHeight - 2 * layout.padY;
   let vScale = Infinity;
@@ -120,6 +159,26 @@ export function computeSankeyGeometry(flow, layout) {
     if (sum <= 0) continue;
     const usable = avail - (col.length - 1) * layout.nodeGap;
     vScale = Math.min(vScale, usable / sum);
+  }
+  if (!Number.isFinite(vScale) || vScale <= 0) vScale = 1;
+
+  // The value-only scale above ignores the `minBand` floors, so a column whose
+  // bands hit the floor still overflows `avail`. Shrink the scale until every
+  // floored column fits — a bounded monotonic search, so it always converges.
+  const fitsAll = (scale) =>
+    columns.every((col) => columnHeight(col, scale) <= avail);
+  if (!fitsAll(vScale)) {
+    let lo = 0;
+    let hi = vScale;
+    for (let i = 0; i < 48; i++) {
+      const mid = (lo + hi) / 2;
+      if (fitsAll(mid)) lo = mid;
+      else hi = mid;
+    }
+    // `hi` is the smallest positive scale reached when even a zero scale
+    // over-subscribes the canvas (more floored bands than fit); it keeps bands
+    // inside their bars while the pannable canvas absorbs the extra height.
+    vScale = lo > 0 ? lo : hi;
   }
   if (!Number.isFinite(vScale) || vScale <= 0) vScale = 1;
 
@@ -132,13 +191,19 @@ export function computeSankeyGeometry(flow, layout) {
     const x = columns.length > 1
       ? layout.padX + (colIndex * innerW) / (columns.length - 1)
       : layout.padX + innerW / 2;
-    const colHeight = col.reduce(
-      (acc, n) => acc + Math.max(n.value * vScale, layout.minBand),
-      0,
-    ) + (col.length - 1) * layout.nodeGap;
-    let cursor = (viewHeight - colHeight) / 2;
+    const colHeight = columnHeight(col, vScale);
+    // Centre the column, but never start above the top padding — a column that
+    // still exceeds `avail` (over-subscribed) extends down into the pannable
+    // canvas rather than spilling off the top of it.
+    let cursor = Math.max(layout.padY, (viewHeight - colHeight) / 2);
     for (const node of col) {
-      const h = Math.max(node.value * vScale, layout.minBand);
+      const h = nodeHeight(node, vScale);
+      const outSpan = outboundValues.has(node.id)
+        ? portSpan(outboundValues.get(node.id), vScale)
+        : 0;
+      const inSpan = inboundValues.has(node.id)
+        ? portSpan(inboundValues.get(node.id), vScale)
+        : 0;
       const isLeftColumn = x < layout.padX + innerW / 2;
       rectById.set(node.id, {
         id: node.id,
@@ -153,8 +218,10 @@ export function computeSankeyGeometry(flow, layout) {
         labelY: cursor + h / 2,
         labelAnchor: isLeftColumn ? "start" : "end",
         labelText: truncateLabel(node.label || node.id, layout.labelMaxChars),
-        outCursor: cursor,
-        inCursor: cursor,
+        // Centre each port stack within the bar so bands align with it and the
+        // stack never runs past the rectangle (h ≥ inSpan and h ≥ outSpan).
+        outCursor: cursor + (h - outSpan) / 2,
+        inCursor: cursor + (h - inSpan) / 2,
       });
       cursor += h + layout.nodeGap;
     }
@@ -210,6 +277,15 @@ export function computeSankeyGeometry(flow, layout) {
     const geom = linkGeom.get(link.id);
     if (!geom || geom.tx === undefined) continue;
     const midX = (geom.sx + geom.tx) / 2;
+    const half = geom.thickness / 2;
+    const sTop = geom.sy - half;
+    const sBot = geom.sy + half;
+    const tTop = geom.ty - half;
+    const tBot = geom.ty + half;
+    // A filled ribbon polygon: a top edge and a bottom edge, each a cubic, then
+    // closed. Unlike a stroked centre-line (whose round joins balloon into a
+    // lens once the stroke nears the column gap), its thickness is exact at both
+    // ends and it cannot balloon (Issue #552).
     links.push({
       id: link.id,
       link,
@@ -219,7 +295,8 @@ export function computeSankeyGeometry(flow, layout) {
       ty: geom.ty,
       thickness: geom.thickness,
       path:
-        `M${geom.sx},${geom.sy} C${midX},${geom.sy} ${midX},${geom.ty} ${geom.tx},${geom.ty}`,
+        `M${geom.sx},${sTop} C${midX},${sTop} ${midX},${tTop} ${geom.tx},${tTop} ` +
+        `L${geom.tx},${tBot} C${midX},${tBot} ${midX},${sBot} ${geom.sx},${sBot} Z`,
     });
   }
 

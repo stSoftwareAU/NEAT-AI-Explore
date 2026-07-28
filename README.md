@@ -480,16 +480,24 @@ to the output.
   on keyboard focus (`docs/sankey/tooltip_panel.js`). The panel is clamped
   inside the viewport, and dismisses on tap-away, `Escape`, or blur. Hover and
   the screen-reader `aria-label` are untouched — this is additive.
-- **Phone layout (Issue #540)** — a phone gets a _different_ layout, not the
-  desktop canvas shrunk: half the per-layer fold budget (so each band is roughly
-  twice as tall and its label survives), thicker band and node floors, shorter
-  labels, and width-based `@media` rules that reflow the header, legend and meta
-  line. The published snapshot lays out as 33 layers, so the phone opens on one
-  **full-height screenful** of that strip and pans, rather than fitting the
-  whole illegible thing on screen. Pinch, drag, wheel, the `+`/`−`/`Reset`
-  buttons and the `+`, `−`, `0` and arrow keys all drive the same `viewBox`
-  window (`docs/shared/viewbox_zoom.js`, `docs/sankey/zoom_pan.js`), so
-  magnifying is never touch-only. The desktop layout is unchanged.
+- **Phone layout (Issue #540, #552)** — a phone gets a _different_ layout, not
+  the desktop canvas shrunk: under half the per-layer fold budget (5 vs 12, so
+  each band is roughly twice as tall and its label survives), thicker band and
+  node floors, shorter labels, and width-based `@media` rules that reflow the
+  header, legend and meta line. The published snapshot lays out as 33 layers, so
+  the phone opens on one **full-height screenful** of that strip and pans,
+  rather than fitting the whole illegible thing on screen. Pinch, drag, wheel,
+  the `+`/`−`/`Reset` buttons and the `+`, `−`, `0` and arrow keys all drive the
+  same `viewBox` window (`docs/shared/viewbox_zoom.js`,
+  `docs/sankey/zoom_pan.js`), so magnifying is never touch-only. The desktop
+  layout is unchanged.
+- **Band geometry (Issue #552)** — bands are drawn as filled ribbon **polygons**
+  (`computeSankeyGeometry` in `docs/shared/sankey_layout.js`), not stroked cubic
+  centre-lines, so a thick band cannot balloon into a lens/blob at phone width.
+  The shared vertical scale is also reconciled with the per-band and per-node
+  `minBand` floors: node heights cover their stacked ports and the scale shrinks
+  until every floored column fits, so a hub's bands stay inside its bar and
+  never spill past the top of the canvas.
 
 ```mermaid
 stateDiagram-v2
@@ -502,7 +510,7 @@ stateDiagram-v2
 ```mermaid
 flowchart TD
     W["viewport width"] --> B{"≤ 640px?"}
-    B -->|yes| P["phone layout<br/>6 per layer · 3px bands · 12-char labels"]
+    B -->|yes| P["phone layout<br/>5 per layer · 3px bands · 12-char labels"]
     B -->|no| D["desktop layout<br/>12 per layer · 1.5px bands · 22-char labels"]
     P --> G["computeSankeyGeometry<br/>docs/shared/sankey_layout.js"]
     D --> G

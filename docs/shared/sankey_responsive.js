@@ -53,14 +53,16 @@ const DESKTOP = Object.freeze({
 
 /**
  * Phone layout. Fewer nodes per layer is what buys legibility: the same
- * vertical space split six ways instead of twelve roughly doubles each band, so
- * labels clear the visibility threshold instead of being dropped. Bands and
- * node rectangles are widened so a tap lands on something, and the remaining
- * thin bands are reachable by pinch-zoom or through the node picker.
+ * vertical space split five ways instead of twelve more than doubles each band,
+ * so labels clear the visibility threshold instead of being dropped. Coarser
+ * folding also keeps a hub's stacked, floored ports well inside its bar at phone
+ * width (Issue #552). Bands and node rectangles are widened so a tap lands on
+ * something, and the remaining thin bands are reachable by pinch-zoom or through
+ * the node picker.
  */
 const PHONE = Object.freeze({
   isNarrow: true,
-  maxNodesPerLayer: 6,
+  maxNodesPerLayer: 5,
   columnWidth: 132,
   minViewWidth: 360,
   viewHeight: 520,
