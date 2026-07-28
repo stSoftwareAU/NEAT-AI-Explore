@@ -2,9 +2,9 @@
  * Candidate comparison page styling (Issue #528).
  *
  * Phone-first: candidate cards stack in a single column on small screens and
- * flow into a responsive grid on wider ones; the side-by-side comparison
- * stacks its iframes vertically on phones and lays them out in columns on
- * desktop. Light/dark themes are driven by prefers-color-scheme.
+ * flow into a responsive grid on wider ones. The side-by-side iframe
+ * comparison was removed as too heavy on phones (Issue #554). Light/dark
+ * themes are driven by prefers-color-scheme.
  */
 
 :root {
@@ -188,65 +188,6 @@ main {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.sideBySideControls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin: 0.5rem 0;
-}
-
-.sideBySideControls .hint {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.sideBySide {
-  display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
-  grid-template-columns: 1fr;
-}
-
-@media (min-width: 60rem) {
-  .sideBySide {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.frameCard {
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--panel);
-  display: flex;
-  flex-direction: column;
-}
-
-.frameTitle {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  border-bottom: 1px solid var(--panel-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.frameTitle a {
-  color: var(--accent);
-  font-size: 0.8rem;
-}
-
-.frameCard iframe {
-  width: 100%;
-  height: 60vh;
-  min-height: 24rem;
-  border: 0;
-  background: var(--bg);
 }
 
 .textLink {

@@ -3,9 +3,10 @@
  *
  * The shared entry point for the three candidate replacement views (layered
  * DAG, Sankey contribution flow, top-impact subgraph). It loads no snapshot
- * itself: it takes one snapshot URL and wires every candidate to it — as a
- * launcher card and as a side-by-side <iframe> — so the three are evaluated on
- * identical data (parent #522).
+ * itself: it takes one snapshot URL and wires every candidate to it as a
+ * launcher card, so the three are evaluated on identical data (parent #522).
+ * The side-by-side <iframe> comparison was removed as too heavy on phones
+ * (Issue #554); the launcher cards remain.
  *
  * The candidate list and link-building live in the DOM-free
  * `docs/shared/candidate_views.js`, unit-tested by
@@ -85,61 +86,15 @@ function renderCards() {
   }
 }
 
-/** Build (or rebuild) the side-by-side iframes for the current snapshot. */
-function renderSideBySide() {
-  const container = document.getElementById("sideBySide");
-  if (!container || container.hidden) return;
-  const url = currentSnapshotUrl();
-  container.textContent = "";
-
-  for (const view of CANDIDATE_VIEWS) {
-    const card = document.createElement("div");
-    card.className = "frameCard";
-
-    const title = document.createElement("p");
-    title.className = "frameTitle";
-    const name = document.createElement("span");
-    name.textContent = view.label;
-    const link = document.createElement("a");
-    link.href = buildCandidateHref(view, url);
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "Open ↗";
-    title.append(name, link);
-
-    const frame = document.createElement("iframe");
-    frame.src = buildCandidateHref(view, url);
-    frame.title = `${view.label} — ${view.tagline}`;
-    frame.loading = "lazy";
-
-    card.append(title, frame);
-    container.appendChild(card);
-  }
-}
-
 function apply() {
   const url = currentSnapshotUrl();
   if (!validSnapshotUrl(url)) return;
   renderCards();
-  renderSideBySide();
   setStatus(
     url
       ? `All three views set to: ${url}`
       : "All three views set to their default snapshot.",
   );
-}
-
-function toggleSideBySide() {
-  const container = document.getElementById("sideBySide");
-  const btn = document.getElementById("sideBySideBtn");
-  if (!container) return;
-  const show = container.hidden;
-  container.hidden = !show;
-  if (btn) {
-    btn.textContent = show ? "Hide side-by-side" : "Compare side by side";
-  }
-  if (show) renderSideBySide();
-  else container.textContent = "";
 }
 
 function wireControls() {
@@ -149,10 +104,6 @@ function wireControls() {
     (event) => {
       if (event.key === "Enter") apply();
     },
-  );
-  document.getElementById("sideBySideBtn")?.addEventListener(
-    "click",
-    toggleSideBySide,
   );
 }
 
