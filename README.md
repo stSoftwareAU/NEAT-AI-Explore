@@ -613,6 +613,30 @@ flowchart LR
     M --> R["rank inputs by mass<br/>+ best (max-product) path"]
 ```
 
+- **Off the main thread (Issue #560)** — the whole heavy pipeline (**download →
+  gunzip → parse → rank**) runs in a Web Worker (`subgraph/subgraph_worker.js`,
+  driven by `shared/subgraph_worker_client.js` over the DOM-free
+  `shared/subgraph_derivation.js`), so the page stays interactive on a phone
+  while a 15.9 MB gzipped snapshot loads. Each phase advances the progress bar
+  **honestly** — no indefinite frozen "Loading…" — and a worker failure surfaces
+  loudly instead of hanging the spinner. Only the cheap
+  `extractTopImpactSubgraph` (re-run on every control change) stays on the main
+  thread. Browsers without module-Worker support fall back to the same pipeline
+  on the main thread.
+
+```mermaid
+sequenceDiagram
+    participant Page as subgraph.js (main thread)
+    participant Worker as subgraph_worker.js
+    Page->>Worker: postMessage(url / file)
+    Worker-->>Page: phase "download" + byte progress
+    Worker-->>Page: phase "gunzip"
+    Worker-->>Page: phase "parse"
+    Worker-->>Page: phase "rank" (buildSubgraphSource)
+    Worker-->>Page: done { source, labels, descriptions }
+    Note over Page: extractTopImpactSubgraph → render (cheap)
+```
+
 - **Controls** — **Top paths** (5–50) and **Min share** (0–5%) re-extract from
   the cached ranking, so changing either is instant.
 - **Rendering** — the same layered layout, impact encodings and Issue #521
@@ -626,6 +650,11 @@ flowchart LR
 ![Top-impact subgraph view, desktop](docs/evidence/issue-527-subgraph-desktop.png)
 
 ![Top-impact subgraph view, phone](docs/evidence/issue-527-subgraph-phone.png)
+
+The default snapshot ranked and rendered on a phone viewport, with the
+derivation dispatched to the Web Worker (Issue #560):
+
+![Top-impact subgraph on a phone, derived off the main thread](docs/evidence/issue-560-subgraph-phone.png)
 
 ---
 

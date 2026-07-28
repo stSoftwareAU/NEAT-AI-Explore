@@ -18,11 +18,6 @@ import {
   SNAPSHOT_FALLBACK_URLS,
 } from "../shared/config.js";
 import {
-  fetchSnapshotJson,
-  readSnapshotFile,
-} from "../shared/snapshot_loader.js";
-import {
-  buildSubgraphSource,
   DEFAULT_IMPACT_THRESHOLD,
   DEFAULT_TOP_PATHS,
   describeSubgraphPath,
@@ -33,13 +28,19 @@ import {
   computeDagLayout,
   dagLayoutToSvgString,
 } from "../shared/dag_layout.js";
-import { escapeHtml, extractTooltips } from "../shared/ui_helpers.js";
+import { escapeHtml } from "../shared/ui_helpers.js";
 import {
   loadFallbackTooltips,
   mergeTooltipMaps,
   needsFallbackTooltips,
 } from "../shared/tooltips_fallback.js";
 import { formatInteger } from "../shared/number_format.js";
+import { deriveSubgraphFromRequest } from "../shared/subgraph_derivation.js";
+import {
+  phaseProgressPercent,
+  runSubgraphDerivation,
+  SUBGRAPH_PHASE_LABELS,
+} from "../shared/subgraph_worker_client.js";
 
 /** The subgraph is compact by construction, so a column rarely overflows. */
 const MAX_NODES_PER_COLUMN = 24;
@@ -63,13 +64,11 @@ const el = {
   legendBody: document.getElementById("legendBody"),
 };
 
-/** @type {unknown} */
-let snapshot = null;
 /** @type {Record<string, string>} */
 let labels = {};
 /** @type {Record<string, string>} */
 let descriptions = {};
-/** @type {ReturnType<typeof buildSubgraphSource>|null} */
+/** @type {Awaited<ReturnType<typeof deriveSubgraphFromRequest>>["source"]|null} */
 let source = null;
 /** @type {ReturnType<typeof extractTopImpactSubgraph>|null} */
 let subgraph = null;
@@ -108,44 +107,90 @@ function hideProgress() {
 }
 
 // ---------------------------------------------------------------------------
-// Snapshot loading (mirrors the DAG view, Issues #93 / #118)
+// Snapshot loading — off the main thread (Issue #560)
+//
+// download → gunzip → parse → rank all run in a Web Worker so the page stays
+// interactive on a phone while a 15.9 MB gzipped snapshot loads. The worker
+// streams honest phase/progress messages back; only the cheap
+// `extractTopImpactSubgraph` (re-run on every control change) stays on the main
+// thread.
 // ---------------------------------------------------------------------------
 
-async function loadSnapshotFromUrl(url) {
-  setStatus(`Loading ${url}…`);
-  showProgress(true);
+/**
+ * Construct the derivation Web Worker, cache-busted to match this module so a
+ * deploy never pairs a fresh page with a stale worker. Returns null when the
+ * platform has no module-Worker support, so the caller can fall back to the
+ * main thread.
+ * @returns {Worker|null}
+ */
+function createDerivationWorker() {
+  try {
+    if (typeof Worker === "undefined") return null;
+    const workerUrl = new URL("./subgraph_worker.js", import.meta.url);
+    // Carry the page module's ?v=<build id> onto the worker URL so both are
+    // invalidated together by the Service Worker.
+    workerUrl.search = new URL(import.meta.url).search;
+    return new Worker(workerUrl, { type: "module" });
+  } catch (e) {
+    console.warn(
+      "Subgraph worker unavailable — deriving on the main thread:",
+      e,
+    );
+    return null;
+  }
+}
 
-  const onProgress = (p) => {
-    if (!p.totalBytes) {
-      showProgress(true);
-      return;
-    }
-    updateProgress((p.receivedBytes / p.totalBytes) * 100);
+/** Advance the progress bar honestly for a phase (0..1 within the phase). */
+function reportPhase(phase, fraction = 0) {
+  setStatus(SUBGRAPH_PHASE_LABELS[phase] ?? "Working…");
+  showProgress(false);
+  updateProgress(phaseProgressPercent(phase, fraction));
+}
+
+/**
+ * Build the derivation request for a URL or an uploaded file. The default
+ * snapshot carries the CORS fallback mirrors (Issue #93); everything else and
+ * every file upload runs without them.
+ * @param {string|File} input
+ * @returns {import("../shared/subgraph_derivation.js").SubgraphRequest}
+ */
+function toRequest(input) {
+  if (typeof input === "string") {
+    return {
+      type: "url",
+      url: input,
+      fallbacks: input === DEFAULT_SNAPSHOT_URL ? SNAPSHOT_FALLBACK_URLS : [],
+    };
+  }
+  return { type: "file", file: input };
+}
+
+/**
+ * Derive the ranked subgraph source for a request, off the main thread when a
+ * Worker is available and on it otherwise. Progress is honest either way.
+ * @param {import("../shared/subgraph_derivation.js").SubgraphRequest} request
+ */
+async function deriveSubgraph(request) {
+  const handlers = {
+    onPhase: (phase) => reportPhase(phase, 0),
+    onProgress: (p) => {
+      if (p?.totalBytes) {
+        reportPhase("download", p.receivedBytes / p.totalBytes);
+      }
+    },
   };
 
-  try {
-    const obj = await fetchSnapshotJson(url, { onProgress });
-    hideProgress();
-    return obj;
-  } catch (e) {
-    // GitHub Pages can be blocked by CORS on some networks — try the mirrors
-    // before giving up (Issue #93).
-    if (String(url) === DEFAULT_SNAPSHOT_URL) {
-      for (const fallback of SNAPSHOT_FALLBACK_URLS) {
-        if (!fallback || fallback === url) continue;
-        try {
-          setStatus(`Trying fallback ${fallback}…`);
-          const obj = await fetchSnapshotJson(fallback, { onProgress });
-          hideProgress();
-          return obj;
-        } catch (_e) {
-          // Keep trying the next fallback.
-        }
-      }
+  const worker = createDerivationWorker();
+  if (worker) {
+    try {
+      return await runSubgraphDerivation(worker, request, handlers);
+    } finally {
+      worker.terminate?.();
     }
-    hideProgress();
-    throw e;
   }
+  // Legacy fallback: no module Worker support. Same pipeline, same honest
+  // progress — but the heavy steps run on the main thread.
+  return await deriveSubgraphFromRequest(request, handlers);
 }
 
 /**
@@ -166,28 +211,40 @@ async function applyFallbackTooltips() {
   }
 }
 
+/**
+ * Load a snapshot (URL or file), derive its ranked source off the main thread,
+ * and render. Returns true on success so the auto-load retry loop can react
+ * without inspecting global state.
+ * @param {string|File} input
+ * @param {string} label
+ * @returns {Promise<boolean>}
+ */
 async function loadSnapshot(input, label) {
   try {
     setStatus(`Loading ${label}…`);
-    snapshot = typeof input === "string"
-      ? await loadSnapshotFromUrl(input)
-      : input;
-    const tooltips = extractTooltips(snapshot);
-    labels = tooltips.labels;
-    descriptions = tooltips.descriptions;
+    showProgress(true);
+    updateProgress(0);
+
+    // The whole download → gunzip → parse → rank derivation runs off the main
+    // thread; only the returned source (structured-cloned back) lands here.
+    const result = await deriveSubgraph(toRequest(input));
+    source = result.source;
+    labels = result.labels;
+    descriptions = result.descriptions;
     await applyFallbackTooltips();
     el.snapshotDetails?.removeAttribute?.("open");
 
-    // The ranked walk does not depend on the controls, so it runs once per
-    // snapshot and every control change re-uses it.
-    setStatus("Ranking contributions to the Score…");
-    source = buildSubgraphSource(snapshot);
+    updateProgress(100);
+    hideProgress();
     selectedInputUuid = "";
     render();
+    return true;
   } catch (e) {
+    // Fail loud rather than leaving a frozen "Loading…" (Issue #3234).
     hideProgress();
     setStatus(e?.message ?? String(e), "bad");
     console.error("Snapshot load failed:", e);
+    return false;
   }
 }
 
@@ -386,16 +443,9 @@ el.fileBtn?.addEventListener?.("click", () => el.fileInput?.click?.());
 el.fileInput?.addEventListener?.("change", async () => {
   const file = el.fileInput?.files?.[0];
   if (!file) return;
-  try {
-    setStatus(`Reading ${file.name}…`);
-    showProgress(true);
-    const obj = await readSnapshotFile(file);
-    hideProgress();
-    await loadSnapshot(obj, file.name);
-  } catch (e) {
-    hideProgress();
-    setStatus(e?.message ?? String(e), "bad");
-  }
+  // The File is handed straight to the worker — read, gunzip and parse all
+  // happen off the main thread too (Issue #560).
+  await loadSnapshot(file, file.name);
 });
 
 if (el.legendBody) el.legendBody.innerHTML = subgraphLegendHtml();
@@ -408,8 +458,7 @@ if (el.fetchUrl) el.fetchUrl.value = DEFAULT_SNAPSHOT_URL;
  */
 async function autoLoadWithRetry(url) {
   for (let attempt = 0; attempt <= AUTO_LOAD_MAX_RETRIES; attempt++) {
-    await loadSnapshot(url, url);
-    if (snapshot) return;
+    if (await loadSnapshot(url, url)) return;
     if (attempt < AUTO_LOAD_MAX_RETRIES) {
       const delay = AUTO_LOAD_RETRY_DELAY_MS * Math.pow(2, attempt);
       setStatus(
