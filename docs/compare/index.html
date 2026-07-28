@@ -6,9 +6,9 @@
     <!--
       Content-Security-Policy (Issue #218). See docs/index.html for the full
       rationale, including why `frame-ancestors` is omitted (ignored when
-      delivered via a meta tag per CSP3 §3.4). This page embeds the candidate
-      views in same-origin <iframe>s, which `default-src 'self'` allows
-      (frame-src falls back to default-src).
+      delivered via a meta tag per CSP3 §3.4). This page only links out to the
+      candidate views (Issue #554 removed the side-by-side iframe mode), so
+      `default-src 'self'` covers everything it loads.
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -76,22 +76,6 @@
       </p>
 
       <ul id="cards" class="cards" aria-label="Candidate views"></ul>
-
-      <div class="sideBySideControls">
-        <button id="sideBySideBtn" class="button" type="button">
-          Compare side by side
-        </button>
-        <span class="hint">
-          Loads all three views together — heavier on phones.
-        </span>
-      </div>
-
-      <section
-        id="sideBySide"
-        class="sideBySide"
-        aria-label="Side-by-side comparison"
-        hidden
-      ></section>
     </main>
 
     <!--
