@@ -277,12 +277,14 @@ function render(flow, layout) {
 
   // Draw links first so nodes sit on top.
   for (const band of geometry.links) {
+    // A filled ribbon polygon (Issue #552): the geometry already carries the
+    // band's thickness in the path, so the band is filled — not a stroked
+    // centre-line, which ballooned into blobs at phone width.
     const path = svg("path", {
       class: "sankeyLink",
       "data-link-id": band.id,
       d: band.path,
-      stroke: synapseWeightColourCss(band.link.weight),
-      "stroke-width": band.thickness,
+      fill: synapseWeightColourCss(band.link.weight),
     });
     const pct = flow.totalScore > 0
       ? ((band.link.value / flow.totalScore) * 100).toFixed(1)

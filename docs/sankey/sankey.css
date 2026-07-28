@@ -242,7 +242,9 @@ svg.sankey.isZoomed {
 }
 
 .sankeyLink {
-  fill: none;
+  /* Filled ribbon polygons (#552); the per-band colour is a presentation
+     attribute so it is not set here. Stroking is what ballooned the old bands. */
+  stroke: none;
   opacity: 0.45;
   transition: opacity 0.15s ease;
 }
