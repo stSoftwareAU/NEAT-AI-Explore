@@ -6,8 +6,8 @@ The `/compare/` page (Issue #528) shipped a "Compare side by side" mode that
 embedded all three candidate views (layered DAG, Sankey, top-impact subgraph) as
 `<iframe>`s, each loading the full snapshot at once. This was too heavy — on
 phones the page could render blank/frozen. The candidate evaluation is complete
-and the winner is recorded in `docs/archive/candidate-view-evaluation-528.md`, so
-the side-by-side comparison has served its purpose.
+and the winner is recorded in `docs/archive/candidate-view-evaluation-528.md`,
+so the side-by-side comparison has served its purpose.
 
 This change removes the side-by-side mode on all devices while keeping the
 compare page and its launcher cards to the three candidate views. Specifically:
@@ -61,7 +61,7 @@ flowchart LR
   - `#sideBySideBtn`, `#sideBySide`, and `.sideBySideControls` are gone;
   - the page embeds no `<iframe>`;
   - `compare.css` no longer defines `.sideBySide`, `.frameCard`, `.frameTitle`.
-  These tests fail against the unfixed page and pass after the change.
+    These tests fail against the unfixed page and pass after the change.
 - `tests/candidate_comparison_test.ts` (the launcher-card / shared-module
   contract) is unchanged and still passes.
 - `./quality.sh` passes cleanly (fmt, lint, type check, 1120+ tests).
