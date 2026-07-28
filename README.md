@@ -637,6 +637,26 @@ sequenceDiagram
     Note over Page: extractTopImpactSubgraph → render (cheap)
 ```
 
+- **On-device cache (Issue #561)** — the derived result (parsed + ranked source,
+  off the critical path) is cached in **IndexedDB** keyed by snapshot identity +
+  a content signal (URL ⇒ HEAD `ETag`/`Last-Modified`, upload ⇒ file size +
+  mtime), so a repeat visit for the **same** snapshot skips download → gunzip →
+  parse → rank and reaches interactive nearly instantly. Invalidation is
+  signal-driven — a changed snapshot yields a fresh derivation, never a stale
+  subgraph — and the cache **fails open**: a miss, an eviction, a corrupted
+  entry, no IndexedDB, or an unavailable signal falls straight through to the
+  normal load with no error. Logic lives in the DOM-free
+  `shared/subgraph_cache.js`.
+
+```mermaid
+flowchart LR
+    V["repeat visit"] --> K["key = identity + signal"]
+    K --> H{"fresh cache<br/>entry?"}
+    H -- "hit" --> F["render (no download)"]
+    H -- "miss / stale / fault" --> D["derive (worker)"]
+    D --> C["cache result"] --> F
+```
+
 - **Controls** — **Top paths** (5–50) and **Min share** (0–5%) re-extract from
   the cached ranking, so changing either is instant.
 - **Rendering** — the same layered layout, impact encodings and Issue #521
