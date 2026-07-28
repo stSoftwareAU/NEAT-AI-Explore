@@ -41,6 +41,12 @@ import {
   runSubgraphDerivation,
   SUBGRAPH_PHASE_LABELS,
 } from "../shared/subgraph_worker_client.js";
+import {
+  createIndexedDbStore,
+  deriveSubgraphCached,
+  fetchVersionSignal,
+  fileVersionSignal,
+} from "../shared/subgraph_cache.js";
 
 /** The subgraph is compact by construction, so a column rarely overflows. */
 const MAX_NODES_PER_COLUMN = 24;
@@ -166,8 +172,66 @@ function toRequest(input) {
 }
 
 /**
- * Derive the ranked subgraph source for a request, off the main thread when a
- * Worker is available and on it otherwise. Progress is honest either way.
+ * On-device cache for the derived result (Issue #561), created once and reused.
+ * Null where IndexedDB is unavailable, so the app runs uncached without a
+ * branch at every call site (fail open).
+ * @type {ReturnType<typeof createIndexedDbStore>|null|undefined}
+ */
+let derivedCache;
+
+/** Lazily open the derived-result cache; a fault leaves it disabled. */
+function getDerivedCache() {
+  if (derivedCache === undefined) {
+    try {
+      derivedCache = createIndexedDbStore();
+    } catch (e) {
+      console.warn("Derived-subgraph cache unavailable — running uncached:", e);
+      derivedCache = null;
+    }
+  }
+  return derivedCache;
+}
+
+/**
+ * A cheap content/version signal for a request, used to invalidate the cache
+ * when the snapshot changes. Uploaded files key on their metadata; URLs key on
+ * a HEAD request's ETag/Last-Modified. Returns null (bypass the cache, fail
+ * open) when no trustworthy signal is available.
+ * @param {import("../shared/subgraph_derivation.js").SubgraphRequest} request
+ * @returns {Promise<string|null>}
+ */
+function versionSignalFor(request) {
+  if (request?.type === "file") {
+    return Promise.resolve(fileVersionSignal(request.file));
+  }
+  return fetchVersionSignal(request?.url ?? "");
+}
+
+/**
+ * Run the full download → gunzip → parse → rank derivation, off the main thread
+ * when a Worker is available and on it otherwise. Progress is honest either way.
+ * @param {import("../shared/subgraph_derivation.js").SubgraphRequest} request
+ * @param {import("../shared/subgraph_derivation.js").DerivationHandlers} handlers
+ */
+async function runDerivation(request, handlers) {
+  const worker = createDerivationWorker();
+  if (worker) {
+    try {
+      return await runSubgraphDerivation(worker, request, handlers);
+    } finally {
+      worker.terminate?.();
+    }
+  }
+  // Legacy fallback: no module Worker support. Same pipeline, same honest
+  // progress — but the heavy steps run on the main thread.
+  return await deriveSubgraphFromRequest(request, handlers);
+}
+
+/**
+ * Derive the ranked subgraph source for a request, serving a cached result on a
+ * fresh repeat visit so the expensive derivation is skipped (Issue #561). The
+ * cache fails open: a miss, a changed snapshot, or any store fault falls through
+ * to {@link runDerivation}.
  * @param {import("../shared/subgraph_derivation.js").SubgraphRequest} request
  */
 async function deriveSubgraph(request) {
@@ -180,17 +244,20 @@ async function deriveSubgraph(request) {
     },
   };
 
-  const worker = createDerivationWorker();
-  if (worker) {
-    try {
-      return await runSubgraphDerivation(worker, request, handlers);
-    } finally {
-      worker.terminate?.();
-    }
-  }
-  // Legacy fallback: no module Worker support. Same pipeline, same honest
-  // progress — but the heavy steps run on the main thread.
-  return await deriveSubgraphFromRequest(request, handlers);
+  const signal = await versionSignalFor(request);
+  return await deriveSubgraphCached({
+    request,
+    signal,
+    store: getDerivedCache(),
+    handlers,
+    derive: runDerivation,
+    onCacheHit: () => {
+      // A repeat visit skips download/parse/rank entirely — jump the bar to
+      // done rather than animating phases that never run.
+      setStatus("Loaded the cached subgraph");
+      updateProgress(100);
+    },
+  });
 }
 
 /**

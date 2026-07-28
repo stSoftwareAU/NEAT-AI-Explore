@@ -114,6 +114,8 @@ const STATIC_FILES = [
   // Off-main-thread subgraph derivation (Issue #560).
   "./shared/subgraph_derivation.js",
   "./shared/subgraph_worker_client.js",
+  // On-device derived-subgraph cache (Issue #561).
+  "./shared/subgraph_cache.js",
   "./shared/candidate_views.js",
   "./shared/sankey_flow.js",
   "./shared/sankey_layout.js",
