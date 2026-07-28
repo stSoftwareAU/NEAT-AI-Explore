@@ -9,8 +9,9 @@ GitHub-hosted runners on 2026-06-02 and is removed entirely on 2026-09-16, so
 this SHA-pinned step emitted a deprecation warning on every Pages deploy and
 would hard-break in September 2026 — no tag movement can rescue a commit pin.
 
-This bumps the pin to `actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`
-(v7.0.1, `runs.using: node24`), keeping the 40-character SHA pin per the
+This bumps the pin to
+`actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` (v7.0.1,
+`runs.using: node24`), keeping the 40-character SHA pin per the
 security-hardening policy. v7.0.1 was published 2026-04-10, well outside the
 24-hour quarantine, and matches the `actions/upload-artifact@v7` build already
 wrapped internally by `actions/upload-pages-artifact` in the same workflow — so
