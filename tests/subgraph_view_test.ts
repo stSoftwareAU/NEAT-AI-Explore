@@ -31,6 +31,12 @@ import {
   extractTopImpactSubgraph,
   subgraphLegendHtml,
 } from "../docs/shared/subgraph_model.js";
+import {
+  phaseProgressPercent,
+  runSubgraphDerivation,
+  SUBGRAPH_PHASES,
+} from "../docs/shared/subgraph_worker_client.js";
+import { deriveSubgraphFromRequest } from "../docs/shared/subgraph_derivation.js";
 
 // deno-lint-ignore no-explicit-any
 type Any = any;
@@ -533,6 +539,248 @@ Deno.test("extraction is deterministic for the same source and controls", () => 
     dagLayoutToSvgString(computeDagLayout(b)),
     "the same subgraph must render identical SVG",
   );
+});
+
+// ---------------------------------------------------------------------------
+// (f) Off-main-thread derivation with honest progress (Issue #560).
+//
+// The page must not run buildSubgraphSource synchronously on the main thread:
+// the whole download → gunzip → parse → rank derivation is dispatched to a Web
+// Worker, driven by `runSubgraphDerivation`, and each phase advances the
+// progress bar honestly. A swallowed worker error must surface loudly.
+// ---------------------------------------------------------------------------
+
+/** Minimal structured-worker double: scripts a message/error sequence. */
+class FakeWorker {
+  // deno-lint-ignore no-explicit-any
+  private listeners: Record<string, Array<(ev: any) => void>> = {};
+  // deno-lint-ignore no-explicit-any
+  posted: any[] = [];
+  terminated = false;
+
+  constructor(
+    private script: (
+      api: { message: (m: Any) => void; error: (m: string) => void },
+    ) => void,
+  ) {}
+
+  // deno-lint-ignore no-explicit-any
+  addEventListener(type: string, fn: (ev: any) => void) {
+    (this.listeners[type] ??= []).push(fn);
+  }
+  // deno-lint-ignore no-explicit-any
+  removeEventListener(type: string, fn: (ev: any) => void) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
+  }
+  // deno-lint-ignore no-explicit-any
+  private emit(type: string, ev: any) {
+    for (const fn of [...(this.listeners[type] ?? [])]) fn(ev);
+  }
+  // deno-lint-ignore no-explicit-any
+  postMessage(msg: any) {
+    this.posted.push(msg);
+    const api = {
+      message: (m: Any) => this.emit("message", { data: m }),
+      error: (m: string) => this.emit("error", { message: m }),
+    };
+    // Mimic a real worker: the round-trip is asynchronous.
+    queueMicrotask(() => this.script(api));
+  }
+  terminate() {
+    this.terminated = true;
+  }
+}
+
+Deno.test("phaseProgressPercent advances monotonically through every phase", () => {
+  // Each phase entry (fraction 0) must be a distinct forward step, so the bar
+  // never stalls or moves backwards across download → gunzip → parse → rank.
+  const entries = SUBGRAPH_PHASES.map((p: string) =>
+    phaseProgressPercent(p as Any, 0)
+  );
+  for (let i = 1; i < entries.length; i++) {
+    assert(
+      entries[i] > entries[i - 1],
+      `phase ${SUBGRAPH_PHASES[i]} (${entries[i]}%) must advance past ${
+        SUBGRAPH_PHASES[i - 1]
+      } (${entries[i - 1]}%)`,
+    );
+  }
+  // Download interpolates within its own slice and stays ordered.
+  assert(
+    phaseProgressPercent("download", 0.5) > phaseProgressPercent("download", 0),
+  );
+  assert(
+    phaseProgressPercent("download", 1) <= phaseProgressPercent("gunzip", 0),
+    "a full download must not overtake the gunzip phase",
+  );
+  assertEquals(phaseProgressPercent("rank", 1), 100, "rank completes the bar");
+  // Out-of-range fractions clamp rather than escaping the phase slice.
+  assertEquals(
+    phaseProgressPercent("download", 5),
+    phaseProgressPercent("download", 1),
+  );
+});
+
+Deno.test("runSubgraphDerivation returns the worker's result via a message round-trip", async () => {
+  const phases: string[] = [];
+  const progress: number[] = [];
+  const sentinel = { source: { rankedPaths: [{ inputUuid: "input-0" }] } };
+
+  const worker = new FakeWorker(({ message }) => {
+    message({ type: "phase", phase: "download" });
+    message({ type: "progress", receivedBytes: 50, totalBytes: 100 });
+    message({ type: "phase", phase: "gunzip" });
+    message({ type: "phase", phase: "parse" });
+    message({ type: "phase", phase: "rank" });
+    message({ type: "done", result: sentinel });
+  });
+
+  const request = { type: "url", url: "https://example.test/snap.json.gz" };
+  const result = await runSubgraphDerivation(worker as Any, request as Any, {
+    onPhase: (p: string) => phases.push(p),
+    onProgress: (p: Any) => progress.push(p.receivedBytes / p.totalBytes),
+  });
+
+  // The derivation result came back across the worker boundary — the page did
+  // not compute it synchronously.
+  assertEquals(result, sentinel);
+  assertEquals(
+    worker.posted[0],
+    request,
+    "the request is posted to the worker",
+  );
+  assertEquals(
+    phases.join(","),
+    "download,gunzip,parse,rank",
+    "each phase must fire once, in order",
+  );
+  assertEquals(progress.length, 1, "download progress is reported");
+});
+
+Deno.test("runSubgraphDerivation surfaces a worker error message loudly", async () => {
+  const worker = new FakeWorker(({ message }) => {
+    message({ type: "phase", phase: "download" });
+    message({ type: "error", message: "gunzip failed: corrupt stream" });
+  });
+
+  let caught: Error | null = null;
+  try {
+    await runSubgraphDerivation(worker as Any, { type: "url", url: "x" });
+  } catch (e) {
+    caught = e as Error;
+  }
+  assert(caught, "a worker error must reject, not resolve silently");
+  assert(
+    caught!.message.includes("corrupt stream"),
+    `the loud error must carry the worker message, got: ${caught?.message}`,
+  );
+});
+
+Deno.test("runSubgraphDerivation rejects on a worker 'error' event", async () => {
+  const worker = new FakeWorker(({ error }) => {
+    error("Worker script failed to import");
+  });
+
+  let caught: Error | null = null;
+  try {
+    await runSubgraphDerivation(worker as Any, { type: "url", url: "x" });
+  } catch (e) {
+    caught = e as Error;
+  }
+  assert(caught, "an error event must reject rather than hang the spinner");
+  assert(caught!.message.includes("import"));
+});
+
+// -- The real DOM-free pipeline: honest phases end-to-end ---------------------
+
+/** Gzip a string with the platform CompressionStream (Deno + browsers). */
+async function gzip(text: string): Promise<Uint8Array> {
+  const stream = new Blob([new TextEncoder().encode(text)]).stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+Deno.test("deriveSubgraphFromRequest walks download→gunzip→parse→rank for a URL", async () => {
+  const gz = await gzip(JSON.stringify(fixtureSnapshot()));
+  const savedFetch = globalThis.fetch;
+  const phases: string[] = [];
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(
+        new Response(gz as Any, {
+          status: 200,
+          headers: {
+            "content-type": "application/gzip",
+            "content-length": String(gz.length),
+          },
+        }),
+      );
+
+    const result = await deriveSubgraphFromRequest(
+      { type: "url", url: "https://example.test/snap.json.gz" },
+      { onPhase: (p: string) => phases.push(p) },
+    );
+
+    assertEquals(
+      phases.join(","),
+      "download,gunzip,parse,rank",
+      "every phase must report exactly once, in order",
+    );
+    assert(
+      result.source.rankedPaths.length > 0,
+      "the ranked source must come back from the pipeline",
+    );
+    assertEquals(
+      result.labels["input-0"],
+      "Cash rate",
+      "observation tooltips are derived alongside the source",
+    );
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
+});
+
+Deno.test("deriveSubgraphFromRequest walks gunzip→parse→rank for an uploaded .gz file", async () => {
+  const gz = await gzip(JSON.stringify(fixtureSnapshot()));
+  const file = new File([gz as Any], "snapshot.json.gz");
+  const phases: string[] = [];
+
+  const result = await deriveSubgraphFromRequest(
+    { type: "file", file },
+    { onPhase: (p: string) => phases.push(p) },
+  );
+
+  assertEquals(
+    phases.join(","),
+    "gunzip,parse,rank",
+    "a local file skips download but still reports its phases",
+  );
+  assert(result.source.rankedPaths.length > 0);
+});
+
+Deno.test("deriveSubgraphFromRequest fails loud when the download fails", async () => {
+  const savedFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("nope", { status: 500 }));
+
+    let caught: Error | null = null;
+    try {
+      await deriveSubgraphFromRequest({
+        type: "url",
+        url: "https://example.test/snap.json.gz",
+      });
+    } catch (e) {
+      caught = e as Error;
+    }
+    assert(caught, "a failed download must throw, never yield an empty result");
+    assert(
+      caught!.message.includes("500"),
+      `the error must name the fault, got: ${caught?.message}`,
+    );
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });
 
 Deno.test("path shares are normalised against the whole ranked set", () => {
