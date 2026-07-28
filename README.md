@@ -595,6 +595,24 @@ flowchart LR
   ranks every observation by its squash-aware contribution to the output; the
   view keeps the top N that clear the minimum share and carves the matching
   nodes and edges out of the aggregated model.
+- **Ranking cost (Issue #559)** — the `exhaustive` ranking is a **memoised DAG
+  propagation**, not path enumeration. An observation's contribution is the sum
+  over every path to the output of the product of per-hop shares; that value is
+  computed once per node and reused, so the walk is linear/near-linear in
+  synapses. On the published snapshot (4 120 neurons / 21 443 synapses) this
+  drops the post-download `buildSubgraphSource` from tens of seconds to well
+  under a second, and — unlike the old capped walk — the ranking is now complete
+  rather than `truncated`. Back-edges are skipped, so recurrent networks still
+  terminate. Benchmark: `scripts/benchmark_subgraph_559.ts`.
+
+```mermaid
+flowchart LR
+    F["focus (output)"] --> D["DFS upstream<br/>skip back-edges → DAG"]
+    D --> T["topological sweep<br/>totalMass = Σ Π share"]
+    T --> M["memoise per node<br/>(computed once, reused)"]
+    M --> R["rank inputs by mass<br/>+ best (max-product) path"]
+```
+
 - **Controls** — **Top paths** (5–50) and **Min share** (0–5%) re-extract from
   the cached ranking, so changing either is instant.
 - **Rendering** — the same layered layout, impact encodings and Issue #521

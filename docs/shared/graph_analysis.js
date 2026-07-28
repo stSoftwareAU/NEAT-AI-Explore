@@ -191,6 +191,21 @@ export function computeTopContributingInputs(input) {
     };
   }
 
+  // Issue #559 — the exhaustive mode used to enumerate every upstream path,
+  // which is exponential and froze for ~a minute on the published snapshot.
+  // On a DAG the same ranking is a memoised propagation (per-node contribution
+  // computed once and reused), so it is linear/near-linear in synapses.
+  if (exhaustive) {
+    return computeExhaustiveContributions({
+      focusUuid,
+      getInboundEdges,
+      getNeuronSquash,
+      getRecordedActivationMax,
+      consumerContract,
+      maxInboundPerNode,
+    });
+  }
+
   /** @type {Map<string, number>} */
   const scoreByInput = new Map();
   /** @type {Map<string, string[]>} */
@@ -307,4 +322,216 @@ export function computeTopContributingInputs(input) {
   for (const r of inputs) r.score = r.score / denom;
 
   return { focusUuid, inputs, truncated };
+}
+
+/**
+ * Exhaustive upstream contribution via memoised DAG propagation (Issue #559).
+ *
+ * The old exhaustive mode enumerated every simple path upstream from the focus.
+ * That is exponential in a fanned-out network and froze `buildSubgraphSource`
+ * for ~71 s on the published snapshot (4 120 neurons / 21 443 synapses), while
+ * still returning `truncated: true`. On a DAG the contribution an observation
+ * makes is the sum, over every path from the focus to that input, of the
+ * product of per-hop shares — and that value can be computed **once per node**
+ * and reused, giving cost linear/near-linear in synapses.
+ *
+ * Semantics preserved vs the old walk (pinned by
+ * `tests/graph_analysis_exhaustive_test.ts`):
+ *  - `score(input) = activeFraction · Σ_paths Π share`, then normalised so the
+ *    reported shares sum to ~1;
+ *  - `path(input)` is the single highest-product path, ordered
+ *    `input → … → focus`;
+ *  - back-edges (an edge that would close a cycle onto the current traversal)
+ *    are skipped, exactly as the old walk skipped predecessors already on its
+ *    path — so recurrent networks still terminate.
+ *
+ * Unlike the old walk this carries no depth/work/queue cap, so on large
+ * networks it is *complete* (`truncated: false`) rather than stopping early.
+ *
+ * @param {{
+ *   focusUuid: string,
+ *   getInboundEdges: (toUuid: string) => Edge[],
+ *   getNeuronSquash: ((uuid: string) => (string | null | undefined)) | null,
+ *   getRecordedActivationMax:
+ *     ((uuid: string) => (number | null | undefined)) | null,
+ *   consumerContract:
+ *     (import("./consumer_contract.js").ConsumerContract | null),
+ *   maxInboundPerNode: number,
+ * }} input
+ * @returns {{
+ *   focusUuid: string,
+ *   inputs: Array<{ uuid: string, score: number, path: string[], gateMaskedFraction: number }>,
+ *   truncated: boolean,
+ * }}
+ */
+function computeExhaustiveContributions(input) {
+  const {
+    focusUuid,
+    getInboundEdges,
+    getNeuronSquash,
+    getRecordedActivationMax,
+    consumerContract,
+    maxInboundPerNode,
+  } = input;
+
+  const isInput = (uuid) => String(uuid).startsWith("input-");
+
+  // Per-node inbound shares, computed once and reused. Inputs are sinks — the
+  // walk never expands their inbound — so they memoise as an empty step list.
+  /** @type {Map<string, Array<{ uuid: string, share: number }>>} */
+  const stepsCache = new Map();
+  function stepsFor(uuid) {
+    const cached = stepsCache.get(uuid);
+    if (cached) return cached;
+    if (isInput(uuid)) {
+      stepsCache.set(uuid, []);
+      return [];
+    }
+    const inbound = getInboundEdges(uuid) ?? [];
+    if (!Array.isArray(inbound) || inbound.length === 0) {
+      stepsCache.set(uuid, []);
+      return [];
+    }
+    const toNeuronSquash = getNeuronSquash ? getNeuronSquash(uuid) : null;
+    const recordedActivationMax = getRecordedActivationMax
+      ? getRecordedActivationMax(uuid)
+      : null;
+    // Identical allocation call to the bounded walk, so per-hop shares match.
+    const allocation = computeInboundSynapseImpactAllocation({
+      toUuid: uuid,
+      neuronImpact: null,
+      inboundSynapses: inbound.map((e) => ({
+        fromUuid: e.fromUuid,
+        toUuid: e.toUuid,
+        weight: e.weight,
+        meanContribution: e.meanContribution ?? null,
+        contributions: Array.isArray(e.contributions) ? e.contributions : null,
+      })),
+      toNeuronSquash: toNeuronSquash ?? null,
+      recordedActivationMax: typeof recordedActivationMax === "number"
+        ? recordedActivationMax
+        : null,
+    });
+    const steps = (allocation?.synapses ?? [])
+      .filter((r) =>
+        r && typeof r.share === "number" && isFinite(r.share) && r.share > 0
+      )
+      .slice(0, maxInboundPerNode)
+      .map((r) => ({ uuid: r.fromUuid, share: r.share }));
+    stepsCache.set(uuid, steps);
+    return steps;
+  }
+
+  // Iterative DFS upstream from the focus. Produces a finish order (children
+  // finish before their parents) and the acyclic edge set: an edge onto a node
+  // that is still on the traversal stack is a back-edge and is dropped, so the
+  // propagation below runs over a DAG and terminates on any graph.
+  const STATE_ON_STACK = 1;
+  const STATE_DONE = 2;
+  /** @type {Map<string, number>} */
+  const state = new Map();
+  /** @type {Map<string, Array<{ uuid: string, share: number }>>} */
+  const dagAdj = new Map();
+  /** @type {string[]} */
+  const finishOrder = [];
+  /** @type {Array<{ uuid: string, i: number }>} */
+  const stack = [{ uuid: focusUuid, i: 0 }];
+  state.set(focusUuid, STATE_ON_STACK);
+
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    const steps = stepsFor(top.uuid);
+    if (top.i < steps.length) {
+      const step = steps[top.i];
+      top.i += 1;
+      const next = step.uuid;
+      const st = state.get(next) ?? 0;
+      if (st === STATE_ON_STACK) continue; // back-edge — skip
+      let adj = dagAdj.get(top.uuid);
+      if (!adj) {
+        adj = [];
+        dagAdj.set(top.uuid, adj);
+      }
+      adj.push(step);
+      if (st === 0) {
+        state.set(next, STATE_ON_STACK);
+        stack.push({ uuid: next, i: 0 });
+      }
+    } else {
+      state.set(top.uuid, STATE_DONE);
+      finishOrder.push(top.uuid);
+      stack.pop();
+    }
+  }
+
+  // Reverse finish order is a topological order of the acyclic edge set (the
+  // focus first), so one forward sweep finalises every node's incoming mass
+  // before it distributes to its predecessors — each node visited once.
+  /** @type {Map<string, number>} — Σ over paths of Π share reaching a node. */
+  const totalMass = new Map([[focusUuid, 1]]);
+  /** @type {Map<string, number>} — max over paths of Π share reaching a node. */
+  const bestProduct = new Map([[focusUuid, 1]]);
+  /** @type {Map<string, string>} — predecessor (toward focus) on the best path. */
+  const bestParent = new Map();
+
+  for (let k = finishOrder.length - 1; k >= 0; k--) {
+    const v = finishOrder[k];
+    const massV = totalMass.get(v) ?? 0;
+    const prodV = bestProduct.get(v) ?? 0;
+    const adj = dagAdj.get(v);
+    if (!adj) continue;
+    for (const step of adj) {
+      const u = step.uuid;
+      const w = step.share;
+      totalMass.set(u, (totalMass.get(u) ?? 0) + massV * w);
+      const cand = prodV * w;
+      if (cand > (bestProduct.get(u) ?? 0)) {
+        bestProduct.set(u, cand);
+        bestParent.set(u, v);
+      }
+    }
+  }
+
+  // Credit each reached input, applying the consumer-gate active fraction at
+  // the input boundary exactly as the old walk did (Issue #272).
+  /** @type {Map<string, number>} */
+  const scoreByInput = new Map();
+  /** @type {Map<string, string[]>} */
+  const bestPathByInput = new Map();
+  /** @type {Map<string, number>} */
+  const gateMaskedByInput = new Map();
+
+  for (const uuid of finishOrder) {
+    if (!isInput(uuid)) continue;
+    const mass = totalMass.get(uuid) ?? 0;
+    if (mass <= 0) continue;
+    const af = consumerContract
+      ? computeInputActiveFraction(consumerContract, uuid)
+      : 1;
+    scoreByInput.set(uuid, mass * af);
+    gateMaskedByInput.set(uuid, 1 - af);
+    // Reconstruct the highest-product path, ordered input → … → focus.
+    const path = [uuid];
+    let cur = uuid;
+    while (bestParent.has(cur)) {
+      cur = bestParent.get(cur);
+      path.push(cur);
+    }
+    bestPathByInput.set(uuid, path);
+  }
+
+  const inputs = Array.from(scoreByInput.entries())
+    .map(([uuid, score]) => ({
+      uuid,
+      score,
+      path: bestPathByInput.get(uuid) ?? [uuid],
+      gateMaskedFraction: gateMaskedByInput.get(uuid) ?? 0,
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  // Normalise for display so reported shares sum to ~1.
+  const denom = inputs.reduce((acc, r) => acc + (r.score ?? 0), 0) || 1;
+  for (const r of inputs) r.score = r.score / denom;
+
+  return { focusUuid, inputs, truncated: false };
 }
