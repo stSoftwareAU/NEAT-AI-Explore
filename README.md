@@ -89,6 +89,34 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   Deno already pinned — so a later advisory can be matched against exactly what
   was deployed (#358).
 
+### Adding a new entry page
+
+Each view under `docs/` (`graph/`, `dag/`, `subgraph/`, `starfield/`,
+`compare/`, `sankey/`) serves its own `index.html` app shell, so a new page must
+be registered in three places or it deploys broken (#549):
+
+1. `ENTRY_PAGE_DIRS` in `docs/sw.js` — navigation routing. Without it the
+   Service Worker serves the root Explorer shell, whose relative asset URLs then
+   404 under the new path.
+2. `STATIC_FILES` in `docs/sw.js` — precache, so the page (and its page-local
+   and shared modules) work offline and are invalidated on deploy.
+3. The `files` list in `scripts/inject_build_id.ts` — otherwise the literal
+   `__BUILD_ID__` placeholder ships to production.
+
+`tests/entry_page_pwa_wiring_test.ts` discovers the entry pages from the
+filesystem and fails `./quality.sh` (and CI) when any of the three is missing.
+
+```mermaid
+flowchart LR
+    new["docs/&lt;page&gt;/index.html"] --> gate{{"entry_page_pwa_wiring_test.ts"}}
+    gate --> nav["sw.js ENTRY_PAGE_DIRS<br/>(navigation routing)"]
+    gate --> pre["sw.js STATIC_FILES<br/>(precache)"]
+    gate --> bid["inject_build_id.ts<br/>(__BUILD_ID__)"]
+    nav --> ok["✅ deploy serves the right shell"]
+    pre --> ok
+    bid --> ok
+```
+
 ---
 
 ## 🏗️ Architecture Overview

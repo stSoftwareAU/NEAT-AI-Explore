@@ -169,6 +169,11 @@ Deno.test("inject_build_id.ts substitutes __BUILD_ID__ across the app shell (#21
     "docs/dag/boot.js",
     "docs/subgraph/index.html",
     "docs/subgraph/boot.js",
+    // Issue #549: compare/ and sankey/ shipped without build-ID injection.
+    "docs/compare/index.html",
+    "docs/compare/boot.js",
+    "docs/sankey/index.html",
+    "docs/sankey/boot.js",
     "docs/sw.js",
   ];
 

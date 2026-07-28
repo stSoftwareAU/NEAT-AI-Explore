@@ -53,6 +53,19 @@ const STATIC_FILES = [
   `./starfield/starfield.js?v=${VERSION}`,
   `./starfield/starfield.css?v=${VERSION}`,
   `./starfield/boot.js?v=${VERSION}`,
+  // Candidate comparison view (Issue #522): cached so compare works offline.
+  "./compare/index.html",
+  `./compare/compare.js?v=${VERSION}`,
+  `./compare/compare.css?v=${VERSION}`,
+  `./compare/boot.js?v=${VERSION}`,
+  // Sankey flow view (Issue #522): cached so sankey works offline.
+  "./sankey/index.html",
+  `./sankey/sankey.js?v=${VERSION}`,
+  `./sankey/sankey.css?v=${VERSION}`,
+  `./sankey/boot.js?v=${VERSION}`,
+  `./sankey/fold_panel.js?v=${VERSION}`,
+  `./sankey/tooltip_panel.js?v=${VERSION}`,
+  `./sankey/zoom_pan.js?v=${VERSION}`,
   // Shared modules for multiple views (Issue #126: all shared modules must be
   // listed so they are precached and invalidated with each deploy — missing
   // modules can be served stale by cacheFirst, breaking imports).
@@ -95,6 +108,11 @@ const STATIC_FILES = [
   "./shared/observation_families.js",
   "./shared/dag_layout.js",
   "./shared/subgraph_model.js",
+  "./shared/candidate_views.js",
+  "./shared/sankey_flow.js",
+  "./shared/sankey_layout.js",
+  "./shared/sankey_responsive.js",
+  "./shared/viewbox_zoom.js",
   "./icons/icon-72x72.png",
   "./icons/icon-16x16.png",
   "./icons/icon-32x32.png",
@@ -105,6 +123,20 @@ const STATIC_FILES = [
   "./icons/icon-192x192.png",
   "./icons/icon-384x384.png",
   "./icons/icon-512x512.png",
+];
+
+// Directories under docs/ that serve their own index.html app shell. Every new
+// entry page must be listed here (navigation routing) and in STATIC_FILES
+// (precache), and added to scripts/inject_build_id.ts — Issue #549.
+// tests/entry_page_pwa_wiring_test.ts fails locally and in CI when a page is
+// missing from any of the three.
+const ENTRY_PAGE_DIRS = [
+  "graph",
+  "starfield",
+  "dag",
+  "subgraph",
+  "compare",
+  "sankey",
 ];
 
 self.addEventListener("install", (event) => {
@@ -239,9 +271,8 @@ self.addEventListener("fetch", (event) => {
   // Navigation -> cached index.html as app shell.
   if (request.mode === "navigate") {
     if (!sameOrigin) return;
-    // This site has multiple entry points under docs/:
-    // - ./index.html (Explorer)
-    // - ./graph/index.html (Graph)
+    // This site has multiple entry points under docs/ — the root Explorer
+    // plus one directory per view (see ENTRY_PAGE_DIRS).
     //
     // IMPORTANT: If we always serve "./index.html" for navigation, then visiting
     // "/graph/" will load the explorer HTML, and its relative asset URLs
@@ -254,19 +285,12 @@ self.addEventListener("fetch", (event) => {
         return "";
       }
     })();
-    const isGraphNav = /\/graph(\/|$)/.test(path);
-    const isStarfieldNav = /\/starfield(\/|$)/.test(path);
-    const isDagNav = /\/dag(\/|$)/.test(path);
-    const isSubgraphNav = /\/subgraph(\/|$)/.test(path);
-    const shell = isGraphNav
-      ? "./graph/index.html"
-      : isStarfieldNav
-      ? "./starfield/index.html"
-      : isDagNav
-      ? "./dag/index.html"
-      : isSubgraphNav
-      ? "./subgraph/index.html"
-      : "./index.html";
+    // Data-driven so adding a page is a one-line change (Issue #549): a page
+    // missing here is served the root Explorer shell instead of its own.
+    const dir = path.split("/").find((segment) =>
+      ENTRY_PAGE_DIRS.includes(segment)
+    );
+    const shell = dir ? `./${dir}/index.html` : "./index.html";
     event.respondWith(cacheFirst(shell));
     return;
   }
