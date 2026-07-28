@@ -36,6 +36,10 @@ const files = [
   "./docs/subgraph/boot.js",
   "./docs/starfield/index.html",
   "./docs/starfield/boot.js",
+  "./docs/compare/index.html",
+  "./docs/compare/boot.js",
+  "./docs/sankey/index.html",
+  "./docs/sankey/boot.js",
   "./docs/sw.js",
 ];
 
