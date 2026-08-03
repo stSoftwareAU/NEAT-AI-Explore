@@ -8,8 +8,8 @@
  * on pull requests, cap its job timeout, and declare a cancelling concurrency
  * group.
  *
- * Checkout persist-credentials handling is covered by its own dedicated test
- * (`workflow_shellcheck_persist_credentials_test.ts`), so it is not re-checked
+ * Checkout persist-credentials handling is covered by the consolidated policy
+ * suite (`workflow_persist_credentials_test.ts`), so it is not re-checked
  * here.
  */
 
