@@ -30,6 +30,7 @@ Deno.test("normaliseSelectionSquash returns null for non-selection squashes", ()
   assertEquals(normaliseSelectionSquash("TANH"), null);
   assertEquals(normaliseSelectionSquash("SIGMOID"), null);
   assertEquals(normaliseSelectionSquash("IDENTITY"), null);
+  assertEquals(normaliseSelectionSquash("SIGMOID"), null);
   assertEquals(normaliseSelectionSquash(""), null);
   assertEquals(normaliseSelectionSquash(null), null);
   assertEquals(normaliseSelectionSquash(undefined), null);
