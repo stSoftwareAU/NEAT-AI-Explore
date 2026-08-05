@@ -84,6 +84,7 @@ import {
   shouldCollapseTraceOverflow,
 } from "./shared/trace_header.js";
 import { wireTraceOverflowMenu } from "./shared/trace_overflow_menu.js";
+import { createProgressUi } from "./shared/progress_ui.js";
 import {
   buildObservationTooltip,
   escapeHtml,
@@ -661,43 +662,9 @@ function getInputGroup(uuid) {
 // Status & Loading
 // ============================================================================
 
-function setStatus(msg, kind = "") {
-  el.status.textContent = msg;
-  el.status.className = "statusInline " + kind;
-}
-
-/**
- * Show the progress bar.
- * @param {boolean} indeterminate - If true, show pulsing animation (unknown size).
- */
-function showProgress(indeterminate = false) {
-  if (!el.progressContainer || !el.progressBar) return;
-  el.progressContainer.style.display = "";
-  el.progressBar.style.width = indeterminate ? "" : "0%";
-  if (indeterminate) {
-    el.progressBar.classList.add("indeterminate");
-  } else {
-    el.progressBar.classList.remove("indeterminate");
-  }
-}
-
-/**
- * Update the progress bar percentage.
- * @param {number} percent - Progress percentage (0-100).
- */
-function updateProgress(percent) {
-  if (!el.progressBar) return;
-  el.progressBar.classList.remove("indeterminate");
-  el.progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
-}
-
-/**
- * Hide the progress bar.
- */
-function hideProgress() {
-  if (!el.progressContainer) return;
-  el.progressContainer.style.display = "none";
-}
+// One shared widget controller instead of a private copy per view (#597).
+const { setStatus, showProgress, updateProgress, hideProgress } =
+  createProgressUi(el);
 
 // ============================================================================
 // Theme mode — delegated to shared/theme.js

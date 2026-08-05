@@ -190,6 +190,24 @@ body {
   background: var(--accent);
 }
 
+/* Unknown-size load: pulse rather than fake a fixed width (Issue #597). */
+.progressBar.indeterminate {
+  width: 30%;
+  animation: progressIndeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes progressIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(250%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 .statusInline {
   color: var(--muted);
   font-size: 12px;

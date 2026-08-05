@@ -19,6 +19,15 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- One status/progress widget controller for every view (#597). The Trace, DAG,
+  Graph and Subgraph views each carried a private copy of the `setStatus` /
+  `showProgress` / `updateProgress` / `hideProgress` quadruplet and the copies
+  had drifted apart: the DAG and Subgraph views faked an unknown-size load with
+  a static 35% bar (their CSS had no `.indeterminate` rule at all) while the
+  other two pulsed. All four now construct the shared, unit-tested
+  `docs/shared/progress_ui.js`, so an unknown-size load pulses everywhere and a
+  non-finite percentage throws instead of painting `width: NaN%`.
+
 - Starfield keyboard papercuts (#529). Typing a snapshot URL containing `w`,
   `a`, `s`, `d`, `q` or `e` into the graph view's header field no longer flies
   the camera away from the focused neuron, and a movement key held when the
