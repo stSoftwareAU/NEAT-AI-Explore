@@ -74,21 +74,6 @@ const NPM_SPEC = /^npm:(@[^/@]+\/[^/@]+|[^/@]+)(?:@|\/|$)/;
  */
 const DENO_LAND_X_SPEC = /^https?:\/\/deno\.land\/x\/([^@/]+)/;
 
-/** Extract every distinct JSR package referenced by an `imports` map. */
-export function parseJsrImports(
-  imports: Record<string, string>,
-): JsrPackage[] {
-  const seen = new Map<string, JsrPackage>();
-  for (const spec of Object.values(imports)) {
-    const m = JSR_SPEC.exec(spec);
-    if (!m) continue;
-    const [, scope, name] = m;
-    const key = `${scope}/${name}`;
-    if (!seen.has(key)) seen.set(key, { scope, name });
-  }
-  return [...seen.values()];
-}
-
 /**
  * Parse a single import specifier into a typed `ExternalImport`. Returns
  * `null` for specifiers we deliberately ignore (relative paths,
@@ -293,26 +278,6 @@ export async function fetchLatestVersionDenoLandX(
     );
   }
   return { version: latest, yanked: false, createdAt: meta.uploaded_at };
-}
-
-/** Resolve whether a single JSR package is currently inside the window. */
-export async function checkQuarantine(
-  pkg: JsrPackage,
-  fetcher: Fetcher,
-  now: Date,
-  quarantineHours: number,
-): Promise<QuarantineResult> {
-  const v = await fetchLatestVersion(pkg, fetcher);
-  const publishedAt = Date.parse(v.createdAt);
-  const ageHours = (now.getTime() - publishedAt) / 3_600_000;
-  return {
-    kind: "jsr",
-    package: `@${pkg.scope}/${pkg.name}`,
-    latestVersion: v.version,
-    publishedAt: v.createdAt,
-    ageHours,
-    inQuarantine: ageHours < quarantineHours,
-  };
 }
 
 /**

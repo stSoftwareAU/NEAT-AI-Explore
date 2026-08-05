@@ -12,7 +12,6 @@ import {
   assertNever,
   checkAll,
   checkImportQuarantine,
-  checkQuarantine,
   fetchLatestVersion,
   fetchLatestVersionDenoLandX,
   fetchLatestVersionNpm,
@@ -21,7 +20,6 @@ import {
   isInternalImport,
   parseImports,
   parseImportSpec,
-  parseJsrImports,
   type VersionRecord,
 } from "../scripts/jsr_quarantine_check.ts";
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -45,31 +43,31 @@ function fetcher(
   };
 }
 
-Deno.test("parseJsrImports extracts scope/name from import specifiers", () => {
+Deno.test("parseImports extracts scope/name from JSR import specifiers", () => {
   const imports = {
     "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
     "@std/path": "jsr:@std/path@^1.0.0",
     "@std/yaml": "jsr:@std/yaml@^1.0.0",
     "not-jsr": "npm:left-pad@^1.0.0",
   };
-  const pkgs = parseJsrImports(imports);
+  const jsr = parseImports(imports).filter((i) => i.kind === "jsr");
   // Sort for stability — order does not matter
-  const keys = pkgs.map((p) => `@${p.scope}/${p.name}`).sort();
+  const keys = jsr.map((p) => `@${p.scope}/${p.name}`).sort();
   assertEquals(keys.length, 3);
   assertEquals(keys[0], "@std/http");
   assertEquals(keys[1], "@std/path");
   assertEquals(keys[2], "@std/yaml");
 });
 
-Deno.test("parseJsrImports deduplicates packages referenced by multiple entrypoints", () => {
+Deno.test("parseImports deduplicates JSR packages referenced by multiple entrypoints", () => {
   const imports = {
     "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
     "@std/http/server": "jsr:@std/http@^1.0.0/server",
   };
-  const pkgs = parseJsrImports(imports);
+  const pkgs = parseImports(imports);
   assertEquals(pkgs.length, 1);
-  assertEquals(pkgs[0].scope, "std");
-  assertEquals(pkgs[0].name, "http");
+  assertEquals(pkgs[0].kind, "jsr");
+  assertEquals(importDisplayName(pkgs[0]), "@std/http");
 });
 
 Deno.test("isInternal recognises stSoftwareAU scope (case-insensitive) as internal", () => {
@@ -79,7 +77,7 @@ Deno.test("isInternal recognises stSoftwareAU scope (case-insensitive) as intern
   assert(!isInternal({ scope: "denoland", name: "x" }));
 });
 
-Deno.test("checkQuarantine flags a package whose latest version is younger than the window", async () => {
+Deno.test("checkImportQuarantine flags a JSR package whose latest version is younger than the window", async () => {
   const now = new Date("2026-05-22T12:00:00Z");
   const versions: VersionRecord[] = [
     {
@@ -98,12 +96,13 @@ Deno.test("checkQuarantine flags a package whose latest version is younger than 
       body: { items: versions },
     },
   });
-  const r = await checkQuarantine(
-    { scope: "std", name: "yaml" },
+  const r = await checkImportQuarantine(
+    { kind: "jsr", scope: "std", name: "yaml" },
     f,
     now,
     24,
   );
+  assertEquals(r.kind, "jsr");
   assertEquals(r.package, "@std/yaml");
   assertEquals(r.latestVersion, "1.0.5");
   assertEquals(r.inQuarantine, true);
@@ -113,7 +112,7 @@ Deno.test("checkQuarantine flags a package whose latest version is younger than 
   );
 });
 
-Deno.test("checkQuarantine clears a package whose latest version is older than the window", async () => {
+Deno.test("checkImportQuarantine clears a JSR package whose latest version is older than the window", async () => {
   const now = new Date("2026-05-22T12:00:00Z");
   const versions: VersionRecord[] = [
     {
@@ -127,8 +126,8 @@ Deno.test("checkQuarantine clears a package whose latest version is older than t
       body: { items: versions },
     },
   });
-  const r = await checkQuarantine(
-    { scope: "std", name: "path" },
+  const r = await checkImportQuarantine(
+    { kind: "jsr", scope: "std", name: "path" },
     f,
     now,
     24,
@@ -136,7 +135,7 @@ Deno.test("checkQuarantine clears a package whose latest version is older than t
   assertEquals(r.inQuarantine, false);
 });
 
-Deno.test("checkQuarantine ignores yanked versions when picking the latest", async () => {
+Deno.test("checkImportQuarantine ignores yanked JSR versions when picking the latest", async () => {
   const now = new Date("2026-05-22T12:00:00Z");
   const versions: VersionRecord[] = [
     {
@@ -155,8 +154,8 @@ Deno.test("checkQuarantine ignores yanked versions when picking the latest", asy
       body: { items: versions },
     },
   });
-  const r = await checkQuarantine(
-    { scope: "std", name: "yaml" },
+  const r = await checkImportQuarantine(
+    { kind: "jsr", scope: "std", name: "yaml" },
     f,
     now,
     24,
@@ -165,7 +164,7 @@ Deno.test("checkQuarantine ignores yanked versions when picking the latest", asy
   assertEquals(r.inQuarantine, false);
 });
 
-Deno.test("checkQuarantine accepts bare-array response shape", async () => {
+Deno.test("checkImportQuarantine accepts the bare-array JSR response shape", async () => {
   const now = new Date("2026-05-22T12:00:00Z");
   const versions: VersionRecord[] = [
     {
@@ -179,8 +178,8 @@ Deno.test("checkQuarantine accepts bare-array response shape", async () => {
       body: versions,
     },
   });
-  const r = await checkQuarantine(
-    { scope: "std", name: "path" },
+  const r = await checkImportQuarantine(
+    { kind: "jsr", scope: "std", name: "path" },
     f,
     now,
     24,
@@ -189,7 +188,7 @@ Deno.test("checkQuarantine accepts bare-array response shape", async () => {
   assertEquals(r.inQuarantine, false);
 });
 
-Deno.test("checkQuarantine throws if the registry returns a non-OK status", async () => {
+Deno.test("checkImportQuarantine throws if the JSR registry returns a non-OK status", async () => {
   const f = fetcher({
     "https://api.jsr.io/scopes/std/packages/missing/versions": {
       status: 500,
@@ -198,8 +197,8 @@ Deno.test("checkQuarantine throws if the registry returns a non-OK status", asyn
   });
   let threw = false;
   try {
-    await checkQuarantine(
-      { scope: "std", name: "missing" },
+    await checkImportQuarantine(
+      { kind: "jsr", scope: "std", name: "missing" },
       f,
       new Date(),
       24,
@@ -211,10 +210,10 @@ Deno.test("checkQuarantine throws if the registry returns a non-OK status", asyn
       `expected error to mention 500, got ${(e as Error).message}`,
     );
   }
-  assert(threw, "checkQuarantine should throw on non-OK status");
+  assert(threw, "checkImportQuarantine should throw on non-OK status");
 });
 
-Deno.test("checkQuarantine throws if the package has no usable (non-yanked) versions", async () => {
+Deno.test("checkImportQuarantine throws if the JSR package has no usable (non-yanked) versions", async () => {
   const f = fetcher({
     "https://api.jsr.io/scopes/std/packages/empty/versions": {
       body: {
@@ -230,8 +229,8 @@ Deno.test("checkQuarantine throws if the package has no usable (non-yanked) vers
   });
   let threw = false;
   try {
-    await checkQuarantine(
-      { scope: "std", name: "empty" },
+    await checkImportQuarantine(
+      { kind: "jsr", scope: "std", name: "empty" },
       f,
       new Date(),
       24,
@@ -243,7 +242,10 @@ Deno.test("checkQuarantine throws if the package has no usable (non-yanked) vers
       `expected error to mention no versions, got ${(e as Error).message}`,
     );
   }
-  assert(threw, "checkQuarantine should throw when no usable versions exist");
+  assert(
+    threw,
+    "checkImportQuarantine should throw when no usable versions exist",
+  );
 });
 
 Deno.test("checkAll skips stSoftwareAU packages and reports cleared vs blocked", async () => {
