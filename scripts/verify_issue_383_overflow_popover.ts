@@ -12,20 +12,11 @@
  *   deno run -A scripts/verify_issue_383_overflow_popover.ts
  */
 
-import { serveDir } from "@std/http/file-server";
-import { fromFileUrl } from "@std/path";
 import { chromium, type Page } from "playwright";
 
-const REPO_ROOT = fromFileUrl(new URL("..", import.meta.url));
-const DOCS = `${REPO_ROOT}docs`;
-const OUT_DIR = `${DOCS}/evidence`;
+import { DOCS, serveDocsOnFreePort } from "./lib/serve_docs.ts";
 
-function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const { port } = listener.addr as Deno.NetAddr;
-  listener.close();
-  return port;
-}
+const OUT_DIR = `${DOCS}/evidence`;
 
 async function waitForOverflowMode(
   page: Page,
@@ -46,12 +37,8 @@ async function waitForOverflowMode(
 
 async function main(): Promise<number> {
   await Deno.mkdir(OUT_DIR, { recursive: true });
-  const port = freePort();
-  const server = Deno.serve(
-    { hostname: "127.0.0.1", port, onListen: () => {} },
-    (req) => serveDir(req, { fsRoot: DOCS, quiet: true }),
-  );
-  const url = `http://127.0.0.1:${port}/`;
+  const server = serveDocsOnFreePort();
+  const url = server.url;
 
   try {
     const browser = await chromium.launch({ headless: true });

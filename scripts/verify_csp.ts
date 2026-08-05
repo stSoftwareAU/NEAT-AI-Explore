@@ -14,20 +14,11 @@
  *   deno run -A scripts/verify_csp.ts
  */
 
-import { serveDir } from "@std/http/file-server";
-import { fromFileUrl } from "@std/path";
 import { chromium } from "playwright";
 
-const REPO_ROOT = fromFileUrl(new URL("..", import.meta.url));
-const DOCS = `${REPO_ROOT}docs`;
-const OUT_DIR = `${REPO_ROOT}docs/evidence`;
+import { REPO_ROOT, serveDocsOnFreePort } from "./lib/serve_docs.ts";
 
-function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const { port } = listener.addr as Deno.NetAddr;
-  listener.close();
-  return port;
-}
+const OUT_DIR = `${REPO_ROOT}docs/evidence`;
 
 async function ensureOutDir(): Promise<void> {
   await Deno.mkdir(OUT_DIR, { recursive: true });
@@ -38,20 +29,17 @@ interface PageCheck {
   evidenceName: string;
 }
 
+// Paths are relative to the served docs/ root (the base URL ends with "/").
 const PAGES: PageCheck[] = [
-  { pathname: "/index.html", evidenceName: "csp-trace.png" },
-  { pathname: "/graph/index.html", evidenceName: "csp-graph.png" },
-  { pathname: "/starfield/index.html", evidenceName: "csp-starfield.png" },
+  { pathname: "index.html", evidenceName: "csp-trace.png" },
+  { pathname: "graph/index.html", evidenceName: "csp-graph.png" },
+  { pathname: "starfield/index.html", evidenceName: "csp-starfield.png" },
 ];
 
 async function main(): Promise<number> {
   await ensureOutDir();
-  const port = freePort();
-  const server = Deno.serve(
-    { hostname: "127.0.0.1", port, onListen: () => {} },
-    (req) => serveDir(req, { fsRoot: DOCS, quiet: true }),
-  );
-  const base = `http://127.0.0.1:${port}`;
+  const server = serveDocsOnFreePort();
+  const base = server.url;
 
   const browser = await chromium.launch({ headless: true });
   let exitCode = 0;
