@@ -98,6 +98,15 @@ themselves; minor and major bumps are made manually when warranted.
   attribute instead of a media query; popover behaviour, focus handling, and
   keyboard navigation in collapsed mode are unchanged (Issue #246).
 
+### Removed
+
+- Superseded JSR-only exports `parseJsrImports` and `checkQuarantine` from
+  `scripts/jsr_quarantine_check.ts` (Issue #592). The gate's CLI entry has run
+  the multi-registry pipeline (`parseImports` / `checkImportQuarantine`, which
+  cover JSR, npm and deno.land/x) since #223; the legacy pair had no caller in
+  the production path. Their tests were repointed at the surviving functions, so
+  every JSR scenario stays covered.
+
 ---
 
 ## [0.1.18] - 2026-05-26
