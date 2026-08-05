@@ -44,6 +44,7 @@ jobs:
           VIBE_BUMP_QUARANTINE_HOURS: ${{ vars.VIBE_BUMP_QUARANTINE_HOURS || '24' }}
         run: |
           set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
           deno run --allow-read \
             --allow-net=api.jsr.io,registry.npmjs.org,cdn.deno.land,deno.land \
             scripts/jsr_quarantine_check.ts deno.json
@@ -51,6 +52,7 @@ jobs:
       - name: Upgrade dependencies
         run: |
           set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
           deno outdated --latest 2>&1 | tee upgrade-dry-run.txt || true
           deno outdated --update --latest 2>&1 | tee upgrade.log || true
 
@@ -58,6 +60,7 @@ jobs:
         id: changes
         run: |
           set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
           if git diff --quiet -- 'deno.json' '**/deno.json' 'deno.lock'; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No deno.json / deno.lock dependency changes."
@@ -71,6 +74,7 @@ jobs:
         id: summary
         run: |
           set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
           {
             echo 'body<<EOF'
             echo '## Dependency Upgrades'
