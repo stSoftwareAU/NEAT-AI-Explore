@@ -20,7 +20,6 @@ import { assert, assertEquals } from "./test_helpers.ts";
 import {
   buildCandidateHref,
   CANDIDATE_VIEWS,
-  findCandidate,
 } from "../docs/shared/candidate_views.js";
 import { resolveSnapshotUrlFromParams } from "../docs/shared/snapshot_loader.js";
 import { buildAggregatedGraphModel } from "../docs/shared/aggregated_graph_model.js";
@@ -59,18 +58,20 @@ function fixtureSnapshot(): unknown {
 Deno.test("the chooser lists all three candidate views", () => {
   const ids = CANDIDATE_VIEWS.map((v) => v.id).sort().join(",");
   assertEquals(ids, "dag,sankey,subgraph");
+
+  // Each id must still resolve to its own view directory (kept from the
+  // removed findCandidate test, which pinned the same id → path mapping).
+  const byId = new Map(CANDIDATE_VIEWS.map((v) => [v.id, v.path]));
+  assertEquals(byId.get("dag"), "../dag/");
+  assertEquals(byId.get("sankey"), "../sankey/");
+  assertEquals(byId.get("subgraph"), "../subgraph/");
+  assertEquals(byId.get("nope"), undefined);
+
   for (const view of CANDIDATE_VIEWS) {
     assert(view.label.length > 0, `${view.id} must have a label`);
     assert(view.path.startsWith("../"), `${view.id} path must be relative`);
     assert(view.tagline.length > 0, `${view.id} must have a tagline`);
   }
-});
-
-Deno.test("findCandidate resolves each id and rejects unknown ones", () => {
-  assertEquals(findCandidate("dag")?.path, "../dag/");
-  assertEquals(findCandidate("sankey")?.path, "../sankey/");
-  assertEquals(findCandidate("subgraph")?.path, "../subgraph/");
-  assertEquals(findCandidate("nope"), undefined);
 });
 
 Deno.test("each candidate link propagates the loaded snapshot", () => {
@@ -87,7 +88,7 @@ Deno.test("each candidate link propagates the loaded snapshot", () => {
 });
 
 Deno.test("an empty snapshot leaves the view on its own default", () => {
-  const dag = findCandidate("dag");
+  const dag = CANDIDATE_VIEWS.find((v) => v.id === "dag");
   assert(dag !== undefined, "dag candidate must exist");
   const href = buildCandidateHref(dag, "");
   assertEquals(href, "../dag/");

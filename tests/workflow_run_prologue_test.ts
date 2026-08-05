@@ -1,5 +1,6 @@
 /**
- * Behaviour tests for the `set -Eeuo pipefail` prologue on the two multi-line
+ * Behaviour tests for the `set -euo pipefail` / `set -E` prologue on the two
+ * multi-line
  * `run:` blocks flagged by #557.
  *
  * GitHub Actions runs `run:` scripts under `bash -e {0}`, so `-e` applies but
