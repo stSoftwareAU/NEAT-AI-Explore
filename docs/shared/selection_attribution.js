@@ -49,14 +49,6 @@ export function normaliseSelectionSquash(squash) {
 }
 
 /**
- * @param {unknown} squash
- * @returns {boolean} true when the squash selects a single operand per sample.
- */
-export function isSelectionSquash(squash) {
-  return normaliseSelectionSquash(squash) !== null;
-}
-
-/**
  * @typedef {object} SelectionOperand
  * @property {number[]|null} [contributions] — per-observation `weight·activation`
  *   series for this operand. When absent for any operand the helper falls back

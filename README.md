@@ -1012,7 +1012,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/panel_resize.js`           | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
 | `docs/shared/ui_helpers.js`             | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
 | `docs/shared/tooltips_fallback.js`      | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
-| `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `isSelectionSquash`, `computeSelectionWinShares`                                                              |
+| `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `computeSelectionWinShares`                                                                                   |
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |
 | `docs/shared/aggregated_graph_model.js` | `assignNeuronLayers`, `buildAggregatedGraphModel`                                                                                         |
 | `docs/shared/sankey_flow.js`            | `buildSankeyFlow`, `bandWidth`, `rankFoldedTail`, `pageFoldedTail`                                                                        |
