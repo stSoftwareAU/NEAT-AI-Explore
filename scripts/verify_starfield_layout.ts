@@ -24,9 +24,9 @@
  *   deno run -A scripts/verify_starfield_layout.ts
  */
 
-import { serveDir } from "@std/http/file-server";
-import { fromFileUrl } from "@std/path";
 import { chromium } from "playwright";
+
+import { DOCS, REPO_ROOT, serveDocsOnFreePort } from "./lib/serve_docs.ts";
 
 /** The subset of `window.__neatStarfield` (graph.js `exposeDebugApi`) used here. */
 interface StarfieldDebugApi {
@@ -48,35 +48,7 @@ interface PageGlobals {
   __neatStarfield?: StarfieldDebugApi;
 }
 
-const REPO_ROOT = fromFileUrl(new URL("..", import.meta.url));
-const DOCS = `${REPO_ROOT}docs`;
 const OUT_DIR = `${DOCS}/screenshots`;
-
-/** Pick an ephemeral local port by binding port 0 and reading the resolved port. */
-function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const { port } = listener.addr as Deno.NetAddr;
-  listener.close();
-  return port;
-}
-
-interface ServerHandle {
-  url: string;
-  shutdown: () => Promise<void>;
-}
-
-function startDocsServer(port: number): ServerHandle {
-  const server = Deno.serve(
-    { hostname: "127.0.0.1", port, onListen: () => {} },
-    (req) => serveDir(req, { fsRoot: DOCS, quiet: true }),
-  );
-  return {
-    url: `http://127.0.0.1:${port}/`,
-    shutdown: async () => {
-      await server.shutdown();
-    },
-  };
-}
 
 async function ensureOutDir(): Promise<void> {
   await Deno.mkdir(OUT_DIR, { recursive: true });
@@ -89,8 +61,7 @@ function relToRoot(path: string): string {
 async function main(): Promise<number> {
   await ensureOutDir();
 
-  const port = freePort();
-  const server = startDocsServer(port);
+  const server = serveDocsOnFreePort();
   const url = `${server.url}graph/index.html`;
 
   try {
