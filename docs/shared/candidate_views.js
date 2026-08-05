@@ -47,15 +47,6 @@ export const CANDIDATE_VIEWS = [
 ];
 
 /**
- * Look up a candidate view by id.
- * @param {string} id
- * @returns {CandidateView | undefined}
- */
-export function findCandidate(id) {
-  return CANDIDATE_VIEWS.find((v) => v.id === id);
-}
-
-/**
  * Build the href that opens a candidate view against a given snapshot.
  *
  * When `snapshotUrl` is empty the view opens on its own default snapshot; when
