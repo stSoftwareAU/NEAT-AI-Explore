@@ -11,12 +11,11 @@ import { approx, assert, assertEquals } from "./test_helpers.ts";
 
 import {
   computeSelectionWinShares,
-  isSelectionSquash,
   normaliseSelectionSquash,
 } from "../docs/shared/selection_attribution.js";
 
 // ---------------------------------------------------------------------------
-// normaliseSelectionSquash / isSelectionSquash
+// normaliseSelectionSquash
 // ---------------------------------------------------------------------------
 
 Deno.test("normaliseSelectionSquash maps aliases and lower/upper case", () => {
@@ -29,18 +28,13 @@ Deno.test("normaliseSelectionSquash maps aliases and lower/upper case", () => {
 
 Deno.test("normaliseSelectionSquash returns null for non-selection squashes", () => {
   assertEquals(normaliseSelectionSquash("TANH"), null);
+  assertEquals(normaliseSelectionSquash("SIGMOID"), null);
   assertEquals(normaliseSelectionSquash("IDENTITY"), null);
+  assertEquals(normaliseSelectionSquash("SIGMOID"), null);
   assertEquals(normaliseSelectionSquash(""), null);
   assertEquals(normaliseSelectionSquash(null), null);
   assertEquals(normaliseSelectionSquash(undefined), null);
   assertEquals(normaliseSelectionSquash(42), null);
-});
-
-Deno.test("isSelectionSquash is true only for MIN/MAX/IF family", () => {
-  assert(isSelectionSquash("MINIMUM"));
-  assert(isSelectionSquash("MAXIMUM"));
-  assert(isSelectionSquash("IF"));
-  assert(!isSelectionSquash("SIGMOID"));
 });
 
 // ---------------------------------------------------------------------------
