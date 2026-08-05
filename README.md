@@ -1011,6 +1011,7 @@ Only pure, DOM-free modules can be tested in Deno:
 | `docs/shared/theme.js`                  | `normaliseThemeMode`, `cycleThemeMode`, `themeModeLabel`, `themeModeGlyph`                                                                |
 | `docs/shared/panel_resize.js`           | `parsePanelSize`, `clampPanelSize`, `resolveInitialPanelSize`, `computeDragPanelSize`, `loadPanelSize`, `savePanelSize`, `clearPanelSize` |
 | `docs/shared/ui_helpers.js`             | `escapeHtml`, `extractTooltips`, `buildObservationTooltip`                                                                                |
+| `docs/shared/progress_ui.js`            | `createProgressUi` — the shared `setStatus` / `showProgress` / `updateProgress` / `hideProgress` widget controller (#597)                 |
 | `docs/shared/tooltips_fallback.js`      | `needsFallbackTooltips`, `mergeTooltipMaps`, `fallbackTooltipsUrl`, `loadFallbackTooltips`                                                |
 | `docs/shared/selection_attribution.js`  | `normaliseSelectionSquash`, `computeSelectionWinShares`                                                                                   |
 | `docs/shared/observation_families.js`   | `normaliseFamilyKey`, `deriveObservationFamily`, `groupObservationsByFamily`                                                              |

@@ -35,6 +35,7 @@ import {
   needsFallbackTooltips,
 } from "../shared/tooltips_fallback.js";
 import { formatInteger } from "../shared/number_format.js";
+import { createProgressUi } from "../shared/progress_ui.js";
 import { deriveSubgraphFromRequest } from "../shared/subgraph_derivation.js";
 import {
   phaseProgressPercent,
@@ -87,30 +88,11 @@ let selectedInputUuid = "";
 // Status / progress
 // ---------------------------------------------------------------------------
 
-function setStatus(text, cls = "") {
-  if (!el.status) return;
-  el.status.textContent = text;
-  el.status.className = `statusInline${cls ? ` ${cls}` : ""}`;
-}
-
-function showProgress(indeterminate) {
-  if (!el.progressContainer || !el.progressBar) return;
-  el.progressContainer.style.display = "block";
-  el.progressBar.style.width = indeterminate
-    ? "35%"
-    : el.progressBar.style.width;
-}
-
-function updateProgress(percent) {
-  if (!el.progressBar) return;
-  const clamped = Math.max(0, Math.min(100, percent));
-  el.progressBar.style.width = `${clamped}%`;
-}
-
-function hideProgress() {
-  if (!el.progressContainer) return;
-  el.progressContainer.style.display = "none";
-}
+// One shared widget controller instead of a private copy per view (#597).
+// The view now pulses an unknown-size load via `.indeterminate` like the
+// Trace and Graph views, instead of faking it with a static 35% bar.
+const { setStatus, showProgress, updateProgress, hideProgress } =
+  createProgressUi(el);
 
 // ---------------------------------------------------------------------------
 // Snapshot loading — off the main thread (Issue #560)
@@ -288,9 +270,10 @@ async function applyFallbackTooltips() {
  */
 async function loadSnapshot(input, label) {
   try {
+    // Size is unknown until the first phase reports, so pulse (#597) — an
+    // updateProgress(0) here would cancel the pulse before it is ever seen.
     setStatus(`Loading ${label}…`);
     showProgress(true);
-    updateProgress(0);
 
     // The whole download → gunzip → parse → rank derivation runs off the main
     // thread; only the returned source (structured-cloned back) lands here.

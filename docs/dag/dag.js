@@ -39,6 +39,7 @@ import {
   needsFallbackTooltips,
 } from "../shared/tooltips_fallback.js";
 import { formatInteger } from "../shared/number_format.js";
+import { createProgressUi } from "../shared/progress_ui.js";
 
 /** Members listed in the details panel before the list is truncated. */
 const MAX_DETAIL_MEMBERS = 40;
@@ -85,30 +86,11 @@ let selectedNodeId = null;
 // Status / progress
 // ---------------------------------------------------------------------------
 
-function setStatus(text, cls = "") {
-  if (!el.status) return;
-  el.status.textContent = text;
-  el.status.className = `statusInline${cls ? ` ${cls}` : ""}`;
-}
-
-function showProgress(indeterminate) {
-  if (!el.progressContainer || !el.progressBar) return;
-  el.progressContainer.style.display = "block";
-  el.progressBar.style.width = indeterminate
-    ? "35%"
-    : el.progressBar.style.width;
-}
-
-function updateProgress(percent) {
-  if (!el.progressBar) return;
-  const clamped = Math.max(0, Math.min(100, percent));
-  el.progressBar.style.width = `${clamped}%`;
-}
-
-function hideProgress() {
-  if (!el.progressContainer) return;
-  el.progressContainer.style.display = "none";
-}
+// One shared widget controller instead of a private copy per view (#597).
+// The view now pulses an unknown-size load via `.indeterminate` like the
+// Trace and Graph views, instead of faking it with a static 35% bar.
+const { setStatus, showProgress, updateProgress, hideProgress } =
+  createProgressUi(el);
 
 // ---------------------------------------------------------------------------
 // Snapshot loading (mirrors the graph view, Issues #93 / #118)

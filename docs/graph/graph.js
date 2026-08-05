@@ -19,6 +19,7 @@ import {
   readSnapshotFile,
 } from "../shared/snapshot_loader.js";
 import { escapeHtml, extractTooltips } from "../shared/ui_helpers.js";
+import { createProgressUi } from "../shared/progress_ui.js";
 import {
   loadFallbackTooltips,
   mergeTooltipMaps,
@@ -107,30 +108,9 @@ const el = {
   modeToggle: document.getElementById("modeToggle"),
 };
 
-function setStatus(msg, kind = "") {
-  if (!el.status) return;
-  el.status.textContent = String(msg ?? "");
-  el.status.className = "statusInline " + kind;
-}
-
-function showProgress(indeterminate = false) {
-  if (!el.progressContainer || !el.progressBar) return;
-  el.progressContainer.style.display = "";
-  el.progressBar.style.width = indeterminate ? "" : "0%";
-  if (indeterminate) el.progressBar.classList.add("indeterminate");
-  else el.progressBar.classList.remove("indeterminate");
-}
-
-function updateProgress(percent) {
-  if (!el.progressBar) return;
-  el.progressBar.classList.remove("indeterminate");
-  el.progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
-}
-
-function hideProgress() {
-  if (!el.progressContainer) return;
-  el.progressContainer.style.display = "none";
-}
+// One shared widget controller instead of a private copy per view (#597).
+const { setStatus, showProgress, updateProgress, hideProgress } =
+  createProgressUi(el);
 
 // ============================================================================
 // Snapshot parsing (minimal normalisation)
