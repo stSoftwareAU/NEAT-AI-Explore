@@ -20,8 +20,10 @@
 
 import { approx, assert, assertEquals } from "./test_helpers.ts";
 
-import { computeTopContributingInputs } from "../docs/shared/graph_analysis.js";
-import { computeInboundSynapseImpactAllocation } from "../docs/impact_attribution.js";
+import {
+  allocationStepsForNode,
+  computeTopContributingInputs,
+} from "../docs/shared/graph_analysis.js";
 
 type Edge = {
   fromUuid: string;
@@ -113,30 +115,18 @@ function referenceExhaustiveWalk(
     const inbound = getInboundEdges(uuid) ?? [];
     if (!Array.isArray(inbound) || inbound.length === 0) continue;
 
-    const allocation = computeInboundSynapseImpactAllocation({
-      toUuid: uuid,
-      neuronImpact: null,
-      inboundSynapses: inbound.map((e) => ({
-        fromUuid: e.fromUuid,
-        toUuid: e.toUuid,
-        weight: e.weight,
-        meanContribution: e.meanContribution ?? null,
-        contributions: Array.isArray(e.contributions) ? e.contributions : null,
-      })),
-      toNeuronSquash: getNeuronSquash(uuid) ?? null,
-      recordedActivationMax: typeof getRecordedActivationMax(uuid) === "number"
-        ? getRecordedActivationMax(uuid)
-        : null,
+    // Shared step rule (#598) — the reference walk differs from production only
+    // in its traversal, never in how a node's inbound shares are computed.
+    const steps = allocationStepsForNode({
+      uuid,
+      inbound,
+      getNeuronSquash,
+      getRecordedActivationMax,
+      maxInboundPerNode,
     });
 
-    const steps = (allocation?.synapses ?? [])
-      .filter((r) =>
-        r && typeof r.share === "number" && isFinite(r.share) && r.share > 0
-      )
-      .slice(0, maxInboundPerNode);
-
     for (const s of steps) {
-      const nextUuid = s.fromUuid;
+      const nextUuid = s.uuid;
       const nextScore = cur.score * (s.share ?? 0);
       if (nextScore <= 0) continue;
       if (cur.path.includes(nextUuid)) continue;
