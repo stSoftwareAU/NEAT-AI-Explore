@@ -42,7 +42,8 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          set -Eeuo pipefail
+          set -euo pipefail
+          set -E # errtrace: ERR traps fire in functions and subshells
 
           # Get the base branch version — route BASE_REF via env to defuse
           # GH Actions script-injection (Issue #217).
@@ -74,7 +75,8 @@ jobs:
         env:
           BASE_VERSION: ${{ steps.check_version.outputs.base_version }}
         run: |
-          set -Eeuo pipefail
+          set -euo pipefail
+          set -E # errtrace: ERR traps fire in functions and subshells
 
           # Parse version (e.g., 0.1.0 -> 0.1.1)
           IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
@@ -101,7 +103,8 @@ jobs:
       - name: Commit Version Update
         if: steps.check_version.outputs.needs_update == 'true'
         run: |
-          set -Eeuo pipefail
+          set -euo pipefail
+          set -E # errtrace: ERR traps fire in functions and subshells
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.json
