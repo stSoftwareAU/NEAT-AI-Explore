@@ -97,6 +97,73 @@ export function computeReachableToOutputs({ outputUuids, incomingByTo }) {
 }
 
 /**
+ * Turn a node's raw inbound edges into ranked attribution steps (Issue #598).
+ *
+ * This is the single source of truth for "how a walk computes per-hop
+ * allocation steps for a node": build the allocation input, fetch the
+ * receiver's squash and recorded-activation envelope, keep only rows with a
+ * finite positive `share`, and cap the fan-out at `maxInboundPerNode`. Every
+ * walk (the bounded walk below, the exhaustive DFS cache, the #559 benchmark
+ * and the exhaustive reference walk in the tests) calls this, so their per-hop
+ * shares cannot drift apart — the walks are only comparable when they match.
+ *
+ * @param {{
+ *   uuid: string,
+ *   inbound: Edge[] | null | undefined,
+ *   getNeuronSquash?: ((uuid: string) => (string | null | undefined)) | null,
+ *   getRecordedActivationMax?:
+ *     ((uuid: string) => (number | null | undefined)) | null,
+ *   maxInboundPerNode?: number,
+ * }} input
+ * @returns {Array<{ uuid: string, share: number }>} steps ordered strongest
+ *   first, where `uuid` is the upstream (from) neuron.
+ */
+export function allocationStepsForNode(input) {
+  const uuid = input?.uuid;
+  const inbound = input?.inbound;
+  if (!Array.isArray(inbound) || inbound.length === 0) return [];
+
+  const getNeuronSquash = input?.getNeuronSquash;
+  const getRecordedActivationMax = input?.getRecordedActivationMax;
+  const rawCap = input?.maxInboundPerNode;
+  const maxInboundPerNode = typeof rawCap === "number" && isFinite(rawCap)
+    ? Math.max(0, Math.floor(rawCap))
+    : Number.MAX_SAFE_INTEGER;
+
+  const toNeuronSquash = typeof getNeuronSquash === "function"
+    ? getNeuronSquash(uuid)
+    : null;
+  const recordedActivationMax = typeof getRecordedActivationMax === "function"
+    ? getRecordedActivationMax(uuid)
+    : null;
+
+  const allocation = computeInboundSynapseImpactAllocation({
+    toUuid: uuid,
+    neuronImpact: null,
+    inboundSynapses: inbound.map((e) => ({
+      fromUuid: e.fromUuid,
+      toUuid: e.toUuid,
+      weight: e.weight,
+      meanContribution: e.meanContribution ?? null,
+      // Issue #513 — per-observation contribution series lets the allocation
+      // apply selection-squash (MINIMUM/MAXIMUM) win-fraction attribution.
+      contributions: Array.isArray(e.contributions) ? e.contributions : null,
+    })),
+    toNeuronSquash: toNeuronSquash ?? null,
+    recordedActivationMax: typeof recordedActivationMax === "number"
+      ? recordedActivationMax
+      : null,
+  });
+
+  return (allocation?.synapses ?? [])
+    .filter((r) =>
+      r && typeof r.share === "number" && isFinite(r.share) && r.share > 0
+    )
+    .slice(0, maxInboundPerNode)
+    .map((r) => ({ uuid: r.fromUuid, share: r.share }));
+}
+
+/**
  * Bounded upstream attribution walk to find the most influential inputs for a
  * focused neuron.
  *
@@ -262,36 +329,16 @@ export function computeTopContributingInputs(input) {
     const inbound = getInboundEdges(uuid) ?? [];
     if (!Array.isArray(inbound) || inbound.length === 0) continue;
 
-    const toNeuronSquash = getNeuronSquash ? getNeuronSquash(uuid) : null;
-    const recordedActivationMax = getRecordedActivationMax
-      ? getRecordedActivationMax(uuid)
-      : null;
-    const allocation = computeInboundSynapseImpactAllocation({
-      toUuid: uuid,
-      neuronImpact: null,
-      inboundSynapses: inbound.map((e) => ({
-        fromUuid: e.fromUuid,
-        toUuid: e.toUuid,
-        weight: e.weight,
-        meanContribution: e.meanContribution ?? null,
-        // Issue #513 — per-observation contribution series lets the allocation
-        // apply selection-squash (MINIMUM/MAXIMUM) win-fraction attribution.
-        contributions: Array.isArray(e.contributions) ? e.contributions : null,
-      })),
-      toNeuronSquash: toNeuronSquash ?? null,
-      recordedActivationMax: typeof recordedActivationMax === "number"
-        ? recordedActivationMax
-        : null,
+    const steps = allocationStepsForNode({
+      uuid,
+      inbound,
+      getNeuronSquash,
+      getRecordedActivationMax,
+      maxInboundPerNode,
     });
 
-    const steps = (allocation?.synapses ?? [])
-      .filter((r) =>
-        r && typeof r.share === "number" && isFinite(r.share) && r.share > 0
-      )
-      .slice(0, maxInboundPerNode);
-
     for (const s of steps) {
-      const nextUuid = s.fromUuid;
+      const nextUuid = s.uuid;
       const nextScore = cur.score * (s.share ?? 0);
       if (nextScore <= 0) continue;
       // Skip back-edges: if `nextUuid` is already on this walk's path, the
@@ -392,32 +439,14 @@ function computeExhaustiveContributions(input) {
       stepsCache.set(uuid, []);
       return [];
     }
-    const toNeuronSquash = getNeuronSquash ? getNeuronSquash(uuid) : null;
-    const recordedActivationMax = getRecordedActivationMax
-      ? getRecordedActivationMax(uuid)
-      : null;
-    // Identical allocation call to the bounded walk, so per-hop shares match.
-    const allocation = computeInboundSynapseImpactAllocation({
-      toUuid: uuid,
-      neuronImpact: null,
-      inboundSynapses: inbound.map((e) => ({
-        fromUuid: e.fromUuid,
-        toUuid: e.toUuid,
-        weight: e.weight,
-        meanContribution: e.meanContribution ?? null,
-        contributions: Array.isArray(e.contributions) ? e.contributions : null,
-      })),
-      toNeuronSquash: toNeuronSquash ?? null,
-      recordedActivationMax: typeof recordedActivationMax === "number"
-        ? recordedActivationMax
-        : null,
+    // Same shared step rule as the bounded walk, so per-hop shares match.
+    const steps = allocationStepsForNode({
+      uuid,
+      inbound,
+      getNeuronSquash,
+      getRecordedActivationMax,
+      maxInboundPerNode,
     });
-    const steps = (allocation?.synapses ?? [])
-      .filter((r) =>
-        r && typeof r.share === "number" && isFinite(r.share) && r.share > 0
-      )
-      .slice(0, maxInboundPerNode)
-      .map((r) => ({ uuid: r.fromUuid, share: r.share }));
     stepsCache.set(uuid, steps);
     return steps;
   }

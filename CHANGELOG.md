@@ -19,6 +19,14 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- One inbound-allocation step rule for every walk (#598). The rule for turning a
+  node's raw inbound edges into ranked attribution steps — build the allocation
+  input, fetch the receiver's squash and recorded-activation envelope, keep only
+  finite positive shares, cap at `maxInboundPerNode` — was copy-pasted across
+  the bounded walk, the exhaustive DFS cache, the #559 benchmark and the
+  exhaustive reference test. All four now call the shared, unit-tested
+  `allocationStepsForNode` in `docs/shared/graph_analysis.js`, so the per-hop
+  shares the exhaustive-parity test compares cannot silently drift apart.
 - One status/progress widget controller for every view (#597). The Trace, DAG,
   Graph and Subgraph views each carried a private copy of the `setStatus` /
   `showProgress` / `updateProgress` / `hideProgress` quadruplet and the copies
