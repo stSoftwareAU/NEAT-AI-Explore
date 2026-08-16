@@ -1,3 +1,5 @@
+![NEAT-AI Explore](https://raw.githubusercontent.com/stSoftwareAU/NEAT-AI/Develop/docs/brand/social-previews/neat-ai-explore.png)
+
 # 🧠 NEAT-AI Explore
 
 [![Licence: Apache 2.0](https://img.shields.io/badge/Licence-Apache%202.0-blue.svg)](LICENSE)
