@@ -133,6 +133,17 @@ GitHub renders Mermaid blocks natively.
 - The `.github/workflows/semver-bump.yml` action auto-increments the **patch**
   version on PRs that don't update `version.json` themselves. Bump
   **minor**/**major** manually when the change warrants it.
+- **The version must never go backwards.** A PR whose version is strictly
+  _lower_ than `origin/Develop` fails CI — it is not treated as a deliberate
+  bump. This catches the merge conflict that silently resolves `version.json` in
+  favour of Develop's older token. Equal versions still auto-patch-bump;
+  versions ahead of Develop are accepted as-is. Check locally with:
+
+  ```bash
+  deno run --allow-read --allow-run=git \
+    scripts/check_version_no_downgrade.ts --base-ref origin/Develop
+  ```
+
 - Add an entry to [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]` (or a
   new version heading) describing the user-visible effect of your change. The
   format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
