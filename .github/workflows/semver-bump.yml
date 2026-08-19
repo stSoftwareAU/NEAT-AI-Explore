@@ -37,6 +37,24 @@ jobs:
         with:
           deno-version: v2.x
 
+      # Refuse a PR whose version.json sits *behind* the base branch (#605).
+      # A merge conflict that silently takes Develop's older version looks
+      # "already different" to the CURRENT != BASE skip below, so without this
+      # gate a downgrade ships unnoticed. The guard fails loud (exit 1), and
+      # also fails when the base version cannot be read at all (exit 2).
+      - name: Reject Version Downgrade
+        env:
+          # Route BASE_REF via env to defuse GH Actions script injection
+          # (Issue #217).
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
+
+          git fetch origin "$BASE_REF" || true
+          deno run --allow-read --allow-run=git \
+            scripts/check_version_no_downgrade.ts --base-ref "origin/$BASE_REF"
+
       - name: Check Version Update
         id: check_version
         env:
