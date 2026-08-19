@@ -143,6 +143,7 @@ GitHub renders Mermaid blocks natively.
   deno run --allow-read --allow-run=git \
     scripts/check_version_no_downgrade.ts --base-ref origin/Develop
   ```
+
 - Add an entry to [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]` (or a
   new version heading) describing the user-visible effect of your change. The
   format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
