@@ -47,9 +47,27 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: git fetch origin "$BASE_REF:$BASE_REF" || true
+      # Dependabot-authored PRs receive no Actions secrets, so the licence
+      # arrives empty and gitleaks-action exits with ErrLicense before
+      # scanning anything — green over an unscanned diff (#609). Branch on
+      # whether the licence is actually present; the `secrets` context is not
+      # available in a step-level `if:`, so record it as a step output.
+      - name: Detect gitleaks licence
+        id: gitleaks_licence
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$GITLEAKS_LICENSE" ]]; then
+            echo "licensed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "licensed=false" >> "$GITHUB_OUTPUT"
+          fi
       # gitleaks/gitleaks-action@v3.0.0 (runs on the supported Node 24
       # runtime; v2.3.9 ran on the deprecated Node 20 — Issue #298).
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
+      - name: Detect secrets with gitleaks (licensed action)
+        if: steps.gitleaks_licence.outputs.licensed == 'true'
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Org-level Gitleaks Pro licence (Issue #1636). Required for
@@ -57,3 +75,16 @@ jobs:
           # with ErrLicense before scanning. Configure in repo or org
           # secrets.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      # The free, open-source CLI needs no licence. `quality/gitleaks_scan.sh`
+      # fetches it at a pinned version, verifies it against its published
+      # SHA-256 checksum, and falls back to a whole-tree scan when the PR
+      # commit range is not reachable in the checkout — so this branch never
+      # reports success over an unscanned diff (#609).
+      - name: Detect secrets with gitleaks (open-source CLI fallback)
+        if: steps.gitleaks_licence.outputs.licensed != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ./quality/gitleaks_scan.sh .
