@@ -62,6 +62,17 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   — unquoted expansions, undefined variables — would otherwise slip through;
   this gate fails the build (at `warning` severity) the moment a finding
   appears. `quality.sh` runs the same gate locally for parity (#480).
+- **Secret-scan gate**: `.github/workflows/gitleaks.yml` scans every pull
+  request diff for committed secrets. The licensed `gitleaks/gitleaks-action`
+  needs an organisation licence, and Dependabot-authored PRs receive no Actions
+  secrets — so on those the action would exit with `ErrLicense` before scanning
+  and report green over an unscanned diff. The workflow therefore branches on
+  whether the licence is present and, when it is not, runs the committed gate
+  script `quality/gitleaks_scan.sh`: the free, open-source CLI at a pinned
+  version, verified against its published SHA-256 checksum before it is
+  executed. When the PR commit range is not reachable in the checkout the script
+  scans the whole working tree rather than nothing, so neither branch can pass
+  over an unscanned diff (#609).
 - **Accessibility workflow**: `.github/workflows/a11y.yml` runs
   [`pa11y-ci`](https://github.com/pa11y/pa11y-ci) against the Explorer, Graph
   and Starfield pages on every pull request. The configuration lives in

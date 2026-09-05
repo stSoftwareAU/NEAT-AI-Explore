@@ -9,9 +9,12 @@
 import { parse as parseYaml } from "@std/yaml";
 
 export interface WorkflowStep {
+  id?: string;
   uses?: string;
   name?: string;
+  if?: string;
   run?: string;
+  env?: Record<string, unknown>;
   with?: Record<string, unknown>;
 }
 
