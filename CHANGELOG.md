@@ -25,11 +25,10 @@ themselves; minor and major bumps are made manually when warranted.
   stayed frozen at 1.163.0 for ever, missing later rule and CVE fixes; the tag
   now sits beside the digest (`semgrep/semgrep:1.163.0@sha256:7cad2b…`), which
   keeps the pull byte-for-byte immutable while restoring automated bumps. The
-  Markdown Lint job installed `markdownlint-cli2` with no version, so the
-  runner executed whatever the registry served at that moment — a `run:` block
-  is not a manifest, so the repository's dependency quarantine never covered
-  it; it is pinned to `@0.23.2`, matching NEAT-AI-Backpropagation and
-  NEAT-AI-Lamarck.
+  Markdown Lint job installed `markdownlint-cli2` with no version, so the runner
+  executed whatever the registry served at that moment — a `run:` block is not a
+  manifest, so the repository's dependency quarantine never covered it; it is
+  pinned to `@0.23.2`, matching NEAT-AI-Backpropagation and NEAT-AI-Lamarck.
 - One inbound-allocation step rule for every walk (#598). The rule for turning a
   node's raw inbound edges into ranked attribution steps — build the allocation
   input, fetch the receiver's squash and recorded-activation envelope, keep only
