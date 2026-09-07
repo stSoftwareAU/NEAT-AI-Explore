@@ -74,8 +74,17 @@ FAILED | 1 passed | 3 failed
 Run after the fix:
 
 ```text
-ok | 4 passed | 0 failed (23ms)
+ok | 7 passed | 0 failed (19ms)
 ```
+
+The detection helpers are also exercised directly, with literal scripts rather
+than only the repo's own workflow files. That closed a false negative found in
+this run: the shell-invocation regex matched the `bash` tail of the _filename_
+on the `curl -o download-actionlint.bash` line, swallowed the newline as its
+separator and captured the next line's `bash` as the script, so the checksum
+policy passed against the unfixed workflow instead of failing it. With the match
+anchored to command position, the policy is red against the unfixed workflow as
+shown above.
 
 ### The changed shell actually rejects a tampered script
 
@@ -91,8 +100,8 @@ TAMPER-REJECTED-OK (exit 1)                  # non-zero → set -e aborts the st
 
 ### Full quality gate
 
-`./quality.sh` — `1195 passed | 0 failed`, format, lint, type check, bash syntax
-and shellcheck all green (run after rebasing onto the latest `Develop`).
+`./quality.sh` — `1198 passed | 0 failed` (10s), format, lint, type check, bash
+syntax and shellcheck all green, re-run in this session after the test fix.
 
 The pin was re-verified against upstream in this run: the `v1.7.12` tag resolves
 to commit `914e7df21a07ef503a81201c76d2b11c789d3fca`
@@ -120,7 +129,7 @@ spelling.
 
 ## Test Plan
 
-Added `tests/workflow_remote_script_pinning_test.ts` (four tests, all new):
+Added `tests/workflow_remote_script_pinning_test.ts` (seven tests, all new):
 
 - `tests/workflow_remote_script_pinning_test.ts::every raw.githubusercontent.com URL in a workflow is pinned to a 40-char commit SHA (#618)`
   — walks every string leaf of every parsed workflow and rejects any raw URL
@@ -139,6 +148,22 @@ Added `tests/workflow_remote_script_pinning_test.ts` (four tests, all new):
   — forward-looking guard against the `curl … | bash` shape, which cannot be
   verified at all. Green both before and after (the repo never used that
   spelling); it exists so the fix cannot be undone by switching form.
+
+Three further tests exercise the detection helpers directly, so the policy
+cannot pass by failing to see the pattern it is meant to catch:
+
+- `tests/workflow_remote_script_pinning_test.ts::the checksum policy flags the historical unverified install script (#618)`
+  — feeds the verbatim pre-fix install script to `downloadedFiles` and
+  `isExecutedByShell` and asserts both detect it. **Fails against the buggy
+  shell-invocation regex** (the false negative described above) **and passes
+  after it is anchored to command position.**
+- `tests/workflow_remote_script_pinning_test.ts::shell-execution detection handles command position and separators (#618)`
+  — eight literal cases: `bash x.sh`, `bash -x x.sh`, `sh x.sh --flag`,
+  `/bin/bash x.sh`, `… && bash x.sh` (all true), and `cp download.bash …`,
+  `./install.sh`, the empty script (all false).
+- `tests/workflow_remote_script_pinning_test.ts::download detection finds curl and wget targets (#618)`
+  — `curl -o` and `wget -O` targets, a script with no download, and the
+  `curl … | bash` pipe shape.
 
 The checks are policy-wide, not fitted to `actionlint.yml`: they parse every
 `.github/workflows/*.yml` and would catch the same class in any workflow added
