@@ -59,7 +59,7 @@ flowchart TD
 
 ### Regression tests — red before, green after
 
-Run against the unfixed workflow (3 of the 4 new tests fail):
+Run against the unfixed workflow (3 of the 4 workflow-policy tests fail):
 
 ```text
 every raw.githubusercontent.com URL in a workflow is pinned to a 40-char commit SHA (#618) ... FAILED
