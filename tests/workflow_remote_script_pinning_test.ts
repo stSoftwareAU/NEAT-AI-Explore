@@ -66,11 +66,20 @@ function downloadedFiles(script: string): string[] {
   return [...names];
 }
 
+/**
+ * `sh`/`bash` followed by any flags and its first non-flag argument — the
+ * script being interpreted. A literal pattern (rather than one built around
+ * the filename) keeps the filename out of the regex engine entirely.
+ */
+const SHELL_INVOCATION_PATTERN =
+  /\b(?:ba)?sh\s+(?:-[^\s]+\s+)*["']?([^\s"';|&]+)/g;
+
 /** True when `script` runs `file` through a shell interpreter. */
 function isExecutedByShell(script: string, file: string): boolean {
-  const quoted = file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b(?:ba)?sh\\s+(?:-[^\\s]+\\s+)*["']?${quoted}`)
-    .test(script);
+  for (const [, target] of script.matchAll(SHELL_INVOCATION_PATTERN)) {
+    if (target.startsWith(file)) return true;
+  }
+  return false;
 }
 
 /** True when `script` pipes a download straight into a shell. */
