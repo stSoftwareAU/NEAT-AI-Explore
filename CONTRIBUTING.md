@@ -165,6 +165,12 @@ GitHub renders Mermaid blocks natively.
   which runs a JSR quarantine check (`scripts/jsr_quarantine_check.ts`) before
   applying updates. External packages younger than the quarantine window are
   rejected.
+- Hand-edited dependency changes are gated too: every pull request runs the same
+  script in `--lock` mode (`.github/workflows/dependency-quarantine.yml`, a
+  required status check), so a version resolved in `deno.lock` — direct or
+  transitive — that was published inside the quarantine window blocks the merge.
+  If you add a dependency, commit the refreshed `deno.lock` with it; the gate
+  fails closed on a manifest entry the lockfile does not resolve.
 - GitHub Actions are pinned to commit SHAs, not floating tags. Keep them that
   way.
 

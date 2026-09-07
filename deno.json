@@ -9,6 +9,15 @@
     "jimp": "npm:jimp@1.6.1",
     "playwright": "npm:playwright@1.60.0"
   },
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": [
+      "jsr:@stsoftware/*",
+      "npm:@stsoftware/*",
+      "jsr:@stsoftwareau/*",
+      "npm:@stsoftwareau/*"
+    ]
+  },
   "lint": {
     "exclude": [
       "docs/app.js",

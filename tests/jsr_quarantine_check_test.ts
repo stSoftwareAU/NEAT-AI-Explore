@@ -12,14 +12,21 @@ import {
   assertNever,
   checkAll,
   checkImportQuarantine,
+  checkLockCoverage,
+  checkLockfile,
+  checkResolvedQuarantine,
   fetchLatestVersion,
   fetchLatestVersionDenoLandX,
   fetchLatestVersionNpm,
+  fetchPublishTimes,
   importDisplayName,
   isInternal,
   isInternalImport,
+  parseCliArgs,
   parseImports,
   parseImportSpec,
+  parseLockEntry,
+  parseLockfile,
   type VersionRecord,
 } from "../scripts/jsr_quarantine_check.ts";
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -792,5 +799,471 @@ Deno.test("importDisplayName handles every current ExternalImport kind", () => {
   assertEquals(
     importDisplayName({ kind: "raw-url", url: "https://example.com/mod.ts" }),
     "https://example.com/mod.ts",
+  );
+});
+
+/* ------------------------------------------------------------------ *
+ * Resolved-lockfile mode (#616)
+ *
+ * The scheduled bump asks "is the newest published version old enough to
+ * adopt?"; a pull request must ask "is every version this branch actually
+ * resolves old enough to trust?" — which covers transitive packages and
+ * stays stable on unrelated PRs.
+ * ------------------------------------------------------------------ */
+
+Deno.test("parseLockEntry splits a JSR lockfile key into package and version", () => {
+  const entry = parseLockEntry("jsr", "@std/yaml@1.1.1");
+  assert(entry, "expected @std/yaml@1.1.1 to parse");
+  assertEquals(entry!.version, "1.1.1");
+  assertEquals(importDisplayName(entry!.import), "@std/yaml");
+});
+
+Deno.test("parseLockEntry splits npm keys, including scopes and peer suffixes", () => {
+  const plain = parseLockEntry("npm", "jimp@1.6.1");
+  assertEquals(plain!.version, "1.6.1");
+  assertEquals(importDisplayName(plain!.import), "npm:jimp");
+
+  const scoped = parseLockEntry("npm", "@jimp/core@1.6.1");
+  assertEquals(scoped!.version, "1.6.1");
+  assertEquals(importDisplayName(scoped!.import), "npm:@jimp/core");
+
+  // Deno records peer-dependency resolutions after an underscore.
+  const peer = parseLockEntry("npm", "@jimp/plugin-resize@1.6.1_jimp@1.6.1");
+  assertEquals(peer!.version, "1.6.1");
+  assertEquals(importDisplayName(peer!.import), "npm:@jimp/plugin-resize");
+});
+
+Deno.test("parseLockEntry returns null for keys it cannot parse", () => {
+  assertEquals(parseLockEntry("jsr", "no-version-here"), null);
+  assertEquals(parseLockEntry("jsr", "not-a-scoped-name@1.0.0"), null);
+  assertEquals(parseLockEntry("npm", "@scope/name@not-a-version"), null);
+  assertEquals(parseLockEntry("npm", "@scope/name"), null);
+});
+
+Deno.test("parseLockfile collects direct and transitive resolutions, deduplicated", () => {
+  const { resolved, unsupported } = parseLockfile({
+    jsr: {
+      "@std/yaml@1.1.1": {},
+      // Same package pinned twice — one entry per package@version.
+      "@std/fmt@1.0.3": {},
+      "@std/fmt@1.0.10": {},
+    },
+    npm: {
+      "jimp@1.6.1": {},
+      // Transitive: never named in deno.json.
+      "@jimp/core@1.6.1": {},
+    },
+  });
+  assertEquals(unsupported.length, 0);
+  const names = resolved
+    .map((r) => `${importDisplayName(r.import)}@${r.version}`)
+    .sort();
+  assertEquals(names.length, 5);
+  assertEquals(names[0], "@std/fmt@1.0.10");
+  assertEquals(names[1], "@std/fmt@1.0.3");
+  assertEquals(names[2], "@std/yaml@1.1.1");
+  assertEquals(names[3], "npm:@jimp/core@1.6.1");
+  assertEquals(names[4], "npm:jimp@1.6.1");
+});
+
+Deno.test("parseLockfile reads the v3/v4 nested `packages` section", () => {
+  const { resolved } = parseLockfile({
+    packages: { jsr: { "@std/path@1.1.5": {} }, npm: { "left-pad@1.3.0": {} } },
+  });
+  const names = resolved
+    .map((r) => `${importDisplayName(r.import)}@${r.version}`)
+    .sort();
+  assertEquals(names.length, 2);
+  assertEquals(names[0], "@std/path@1.1.5");
+  assertEquals(names[1], "npm:left-pad@1.3.0");
+});
+
+Deno.test("parseLockfile fails closed on remote URLs and unparseable keys", () => {
+  const { resolved, unsupported } = parseLockfile({
+    jsr: { "garbage-key": {} },
+    remote: { "https://example.com/mod.ts": "sha256-..." },
+  });
+  assertEquals(resolved.length, 0);
+  assertEquals(unsupported.length, 2);
+  const reasons = unsupported.map((u) => u.reason).sort();
+  assert(
+    reasons[0].includes("raw URL dependency in deno.lock"),
+    `unexpected reason: ${reasons[0]}`,
+  );
+  assert(
+    reasons[1].includes("unparseable jsr lockfile entry"),
+    `unexpected reason: ${reasons[1]}`,
+  );
+});
+
+Deno.test("fetchPublishTimes maps every JSR version to its publication time", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/yaml/versions": {
+      body: {
+        items: [
+          {
+            version: "1.1.1",
+            yanked: false,
+            createdAt: "2026-05-01T00:00:00Z",
+          },
+          {
+            version: "1.1.0",
+            yanked: false,
+            createdAt: "2026-04-01T00:00:00Z",
+          },
+        ],
+      },
+    },
+  });
+  const times = await fetchPublishTimes(
+    { kind: "jsr", scope: "std", name: "yaml" },
+    f,
+  );
+  assertEquals(times.get("1.1.1"), "2026-05-01T00:00:00Z");
+  assertEquals(times.get("1.1.0"), "2026-04-01T00:00:00Z");
+});
+
+Deno.test("fetchPublishTimes maps npm versions and drops the created/modified keys", async () => {
+  const f = fetcher({
+    "https://registry.npmjs.org/jimp": {
+      body: {
+        time: {
+          created: "2020-01-01T00:00:00Z",
+          modified: "2026-05-01T00:00:00Z",
+          "1.6.1": "2026-04-01T00:00:00Z",
+        },
+      },
+    },
+  });
+  const times = await fetchPublishTimes({ kind: "npm", name: "jimp" }, f);
+  assertEquals(times.size, 1);
+  assertEquals(times.get("1.6.1"), "2026-04-01T00:00:00Z");
+});
+
+Deno.test("fetchPublishTimes propagates a registry error instead of returning empty", async () => {
+  const f = fetcher({});
+  let message = "";
+  try {
+    await fetchPublishTimes({ kind: "npm", name: "left-pad" }, f);
+  } catch (e) {
+    message = (e as Error).message;
+  }
+  assert(
+    message.includes("npm registry returned 404"),
+    `expected a loud registry failure, got: ${message}`,
+  );
+});
+
+Deno.test("checkResolvedQuarantine ages the pinned version, not the latest release", () => {
+  const now = new Date("2026-05-22T12:00:00Z");
+  const times = new Map([
+    ["1.0.0", "2026-01-01T00:00:00Z"], // pinned, long aged
+    ["2.0.0", "2026-05-22T11:00:00Z"], // fresh latest — irrelevant here
+  ]);
+  const r = checkResolvedQuarantine(
+    { import: { kind: "npm", name: "left-pad" }, version: "1.0.0" },
+    times,
+    now,
+    24,
+  );
+  assertEquals(r.inQuarantine, false);
+  assertEquals(r.latestVersion, "1.0.0");
+  assertEquals(r.publishedAt, "2026-01-01T00:00:00Z");
+});
+
+Deno.test("checkResolvedQuarantine throws when the registry does not know the pinned version", () => {
+  let message = "";
+  try {
+    checkResolvedQuarantine(
+      { import: { kind: "jsr", scope: "std", name: "yaml" }, version: "9.9.9" },
+      new Map([["1.0.0", "2026-01-01T00:00:00Z"]]),
+      new Date("2026-05-22T12:00:00Z"),
+      24,
+    );
+  } catch (e) {
+    message = (e as Error).message;
+  }
+  assert(
+    message.includes("no publication time for @std/yaml@9.9.9"),
+    `expected a loud failure for the unknown version, got: ${message}`,
+  );
+});
+
+Deno.test("checkLockfile blocks a freshly published transitive dependency (#616)", async () => {
+  const now = new Date("2026-05-22T12:00:00Z");
+  const f = fetcher({
+    "https://registry.npmjs.org/jimp": {
+      body: { time: { "1.6.1": "2026-01-01T00:00:00Z" } },
+    },
+    "https://registry.npmjs.org/@jimp/core": {
+      // Transitive dependency published 30 minutes ago.
+      body: { time: { "1.6.1": "2026-05-22T11:30:00Z" } },
+    },
+  });
+  const { blocked, cleared, unsupported } = await checkLockfile(
+    { npm: { "jimp@1.6.1": {}, "@jimp/core@1.6.1": {} } },
+    f,
+    now,
+    24,
+  );
+  assertEquals(unsupported.length, 0);
+  assertEquals(cleared.length, 1);
+  assertEquals(cleared[0].package, "npm:jimp");
+  assertEquals(blocked.length, 1);
+  assertEquals(blocked[0].package, "npm:@jimp/core");
+  assertEquals(blocked[0].latestVersion, "1.6.1");
+  assert(
+    blocked[0].ageHours > 0.4 && blocked[0].ageHours < 0.6,
+    `expected ~0.5 hour age, got ${blocked[0].ageHours}`,
+  );
+});
+
+Deno.test("checkLockfile clears a lockfile whose resolutions are all aged", async () => {
+  const now = new Date("2026-05-22T12:00:00Z");
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/yaml/versions": {
+      body: {
+        items: [
+          {
+            version: "1.1.1",
+            yanked: false,
+            createdAt: "2026-04-01T00:00:00Z",
+          },
+        ],
+      },
+    },
+  });
+  const { blocked, cleared, skipped } = await checkLockfile(
+    { jsr: { "@std/yaml@1.1.1": {} } },
+    f,
+    now,
+    24,
+  );
+  assertEquals(blocked.length, 0);
+  assertEquals(skipped.length, 0);
+  assertEquals(cleared.length, 1);
+  assertEquals(cleared[0].package, "@std/yaml");
+});
+
+Deno.test("checkLockfile skips internal stSoftwareAU packages", async () => {
+  const { blocked, cleared, skipped } = await checkLockfile(
+    {
+      jsr: { "@stsoftwareau/neat@0.1.0": {} },
+      npm: { "@stsoftwareau/widget@2.0.0": {} },
+    },
+    fetcher({}), // any registry call would 404 and fail the test
+    new Date("2026-05-22T12:00:00Z"),
+    24,
+  );
+  assertEquals(blocked.length, 0);
+  assertEquals(cleared.length, 0);
+  assertEquals(skipped.length, 2);
+});
+
+Deno.test("checkLockfile fetches each package once however many versions it pins", async () => {
+  let calls = 0;
+  const f = (_url: string) => {
+    calls++;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              version: "1.0.3",
+              yanked: false,
+              createdAt: "2026-01-01T00:00:00Z",
+            },
+            {
+              version: "1.0.10",
+              yanked: false,
+              createdAt: "2026-02-01T00:00:00Z",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  };
+  const { cleared } = await checkLockfile(
+    { jsr: { "@std/fmt@1.0.3": {}, "@std/fmt@1.0.10": {} } },
+    f,
+    new Date("2026-05-22T12:00:00Z"),
+    24,
+  );
+  assertEquals(cleared.length, 2);
+  assertEquals(calls, 1);
+});
+
+Deno.test("checkLockCoverage flags a deno.json import missing from the lockfile", () => {
+  const unsupported = checkLockCoverage(
+    { "left-pad": "npm:left-pad@^1.3.0", "@std/yaml": "jsr:@std/yaml@^1.0.0" },
+    [{ import: { kind: "jsr", scope: "std", name: "yaml" }, version: "1.1.1" }],
+  );
+  assertEquals(unsupported.length, 1);
+  assertEquals(importDisplayName(unsupported[0].import), "npm:left-pad");
+  assert(
+    unsupported[0].reason.includes("absent from deno.lock"),
+    `unexpected reason: ${unsupported[0].reason}`,
+  );
+});
+
+Deno.test("checkLockCoverage fails closed on raw URL and deno.land/x specifiers", () => {
+  const unsupported = checkLockCoverage(
+    {
+      raw: "https://example.com/mod.ts",
+      oak: "https://deno.land/x/oak@v12.0.0/mod.ts",
+    },
+    [],
+  );
+  assertEquals(unsupported.length, 2);
+  const names = unsupported.map((u) => importDisplayName(u.import)).sort();
+  assertEquals(names[0], "deno.land/x/oak");
+  assertEquals(names[1], "https://example.com/mod.ts");
+});
+
+Deno.test("checkLockCoverage ignores internal stSoftwareAU imports", () => {
+  assertEquals(
+    checkLockCoverage({ neat: "jsr:@stsoftwareau/neat@^0.1.0" }, []).length,
+    0,
+  );
+});
+
+Deno.test("checkLockfile reports a stale lockfile as unsupported, never as clean", async () => {
+  const f = fetcher({
+    "https://api.jsr.io/scopes/std/packages/yaml/versions": {
+      body: {
+        items: [
+          {
+            version: "1.1.1",
+            yanked: false,
+            createdAt: "2026-04-01T00:00:00Z",
+          },
+        ],
+      },
+    },
+  });
+  const { unsupported } = await checkLockfile(
+    { jsr: { "@std/yaml@1.1.1": {} } },
+    f,
+    new Date("2026-05-22T12:00:00Z"),
+    24,
+    // deno.json declares a package the lockfile never resolved.
+    { "@std/yaml": "jsr:@std/yaml@^1.0.0", evil: "npm:evil@^9.9.9" },
+  );
+  assertEquals(unsupported.length, 1);
+  assertEquals(importDisplayName(unsupported[0].import), "npm:evil");
+});
+
+Deno.test("parseCliArgs defaults to deno.json in latest-published mode", () => {
+  const args = parseCliArgs([]);
+  assertEquals(args.denoJsonPath, "deno.json");
+  assertEquals(args.lockPath, null);
+  assertEquals(parseCliArgs(["custom.json"]).denoJsonPath, "custom.json");
+});
+
+Deno.test("parseCliArgs selects lockfile mode with an explicit or default path", () => {
+  assertEquals(parseCliArgs(["--lock"]).lockPath, "deno.lock");
+  assertEquals(parseCliArgs(["--lock=other.lock"]).lockPath, "other.lock");
+  const both = parseCliArgs(["--lock", "deno.lock", "deno.json"]);
+  assertEquals(both.lockPath, "deno.lock");
+  assertEquals(both.denoJsonPath, "deno.json");
+});
+
+Deno.test("parseCliArgs rejects an unknown option instead of ignoring it", () => {
+  let message = "";
+  try {
+    parseCliArgs(["--locked"]);
+  } catch (e) {
+    message = (e as Error).message;
+  }
+  assert(
+    message.includes("Unknown option '--locked'"),
+    `expected a loud rejection, got: ${message}`,
+  );
+});
+
+/* ------------------------------------------------------------------ *
+ * CLI exit codes in `--lock` mode (#616)
+ *
+ * The workflow's only contract with the gate is its exit status, so these
+ * cases drive the real CLI end to end. Every fixture below resolves without
+ * touching a registry, so the tests are deterministic and offline.
+ * ------------------------------------------------------------------ */
+
+const GATE_SCRIPT = new URL(
+  "../scripts/jsr_quarantine_check.ts",
+  import.meta.url,
+);
+
+async function runGate(
+  denoJson: unknown,
+  lock: unknown,
+): Promise<{ code: number; output: string }> {
+  const dir = await Deno.makeTempDir();
+  try {
+    const jsonPath = `${dir}/deno.json`;
+    const lockPath = `${dir}/deno.lock`;
+    await Deno.writeTextFile(jsonPath, JSON.stringify(denoJson));
+    await Deno.writeTextFile(lockPath, JSON.stringify(lock));
+    const { code, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
+      args: [
+        // The same permission set the PR workflow grants.
+        "run",
+        "--allow-read",
+        "--allow-env=VIBE_BUMP_QUARANTINE_HOURS",
+        GATE_SCRIPT.pathname,
+        "--lock",
+        lockPath,
+        jsonPath,
+      ],
+    }).output();
+    const decoder = new TextDecoder();
+    return {
+      code,
+      output: decoder.decode(stdout) + decoder.decode(stderr),
+    };
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+}
+
+Deno.test("gate CLI exits 0 when every resolved version is internal", async () => {
+  const { code, output } = await runGate(
+    { imports: { neat: "jsr:@stsoftwareau/neat@^1.0.0" } },
+    { version: "5", jsr: { "@stsoftwareau/neat@1.0.0": {} } },
+  );
+  assertEquals(code, 0, `expected a clean gate, got:\n${output}`);
+  assert(
+    output.includes("Quarantine gate (resolved versions): OK"),
+    `expected the resolved-mode success line, got:\n${output}`,
+  );
+});
+
+Deno.test("gate CLI exits non-zero when deno.json adds a dependency the lockfile never resolved", async () => {
+  const { code, output } = await runGate(
+    {
+      imports: {
+        neat: "jsr:@stsoftwareau/neat@^1.0.0",
+        evil: "npm:evil@^9.9.9",
+      },
+    },
+    { version: "5", jsr: { "@stsoftwareau/neat@1.0.0": {} } },
+  );
+  assertEquals(code, 1, `expected the gate to fail closed, got:\n${output}`);
+  assert(
+    output.includes("npm:evil") && output.includes("absent from deno.lock"),
+    `expected the stale-lockfile failure, got:\n${output}`,
+  );
+});
+
+Deno.test("gate CLI exits non-zero on a raw URL dependency it cannot age-check", async () => {
+  const { code, output } = await runGate(
+    { imports: {} },
+    { version: "5", remote: { "https://example.com/mod.ts": "sha256-x" } },
+  );
+  assertEquals(code, 1, `expected the gate to fail closed, got:\n${output}`);
+  assert(
+    output.includes("cannot be age-checked"),
+    `expected the raw-URL failure, got:\n${output}`,
   );
 });

@@ -37,6 +37,7 @@ const CASES: Case[] = [
   { workflow: "bash-syntax.yml", ref: "#497" },
   { workflow: "deno-quality.yml", ref: "#493" },
   { workflow: "dependency-audit.yml", ref: "#497" },
+  { workflow: "dependency-quarantine.yml", ref: "#616" },
   { workflow: "dependency-review.yml", ref: "#497" },
   { workflow: "gitleaks.yml", ref: "#494" },
   { workflow: "markdown-lint.yml", ref: "#495" },

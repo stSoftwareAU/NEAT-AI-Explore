@@ -45,7 +45,11 @@ jobs:
         run: |
           set -euo pipefail
           set -E # errtrace: keep ERR traps in functions/subshells (#557)
+          # `--allow-env` is required: without it the gate cannot read
+          # VIBE_BUMP_QUARANTINE_HOURS and aborts on a permission error
+          # before a single package is age-checked (#616).
           deno run --allow-read \
+            --allow-env=VIBE_BUMP_QUARANTINE_HOURS \
             --allow-net=api.jsr.io,registry.npmjs.org,cdn.deno.land,deno.land \
             scripts/jsr_quarantine_check.ts deno.json
 
