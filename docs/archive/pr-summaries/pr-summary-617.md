@@ -51,6 +51,11 @@ a11y npm install fails loud after exhausting retries (PR #473) ... ok
 ok | 4 passed | 0 failed
 ```
 
+Red/green was re-verified in this run. With the pin temporarily reverted to
+`npm install -g pa11y-ci http-server`, running the pinning suite reported
+`FAILED | 0 passed | 2 failed`; with the pin restored the same command reports
+`ok | 4 passed | 0 failed` alongside the two pre-existing retry tests.
+
 Full gate: `./quality.sh` — `ok | 1191 passed (68 steps) | 0 failed`, `==> OK`.
 
 Where the install path now sits relative to the repo's existing supply-chain
@@ -89,13 +94,11 @@ flowchart LR
 ## Test Plan
 
 - **Added**
-  `tests/workflow_npm_install_pinning_test.ts::every workflow npm
-  install pins an exact package version (#617)`
+  `tests/workflow_npm_install_pinning_test.ts::every workflow npm install pins an exact package version (#617)`
   — the regression test: it fails against the unfixed workflow (output above)
   and passes after the pin.
 - **Added**
-  `tests/workflow_npm_install_pinning_test.ts::a11y installs pinned
-  pa11y-ci and http-server (#617)`
+  `tests/workflow_npm_install_pinning_test.ts::a11y installs pinned pa11y-ci and http-server (#617)`
   — asserts the a11y job specifically installs both tools with exact versions;
   also red before the fix.
 - **Modified** `tests/workflow_a11y_npm_install_retry_test.ts` — the retry test
