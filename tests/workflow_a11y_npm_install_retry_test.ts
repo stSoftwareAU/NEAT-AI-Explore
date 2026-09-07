@@ -58,8 +58,10 @@ Deno.test(
         "npm network error",
     );
     assert(
-      run.includes("npm install -g pa11y-ci http-server"),
-      "install step must install pa11y-ci and http-server",
+      /npm install -g pa11y-ci@\S+ http-server@\S+/.test(run),
+      "install step must install pa11y-ci and http-server (version-pinned " +
+        "since #617; the pins themselves are asserted by " +
+        "workflow_npm_install_pinning_test.ts)",
     );
   },
 );

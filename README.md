@@ -78,6 +78,9 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   and Starfield pages on every pull request. The configuration lives in
   `pa11yci.json` and targets the WCAG 2 AA standard, so regressions in labels,
   contrast, focus traps or ARIA usage are caught before they reach GitHub Pages.
+  The `pa11y-ci` and `http-server` CLIs are installed at exact pinned versions
+  so a freshly published release cannot execute on the runner unreviewed (#617);
+  bump the pins deliberately.
 - **Auto-bump workflow**: `.github/workflows/upgrade-dependencies.yml` runs
   weekly (Mondays 06:00 UTC, plus `workflow_dispatch`), invokes
   `deno outdated --update --latest`, and opens a PR against `Develop` with the

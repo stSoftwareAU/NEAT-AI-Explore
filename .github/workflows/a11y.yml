@@ -51,11 +51,19 @@ jobs:
         # Retry with backoff so a single transient npm network error
         # (e.g. ECONNRESET mid-download) does not fail the whole a11y gate.
         # Fails loud with a non-zero exit only after all attempts are exhausted.
+        #
+        # Both tools are pinned to an exact version (#617). An unpinned
+        # `npm install -g` resolves whatever the registry serves at that
+        # moment, so a hijacked release runs on the runner the instant it is
+        # published — and a `run:` block is not a manifest, so neither
+        # `deno.json`'s `minimumDependencyAge` nor the quarantine gate covers
+        # it. Bump these deliberately, the way `markdown-lint.yml` pins
+        # `markdownlint-cli2`.
         run: |
           set -euo pipefail
           set -E # errtrace: keep ERR traps in functions/subshells (#557)
           for attempt in 1 2 3; do
-            if npm install -g pa11y-ci http-server; then
+            if npm install -g pa11y-ci@4.1.1 http-server@14.1.1; then
               exit 0
             fi
             echo "npm install failed (attempt ${attempt}/3); retrying after backoff..."

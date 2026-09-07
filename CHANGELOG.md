@@ -19,6 +19,16 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- The a11y gate no longer installs whatever npm serves at run time (#617).
+  `.github/workflows/a11y.yml` ran `npm install -g pa11y-ci http-server` with no
+  version pin, so a hijacked or maliciously republished release of either tool —
+  or of `pa11y-ci`'s large transitive tree, `puppeteer-core` included — executed
+  on the runner the moment it was published. A `run:` block is not a manifest,
+  so neither `deno.json`'s `minimumDependencyAge` nor
+  `scripts/jsr_quarantine_check.ts` ever covered it. Both are pinned
+  (`pa11y-ci@4.1.1`, `http-server@14.1.1`), matching the `markdownlint-cli2` pin
+  from #610, and a new repo-wide test fails any workflow that installs an
+  unpinned npm package.
 - The quarantine gate can read its own window again (#616). Both call sites ran
   the script without `--allow-env`, so
   `Deno.env.get("VIBE_BUMP_QUARANTINE_HOURS")` hit a permission error and the
