@@ -80,8 +80,9 @@ flowchart LR
   failed …"`) and comments, and only inspects segments
   that genuinely begin `npm install`, so the check cannot be satisfied by text
   that never executes.
-- No secrets or hidden files staged; the job keeps `permissions: contents: read`
-  and `persist-credentials: false`.
+- No secrets or hidden files staged; the job still runs read-only
+  (`permissions: contents: read`) and still does not persist the checkout
+  credentials.
 - No new dependency is added — two existing, already-executed tools gain exact
   versions.
 
