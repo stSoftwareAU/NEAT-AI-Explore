@@ -67,12 +67,19 @@ function downloadedFiles(script: string): string[] {
 }
 
 /**
- * `sh`/`bash` followed by any flags and its first non-flag argument — the
+ * `sh`/`bash` in *command position* — at the start of a line or after a `;`,
+ * `|` or `&` — followed by any flags and its first non-flag argument, the
  * script being interpreted. A literal pattern (rather than one built around
  * the filename) keeps the filename out of the regex engine entirely.
+ *
+ * Command position and the newline-free `[ \t]` separators both matter: an
+ * earlier line ending in `download-actionlint.bash` would otherwise match
+ * `\b(?:ba)?sh` on its own tail, swallow the newline as the separator and
+ * capture the *next* line's `bash` as the script — hiding the real
+ * `bash download-actionlint.bash` invocation from the checksum policy below.
  */
 const SHELL_INVOCATION_PATTERN =
-  /\b(?:ba)?sh\s+(?:-[^\s]+\s+)*["']?([^\s"';|&]+)/g;
+  /(?:^|[;|&]|\s)[ \t]*(?:[^\s;|&]*\/)?(?:ba)?sh[ \t]+(?:-[^\s]+[ \t]+)*["']?([^\s"';|&]+)/gm;
 
 /** True when `script` runs `file` through a shell interpreter. */
 function isExecutedByShell(script: string, file: string): boolean {
@@ -189,5 +196,81 @@ Deno.test("the actionlint install step pins its script URL and verifies its chec
     String(install.run).includes(expected) ||
       /\$\{?SCRIPT_SHA256\b/.test(String(install.run)),
     "the install step must feed SCRIPT_SHA256 into its verification",
+  );
+});
+
+/**
+ * The historical `actionlint.yml` install step, verbatim — the shape the
+ * policy tests above must reject. A regression regex once matched the `bash`
+ * tail of the *filename* on the `curl` line, swallowed the newline as its
+ * separator and captured the next line's `bash` as the script, so this exact
+ * script slipped through the checksum policy while looking green.
+ */
+const UNVERIFIED_INSTALL_SCRIPT = `set -euo pipefail
+curl -fsSL "$SCRIPT_URL" -o download-actionlint.bash
+bash download-actionlint.bash "$ACTIONLINT_VERSION"
+echo "$PWD" >> "$GITHUB_PATH"
+`;
+
+Deno.test("the checksum policy flags the historical unverified install script (#618)", () => {
+  const downloaded = downloadedFiles(UNVERIFIED_INSTALL_SCRIPT);
+  assert(
+    downloaded.includes("download-actionlint.bash"),
+    `expected the curl -o target to be detected, got ${downloaded.join(", ")}`,
+  );
+  assert(
+    isExecutedByShell(UNVERIFIED_INSTALL_SCRIPT, "download-actionlint.bash"),
+    "expected 'bash download-actionlint.bash' to count as a shell execution",
+  );
+  assert(
+    !/\bsha256sum\b[^\n]*\s-c\b/.test(UNVERIFIED_INSTALL_SCRIPT),
+    "the historical script had no checksum verification",
+  );
+});
+
+Deno.test("shell-execution detection handles command position and separators (#618)", () => {
+  const cases: [string, string, boolean][] = [
+    ["bash install.sh", "install.sh", true],
+    ["  bash -x install.sh", "install.sh", true],
+    ["sh install.sh --version 1.2.3", "install.sh", true],
+    ["/bin/bash install.sh", "install.sh", true],
+    ["curl -o install.sh URL && bash install.sh", "install.sh", true],
+    // A filename ending in `sh` is not an invocation of a shell.
+    ["cp download.bash /tmp/download.bash", "download.bash", false],
+    // Executed directly, not through a shell interpreter.
+    ["./install.sh", "install.sh", false],
+    ["", "install.sh", false],
+  ];
+  for (const [script, file, expected] of cases) {
+    assert(
+      isExecutedByShell(script, file) === expected,
+      `isExecutedByShell(${
+        JSON.stringify(script)
+      }, '${file}') should be ${expected}`,
+    );
+  }
+});
+
+Deno.test("download detection finds curl and wget targets (#618)", () => {
+  assert(
+    downloadedFiles('curl -fsSL "$URL" -o install.sh').includes("install.sh"),
+    "curl -o target must be detected",
+  );
+  assert(
+    downloadedFiles("wget -q -O install.sh https://example.test/i.sh")
+      .includes("install.sh"),
+    "wget -O target must be detected",
+  );
+  assert(
+    downloadedFiles("echo no downloads here").length === 0,
+    "a script with no download must yield no targets",
+  );
+  assert(
+    pipesDownloadToShell("curl -fsSL https://example.test/i.sh | bash"),
+    "a curl piped into bash must be detected",
+  );
+  assert(
+    !pipesDownloadToShell(UNVERIFIED_INSTALL_SCRIPT),
+    "a download written to disk is not a pipe into a shell",
   );
 });
