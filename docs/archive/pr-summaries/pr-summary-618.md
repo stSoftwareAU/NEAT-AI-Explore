@@ -91,8 +91,14 @@ TAMPER-REJECTED-OK (exit 1)                  # non-zero → set -e aborts the st
 
 ### Full quality gate
 
-`./quality.sh` — `1193 passed | 0 failed`, format, lint, type check, bash syntax
-and shellcheck all green.
+`./quality.sh` — `1195 passed | 0 failed`, format, lint, type check, bash syntax
+and shellcheck all green (run after rebasing onto the latest `Develop`).
+
+The pin was re-verified against upstream in this run: the `v1.7.12` tag resolves
+to commit `914e7df21a07ef503a81201c76d2b11c789d3fca`
+(`gh api repos/rhysd/actionlint/git/refs/tags/v1.7.12`), and the script served
+at that commit hashes to the pinned
+`72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e`.
 
 ## Original trigger closed
 
