@@ -6,10 +6,11 @@ name: actionlint
 # landing silently.
 #
 # actionlint has no first-party GitHub Action; the maintainer ships a Go
-# binary plus an official install script. We download a pinned release of
-# that script and a pinned binary version in a `run:` step rather than
-# depend on an unofficial third-party action, keeping the supply-chain
-# surface to repos we already trust (actions/checkout + rhysd/actionlint).
+# binary plus an official install script. We download that script from an
+# immutable commit SHA, verify its SHA-256 against a value pinned here, and
+# install a pinned binary version in a `run:` step rather than depend on an
+# unofficial third-party action, keeping the supply-chain surface to repos we
+# already trust (actions/checkout + rhysd/actionlint).
 
 # actionlint is a checker: it gates pull requests only. It deliberately does
 # not trigger on `push:` to the default branch — the post-merge run would just
@@ -56,13 +57,23 @@ jobs:
           persist-credentials: false
       - name: Install actionlint
         env:
-          # Pin the install script to the matching release tag (immutable in
-          # practice) rather than the moving `main` branch the upstream
-          # README suggests.
-          SCRIPT_URL: https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash
+          # Pin the install script to the immutable commit SHA the v1.7.12 tag
+          # pointed at, not the tag itself (#618). A tag can be force-moved by
+          # a compromised upstream account to point at new content, and this
+          # script is executed with bash on the runner — the same trust
+          # decision every `uses:` in this repo already SHA-pins.
+          SCRIPT_URL: https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash
+          # SHA-256 of that exact script, verified before it runs. Defence in
+          # depth over the SHA-pinned URL: a substituted response fails the
+          # check instead of executing. Mirrors quality/gitleaks_scan.sh.
+          SCRIPT_SHA256: 72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e
         run: |
           set -euo pipefail
           curl -fsSL "$SCRIPT_URL" -o download-actionlint.bash
+          # Fail loud on any mismatch: sha256sum -c exits non-zero and `set -e`
+          # aborts the step before the script is ever executed.
+          printf '%s  %s\n' "$SCRIPT_SHA256" download-actionlint.bash \
+            | sha256sum -c -
           bash download-actionlint.bash "$ACTIONLINT_VERSION"
           # The script drops the binary in the working directory; record its
           # path for the next step.

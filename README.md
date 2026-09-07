@@ -48,7 +48,10 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   `.github/workflows/*.yml` file on each pull request and `Develop` push, so bad
   `${{ }}` expressions, undefined `needs:`, invalid event filters and shellcheck
   issues in `run:` blocks fail the build instead of landing silently. The linter
-  binary is pinned to a fixed release for reproducibility.
+  binary is pinned to a fixed release for reproducibility, and its install
+  script is fetched from an immutable upstream commit SHA and checked against a
+  pinned SHA-256 before it is executed (#618) — a moved tag or a substituted
+  response fails the step instead of running.
 - **Bash syntax gate**: `.github/workflows/bash-syntax.yml` invokes the
   committed gate script `quality/bash_syntax.sh`, which runs `bash -n` (a
   parse-only no-op) over every `*.sh` file on each pull request. Bash has no
