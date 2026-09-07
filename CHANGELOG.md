@@ -29,6 +29,15 @@ themselves; minor and major bumps are made manually when warranted.
   (`pa11y-ci@4.1.1`, `http-server@14.1.1`), matching the `markdownlint-cli2` pin
   from #610, and a new repo-wide test fails any workflow that installs an
   unpinned npm package.
+- The actionlint install script is fetched from an immutable commit SHA and
+  checksum-verified before it runs (#618). `actionlint.yml` pulled
+  `download-actionlint.bash` from the mutable `v1.7.12` tag — not a commit — and
+  executed it with `bash`, so an upstream account compromise that force-moved
+  that tag would have run attacker-chosen code on the runner with no diff review
+  — the one third-party fetch in the repo that escaped the SHA-pinning
+  discipline every `uses:` already follows. The URL now names the commit the tag
+  pointed at, and the step verifies the download against a pinned SHA-256
+  (failing loud via `sha256sum -c`) before executing it.
 - The quarantine gate can read its own window again (#616). Both call sites ran
   the script without `--allow-env`, so
   `Deno.env.get("VIBE_BUMP_QUARANTINE_HOURS")` hit a permission error and the
