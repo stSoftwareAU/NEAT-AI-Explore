@@ -19,10 +19,23 @@
  * package is published under the `@stsoftwareau` scope. All other
  * scopes — including `@std/*` — are external.
  *
+ * Two modes (#616):
+ *
+ * - Default (pre-bump): age-check the *latest* published version of each
+ *   direct import, so the weekly bump refuses to ingest a fresh release.
+ * - `--lock` (pull request): age-check every *resolved* version in
+ *   `deno.lock`, direct and transitive, so a PR that hand-edits
+ *   `deno.json`/`deno.lock` cannot adopt a minutes-old package with no
+ *   publish-age verification.
+ *
  * Usage:
  *   deno run --allow-read \
  *     --allow-net=api.jsr.io,registry.npmjs.org,cdn.deno.land,deno.land \
  *     scripts/jsr_quarantine_check.ts [deno.json]
+ *
+ *   deno run --allow-read \
+ *     --allow-net=api.jsr.io,registry.npmjs.org \
+ *     scripts/jsr_quarantine_check.ts --lock deno.lock deno.json
  */
 
 export interface JsrPackage {
@@ -374,6 +387,268 @@ export async function checkAll(
   return { blocked, cleared, skipped, unsupported };
 }
 
+/* ------------------------------------------------------------------ *
+ * Resolved-lockfile mode (#616)
+ *
+ * The `checkAll` pipeline above answers "is the newest published version
+ * of each direct import old enough to adopt?" — the question the weekly
+ * bump asks before it runs `deno outdated --update`. A pull request asks
+ * a different question: "is every version this branch actually resolves
+ * old enough to trust?" That covers transitive packages, which never
+ * appear in `deno.json`, and it stays stable on unrelated PRs because a
+ * pinned version only ever gets older.
+ * ------------------------------------------------------------------ */
+
+/** A package version actually resolved in `deno.lock`. */
+export interface ResolvedPackage {
+  import: ExternalImport;
+  version: string;
+}
+
+export interface LockfileParse {
+  resolved: ResolvedPackage[];
+  unsupported: UnsupportedImport[];
+}
+
+/** The subset of the `deno.lock` shape this gate reads. */
+export interface Lockfile {
+  jsr?: Record<string, unknown>;
+  npm?: Record<string, unknown>;
+  /** Lockfile v3/v4 nested the registry sections under `packages`. */
+  packages?: {
+    jsr?: Record<string, unknown>;
+    npm?: Record<string, unknown>;
+  };
+  remote?: Record<string, unknown>;
+}
+
+/** Map of version string -> ISO 8601 publication timestamp. */
+export type PublishTimes = Map<string, string>;
+
+/**
+ * Split a `deno.lock` registry key (`@scope/name@1.2.3`, `left-pad@1.3.0`)
+ * into the package it names and the exact version it pins.
+ *
+ * npm keys carry peer-dependency suffixes after an underscore
+ * (`@jimp/core@1.6.1_jimp@1.6.1`); only the part before the first `_`
+ * identifies the package. Returns `null` for a key that cannot be parsed,
+ * so the caller can fail closed rather than skip it silently.
+ */
+export function parseLockEntry(
+  kind: "jsr" | "npm",
+  key: string,
+): ResolvedPackage | null {
+  const base = kind === "npm" ? key.split("_")[0] : key;
+  const at = base.lastIndexOf("@");
+  if (at <= 0) return null;
+  const name = base.slice(0, at);
+  const version = base.slice(at + 1);
+  if (!/^\d/.test(version)) return null;
+  if (kind === "jsr") {
+    const m = /^@([^/@]+)\/([^/@]+)$/.exec(name);
+    if (!m) return null;
+    return { import: { kind: "jsr", scope: m[1], name: m[2] }, version };
+  }
+  if (!/^(@[^/@]+\/)?[^/@]+$/.test(name)) return null;
+  return { import: { kind: "npm", name }, version };
+}
+
+/**
+ * Extract every distinct `package@version` pair the lockfile resolves,
+ * across the JSR and npm sections (direct *and* transitive).
+ *
+ * Anything that cannot be age-checked — an unparseable registry key, or a
+ * `remote:` raw-URL entry — is returned as `unsupported`; callers must
+ * treat a non-empty `unsupported` set as blocking.
+ */
+export function parseLockfile(lock: Lockfile): LockfileParse {
+  const seen = new Map<string, ResolvedPackage>();
+  const unsupported: UnsupportedImport[] = [];
+  const sections: Array<["jsr" | "npm", Record<string, unknown> | undefined]> =
+    [
+      ["jsr", lock.jsr ?? lock.packages?.jsr],
+      ["npm", lock.npm ?? lock.packages?.npm],
+    ];
+  for (const [kind, section] of sections) {
+    for (const key of Object.keys(section ?? {})) {
+      const entry = parseLockEntry(kind, key);
+      if (!entry) {
+        unsupported.push({
+          import: { kind: "raw-url", url: `${kind}:${key}` },
+          reason:
+            `unparseable ${kind} lockfile entry '${key}'; refusing to trust it`,
+        });
+        continue;
+      }
+      const dedup = `${importDisplayName(entry.import)}@${entry.version}`;
+      if (!seen.has(dedup)) seen.set(dedup, entry);
+    }
+  }
+  for (const url of Object.keys(lock.remote ?? {})) {
+    unsupported.push({
+      import: { kind: "raw-url", url },
+      reason: `raw URL dependency in deno.lock cannot be age-checked (${url})`,
+    });
+  }
+  return { resolved: [...seen.values()], unsupported };
+}
+
+/**
+ * Every deno.json import that the lockfile does not resolve, reported as
+ * unsupported so a PR cannot add a dependency to `deno.json` and dodge the
+ * gate by leaving `deno.lock` stale.
+ */
+export function checkLockCoverage(
+  imports: Record<string, string>,
+  resolved: ResolvedPackage[],
+): UnsupportedImport[] {
+  const have = new Set(resolved.map((r) => importDisplayName(r.import)));
+  const out: UnsupportedImport[] = [];
+  for (const imp of parseImports(imports)) {
+    if (imp.kind === "raw-url") {
+      out.push({
+        import: imp,
+        reason:
+          `raw URL specifier cannot be age-checked; refusing to trust it (${imp.url})`,
+      });
+      continue;
+    }
+    if (imp.kind === "denoland-x") {
+      out.push({
+        import: imp,
+        reason:
+          "deno.land/x specifier resolves to no pinned deno.lock entry; " +
+          "its adopted version cannot be age-checked",
+      });
+      continue;
+    }
+    if (isInternalImport(imp)) continue;
+    if (!have.has(importDisplayName(imp))) {
+      out.push({
+        import: imp,
+        reason:
+          "declared in deno.json but absent from deno.lock; regenerate the " +
+          "lockfile so the adopted version can be age-checked",
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Load every published version of a package and its publication time, from
+ * the registry that owns it.
+ */
+export async function fetchPublishTimes(
+  imp: ExternalImport,
+  fetcher: Fetcher,
+): Promise<PublishTimes> {
+  const times: PublishTimes = new Map();
+  if (imp.kind === "jsr") {
+    const url =
+      `https://api.jsr.io/scopes/${imp.scope}/packages/${imp.name}/versions`;
+    const res = await fetcher(url);
+    if (!res.ok) {
+      throw new Error(
+        `JSR registry returned ${res.status} for @${imp.scope}/${imp.name}`,
+      );
+    }
+    const data = await res.json() as
+      | { items?: VersionRecord[] }
+      | VersionRecord[];
+    const items = Array.isArray(data) ? data : (data.items ?? []);
+    for (const v of items) {
+      if (v?.version && v.createdAt) times.set(v.version, v.createdAt);
+    }
+    return times;
+  }
+  if (imp.kind === "npm") {
+    const res = await fetcher(`https://registry.npmjs.org/${imp.name}`);
+    if (!res.ok) {
+      throw new Error(`npm registry returned ${res.status} for ${imp.name}`);
+    }
+    const data = await res.json() as { time?: Record<string, string> };
+    for (const [version, createdAt] of Object.entries(data.time ?? {})) {
+      if (version === "created" || version === "modified") continue;
+      times.set(version, createdAt);
+    }
+    return times;
+  }
+  throw new Error(
+    `cannot age-check a resolved version for ${importDisplayName(imp)}`,
+  );
+}
+
+/**
+ * Age-check one resolved `package@version` against the quarantine window.
+ *
+ * `publishTimes` is the registry's version -> publication-time map; the
+ * lookup fails loudly when the registry does not know the pinned version,
+ * rather than treating an unknown version as aged.
+ */
+export function checkResolvedQuarantine(
+  pkg: ResolvedPackage,
+  publishTimes: PublishTimes,
+  now: Date,
+  quarantineHours: number,
+): QuarantineResult {
+  const display = importDisplayName(pkg.import);
+  const createdAt = publishTimes.get(pkg.version);
+  if (!createdAt) {
+    throw new Error(
+      `registry has no publication time for ${display}@${pkg.version}`,
+    );
+  }
+  const ageHours = (now.getTime() - Date.parse(createdAt)) / 3_600_000;
+  return {
+    kind: pkg.import.kind === "jsr" ? "jsr" : "npm",
+    package: display,
+    latestVersion: pkg.version,
+    publishedAt: createdAt,
+    ageHours,
+    inQuarantine: ageHours < quarantineHours,
+  };
+}
+
+/**
+ * Run the quarantine check across every version `deno.lock` resolves —
+ * direct and transitive — and, when `imports` is supplied, confirm the
+ * lockfile actually covers every external import `deno.json` declares.
+ *
+ * Registry responses are fetched once per package, so a package pinned at
+ * several versions costs one request, not one per version.
+ */
+export async function checkLockfile(
+  lock: Lockfile,
+  fetcher: Fetcher,
+  now: Date,
+  quarantineHours: number,
+  imports?: Record<string, string>,
+): Promise<CheckAllResult> {
+  const blocked: QuarantineResult[] = [];
+  const cleared: QuarantineResult[] = [];
+  const skipped: ExternalImport[] = [];
+  const { resolved, unsupported } = parseLockfile(lock);
+  if (imports) unsupported.push(...checkLockCoverage(imports, resolved));
+  const cache = new Map<string, PublishTimes>();
+  for (const pkg of resolved) {
+    if (isInternalImport(pkg.import)) {
+      skipped.push(pkg.import);
+      continue;
+    }
+    const key = importDisplayName(pkg.import);
+    let times = cache.get(key);
+    if (!times) {
+      times = await fetchPublishTimes(pkg.import, fetcher);
+      cache.set(key, times);
+    }
+    const r = checkResolvedQuarantine(pkg, times, now, quarantineHours);
+    if (r.inQuarantine) blocked.push(r);
+    else cleared.push(r);
+  }
+  return { blocked, cleared, skipped, unsupported };
+}
+
 function parseQuarantineHours(raw: string | undefined): number {
   if (raw === undefined || raw === "") return 24;
   const n = Number.parseFloat(raw);
@@ -398,14 +673,53 @@ function describeSkipped(imp: ExternalImport): string {
   }
 }
 
-if (import.meta.main) {
-  const denoJsonPath = Deno.args[0] ?? "deno.json";
-  const text = await Deno.readTextFile(denoJsonPath);
-  const config = JSON.parse(text) as { imports?: Record<string, string> };
-  const imports = config.imports ?? {};
+/** Command-line arguments for the gate. */
+export interface CliArgs {
+  denoJsonPath: string;
+  /** Non-null when the gate runs in resolved-lockfile mode (#616). */
+  lockPath: string | null;
+}
 
+/**
+ * Parse the gate's argv. `--lock [path]` selects resolved-lockfile mode
+ * (defaulting to `deno.lock`); the single positional argument is the
+ * manifest path (defaulting to `deno.json`). An unknown option is an error
+ * rather than a silently ignored flag — a typo must not quietly disable
+ * the gate's lockfile coverage.
+ */
+export function parseCliArgs(argv: string[]): CliArgs {
+  let denoJsonPath: string | null = null;
+  let lockPath: string | null = null;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--lock") {
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        lockPath = next;
+        i++;
+      } else {
+        lockPath = "deno.lock";
+      }
+      continue;
+    }
+    if (arg.startsWith("--lock=")) {
+      lockPath = arg.slice("--lock=".length) || "deno.lock";
+      continue;
+    }
+    if (arg.startsWith("-")) throw new Error(`Unknown option '${arg}'`);
+    if (denoJsonPath !== null) {
+      throw new Error(`Unexpected extra argument '${arg}'`);
+    }
+    denoJsonPath = arg;
+  }
+  return { denoJsonPath: denoJsonPath ?? "deno.json", lockPath };
+}
+
+if (import.meta.main) {
+  let args: CliArgs;
   let quarantineHours: number;
   try {
+    args = parseCliArgs(Deno.args);
     quarantineHours = parseQuarantineHours(
       Deno.env.get("VIBE_BUMP_QUARANTINE_HOURS"),
     );
@@ -414,13 +728,35 @@ if (import.meta.main) {
     Deno.exit(2);
   }
 
+  const text = await Deno.readTextFile(args.denoJsonPath);
+  const config = JSON.parse(text) as { imports?: Record<string, string> };
+  const imports = config.imports ?? {};
   const fetcher: Fetcher = (url) => fetch(url);
-  const { blocked, cleared, skipped, unsupported } = await checkAll(
-    imports,
-    fetcher,
-    new Date(),
-    quarantineHours,
-  );
+  const mode = args.lockPath === null ? "latest published" : "resolved";
+
+  let result: CheckAllResult;
+  try {
+    if (args.lockPath === null) {
+      result = await checkAll(imports, fetcher, new Date(), quarantineHours);
+    } else {
+      const lock = JSON.parse(
+        await Deno.readTextFile(args.lockPath),
+      ) as Lockfile;
+      result = await checkLockfile(
+        lock,
+        fetcher,
+        new Date(),
+        quarantineHours,
+        imports,
+      );
+    }
+  } catch (e) {
+    // Fail loud: a registry lookup that could not complete leaves a version
+    // unverified, which must never be reported as a clean gate.
+    console.error(`\nQuarantine gate: ${(e as Error).message}. Aborting.`);
+    Deno.exit(1);
+  }
+  const { blocked, cleared, skipped, unsupported } = result;
 
   for (const imp of skipped) {
     console.log(describeSkipped(imp));
@@ -445,17 +781,17 @@ if (import.meta.main) {
 
   if (unsupported.length > 0) {
     console.error(
-      `\nQuarantine gate: ${unsupported.length} unsupported specifier(s) cannot be age-checked. Aborting upgrade.`,
+      `\nQuarantine gate: ${unsupported.length} unsupported specifier(s) cannot be age-checked. Aborting.`,
     );
     Deno.exit(1);
   }
   if (blocked.length > 0) {
     console.error(
-      `\nQuarantine gate: ${blocked.length} package(s) under ${quarantineHours}h since publication. Aborting upgrade.`,
+      `\nQuarantine gate: ${blocked.length} package(s) under ${quarantineHours}h since publication. Aborting.`,
     );
     Deno.exit(1);
   }
   console.log(
-    `\nQuarantine gate: OK (${cleared.length} cleared, ${skipped.length} internal skipped).`,
+    `\nQuarantine gate (${mode} versions): OK (${cleared.length} cleared, ${skipped.length} internal skipped).`,
   );
 }

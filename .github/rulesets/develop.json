@@ -1,5 +1,5 @@
 {
-  "_comment": "Issue #211 — settings-as-code mirror of the live GitHub ruleset that protects the default branch (Develop). The `quality` job from .github/workflows/deno-quality.yml is listed as a required status check so a failing `deno check`, `deno fmt --check`, `deno lint`, or `deno test` blocks PR merge. Keep this file in sync with the live ruleset; edits here are not auto-applied — a repo admin must PUT this payload to /repos/stSoftwareAU/NEAT-AI-Explore/rulesets/11243690. Issue #361 — `require_code_owner_review` is true so the .github/CODEOWNERS rules on privileged paths (.github/workflows/, .github/actions/, .github/rulesets/) are enforced at merge.",
+  "_comment": "Issue #211 — settings-as-code mirror of the live GitHub ruleset that protects the default branch (Develop). The `quality` job from .github/workflows/deno-quality.yml is listed as a required status check so a failing `deno check`, `deno fmt --check`, `deno lint`, or `deno test` blocks PR merge. Keep this file in sync with the live ruleset; edits here are not auto-applied — a repo admin must PUT this payload to /repos/stSoftwareAU/NEAT-AI-Explore/rulesets/11243690. Issue #616 — `dependency-quarantine` (the job in .github/workflows/dependency-quarantine.yml) is a required status check so a PR that hand-edits deno.json/deno.lock cannot merge without the 24-hour dependency-age gate. Issue #361 — `require_code_owner_review` is true so the .github/CODEOWNERS rules on privileged paths (.github/workflows/, .github/actions/, .github/rulesets/) are enforced at merge.",
   "name": "Develop",
   "target": "branch",
   "enforcement": "active",
@@ -38,7 +38,8 @@
         "do_not_enforce_on_create": true,
         "required_status_checks": [
           { "context": "update-version", "integration_id": 15368 },
-          { "context": "quality" }
+          { "context": "quality" },
+          { "context": "dependency-quarantine" }
         ]
       }
     }

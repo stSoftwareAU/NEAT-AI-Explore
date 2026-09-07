@@ -36,6 +36,11 @@ const CASES: Case[] = [
   { workflow: "deno-quality.yml", job: "quality", ref: "#457" },
   { workflow: "dependency-audit.yml", job: "audit", ref: "#458" },
   { workflow: "dependency-review.yml", job: "dependency-review", ref: "#459" },
+  {
+    workflow: "dependency-quarantine.yml",
+    job: "dependency-quarantine",
+    ref: "#616",
+  },
   { workflow: "deploy.yml", job: "deploy", ref: "#460" },
   { workflow: "markdown-lint.yml", job: "markdownlint", ref: "#461" },
   { workflow: "semgrep.yml", job: "semgrep", ref: "#462" },

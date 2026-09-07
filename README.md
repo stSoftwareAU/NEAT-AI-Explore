@@ -87,6 +87,18 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   the job if any package is younger than `VIBE_BUMP_QUARANTINE_HOURS` (default
   24h) — closing the cron-window exposure to freshly-published malicious
   versions. `stSoftwareAU/*` scopes bypass the gate as internal.
+- **PR dependency quarantine**: `.github/workflows/dependency-quarantine.yml`
+  runs `scripts/jsr_quarantine_check.ts --lock deno.lock` on every pull request
+  and is a required status check on `Develop`. The scheduled gate above only
+  guards the weekly bump, so a PR that hand-edited `deno.json`/`deno.lock` could
+  adopt a package published minutes earlier with no publish-age check at all
+  (#616). The PR gate ages the versions the branch actually **resolves** —
+  transitive packages included — rather than the newest release on the registry,
+  so an unrelated PR is unaffected by someone else publishing today. It also
+  fails closed when `deno.json` declares an import `deno.lock` never resolved,
+  so a stale lockfile cannot hide a new dependency. `deno.json`'s
+  `minimumDependencyAge` (`P1D`, excluding internal `@stsoftwareau` scopes)
+  states the same floor declaratively for Deno's own tooling.
 - **Dependency audit workflow**: `.github/workflows/dependency-audit.yml` runs
   Deno's native `deno audit` over the resolved lockfile (`deno.lock`) on a
   weekly schedule (Mondays 07:00 UTC, one hour ahead of the upgrade cron) and on

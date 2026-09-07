@@ -19,6 +19,12 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- The quarantine gate can read its own window again (#616). Both call sites ran
+  the script without `--allow-env`, so
+  `Deno.env.get("VIBE_BUMP_QUARANTINE_HOURS")` hit a permission error and the
+  step exited 2 before age-checking a single package — the weekly bump's gate
+  has never actually verified anything. Both now grant
+  `--allow-env=VIBE_BUMP_QUARANTINE_HOURS`.
 - Both CI supply-chain pins are now trackable and exact (#610, #612). The
   Semgrep job's container carried a bare digest, so Renovate's docker manager
   and Dependabot had no tag to resolve a bump from and the image would have
@@ -67,6 +73,26 @@ themselves; minor and major bumps are made manually when warranted.
   (e.g. `value not recorded for 197/200 observations`) instead of a false fault.
 
 ### Added
+
+- The 24-hour dependency quarantine now runs on pull requests (#616). The repo's
+  primary supply-chain control was wired into the scheduled bump only, so a PR
+  that hand-edited `deno.json`/`deno.lock` could adopt a package published
+  minutes earlier and merge with every required check green —
+  `dependency-review.yml` and `dependency-audit.yml` check disclosed advisories
+  and licences, never publish recency. The new
+  `.github/workflows/dependency-quarantine.yml` runs
+  `scripts/jsr_quarantine_check.ts --lock deno.lock` on every PR and is listed
+  in `.github/rulesets/develop.json` as a required status check.
+- Resolved-lockfile mode in `scripts/jsr_quarantine_check.ts` (#616). The gate
+  now age-checks the versions a branch actually resolves — transitive packages
+  included, which never appear in `deno.json` — instead of only the newest
+  release of each direct import, and fails closed when `deno.json` declares an
+  import `deno.lock` does not resolve, so a stale lockfile cannot hide a new
+  dependency.
+- `deno.json` declares `minimumDependencyAge` (`P1D`, excluding the internal
+  `@stsoftware`/`@stsoftwareau` scopes) (#616), so the policy is visible to
+  Deno's own tooling and to a reviewer reading the manifest, not just to the
+  gate script and a mutable repository variable.
 
 - Inspectable folds in the Sankey view (#538). Selecting a folded "other" band
   now lists what the per-layer fold swallowed, weakest contribution first, with

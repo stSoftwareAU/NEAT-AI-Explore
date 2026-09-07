@@ -83,10 +83,12 @@ take the fix **inside** the window. The override lever already exists — this
 section is the documented, deliberate path so responders do not have to
 improvise under pressure.
 
-`.github/workflows/upgrade-dependencies.yml` reads the quarantine window from
-the repository variable `VIBE_BUMP_QUARANTINE_HOURS` (default `24`) and exposes
-a `workflow_dispatch` trigger. To bypass the window for a confirmed,
-actively-exploited advisory:
+Both quarantine gates — `.github/workflows/upgrade-dependencies.yml` (the weekly
+bump) and `.github/workflows/dependency-quarantine.yml` (every pull request, a
+required status check) — read the window from the repository variable
+`VIBE_BUMP_QUARANTINE_HOURS` (default `24`), so one lever moves both. The
+upgrade workflow also exposes a `workflow_dispatch` trigger. To bypass the
+window for a confirmed, actively-exploited advisory:
 
 1. A repository **owner** sets the repository variable
    `VIBE_BUMP_QUARANTINE_HOURS` to `0` (**Settings → Secrets and variables →
@@ -98,7 +100,12 @@ actively-exploited advisory:
 3. **Record the CVE and the override decision** in the resulting PR description,
    so the deliberate trade-off is auditable.
 4. **Restore** `VIBE_BUMP_QUARANTINE_HOURS` to its default (`24`) once the fix
-   has merged, re-arming the quarantine gate for routine bumps.
+   has merged, re-arming both quarantine gates for routine bumps.
+
+A hand-applied emergency bump (steps 1–2 of the runbook above) opens an ordinary
+PR, so the required `dependency-quarantine` check applies to it as well: while
+the repository variable is `0` the fresh version is allowed through, and the
+window re-arms for every later PR the moment it is restored.
 
 This override is intended only for an actively-exploited advisory where waiting
 out the window is the greater risk. Outside an incident, leave the default
@@ -111,6 +118,8 @@ window in place.
 - Contributor-facing supply-chain conventions live in
   [`CONTRIBUTING.md`](CONTRIBUTING.md#-security-and-supply-chain).
 - The dependency-update **quarantine window** itself is owned by the
-  `security-scan` template and enforced by `scripts/jsr_quarantine_check.ts`.
+  `security-scan` template and enforced by `scripts/jsr_quarantine_check.ts`, on
+  the weekly bump (latest published versions) and on every pull request
+  (versions resolved in `deno.lock`, direct and transitive).
 - The emergency quarantine **bypass** path (`SCR-QUARANTINE-OVERRIDE`) is
   documented above under **Emergency quarantine bypass**.
