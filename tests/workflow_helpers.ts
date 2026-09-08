@@ -102,3 +102,11 @@ export function jobsWithCheckout(wf: Workflow): string[] {
     .filter(([, job]) => checkoutSteps(job).length > 0)
     .map(([name]) => name);
 }
+
+/** Return every `denoland/setup-deno` step in the given job. */
+export function setupDenoSteps(job: WorkflowJob | undefined): WorkflowStep[] {
+  return (job?.steps ?? []).filter((step) =>
+    typeof step.uses === "string" &&
+    step.uses.startsWith("denoland/setup-deno@")
+  );
+}

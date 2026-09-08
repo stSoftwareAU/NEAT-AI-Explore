@@ -13,6 +13,7 @@ import {
   jobsWithCheckout,
   listWorkflowFiles,
   loadWorkflow,
+  setupDenoSteps,
   type WorkflowJob,
 } from "./workflow_helpers.ts";
 
@@ -67,6 +68,26 @@ Deno.test("checkoutSteps handles missing jobs and empty step lists", () => {
   assertEquals(checkoutSteps(undefined).length, 0);
   assertEquals(checkoutSteps({}).length, 0);
   assertEquals(checkoutSteps({ steps: [] }).length, 0);
+});
+
+Deno.test("setupDenoSteps selects only denoland/setup-deno steps", () => {
+  const job: WorkflowJob = {
+    steps: [
+      { uses: "actions/checkout@abc" },
+      { uses: "denoland/setup-deno@def", with: { "deno-version": "v2.x" } },
+      { run: "deno test -A" },
+      { uses: "denoland/setup-deno-canary@def" },
+    ],
+  };
+  const steps = setupDenoSteps(job);
+  assertEquals(steps.length, 1);
+  assertEquals(steps[0].with?.["deno-version"], "v2.x");
+});
+
+Deno.test("setupDenoSteps handles missing jobs and empty step lists", () => {
+  assertEquals(setupDenoSteps(undefined).length, 0);
+  assertEquals(setupDenoSteps({}).length, 0);
+  assertEquals(setupDenoSteps({ steps: [] }).length, 0);
 });
 
 Deno.test("jobsWithCheckout names only jobs that check out", () => {
