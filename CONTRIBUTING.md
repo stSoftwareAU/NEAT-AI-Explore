@@ -173,6 +173,14 @@ GitHub renders Mermaid blocks natively.
   fails closed on a manifest entry the lockfile does not resolve.
 - GitHub Actions are pinned to commit SHAs, not floating tags. Keep them that
   way.
+- Six workflows open with the same `actions/checkout` + `denoland/setup-deno`
+  preamble. The pair cannot be factored into a local composite action — the
+  runner reads `uses: ./.github/actions/...` from the workspace, which only
+  exists once `actions/checkout` has run — so CI polices the copies instead:
+  they must agree on the pinned SHA and the requested `deno-version`, and no job
+  may install Deno before checking the repository out
+  (`tests/workflow_setup_deno_consistency_test.ts`). Bump the pin in all six, or
+  the gate fails.
 
 ---
 

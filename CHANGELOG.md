@@ -19,6 +19,18 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- The `actions/checkout` + `denoland/setup-deno` preamble, copy-pasted across
+  six workflows, can no longer drift apart unnoticed (#623). The pair itself
+  cannot be extracted: a local composite action is read from the workspace, so
+  the runner resolves it only _after_ `actions/checkout` has run, and a reusable
+  workflow runs as its own job rather than preparing the calling job's steps.
+  What was actually at risk — one copy left on an older `denoland/setup-deno`
+  pin or a different `deno-version` after a partial bump — is now a CI failure:
+  `tests/workflow_setup_deno_consistency_test.ts` fails when the six copies
+  disagree on the pinned SHA or the requested Deno version, or when a job
+  installs Deno without checking the repository out first. This mirrors the
+  existing single-SHA gate on `actions/checkout` (#293).
+
 - The a11y gate no longer installs whatever npm serves at run time (#617).
   `.github/workflows/a11y.yml` ran `npm install -g pa11y-ci http-server` with no
   version pin, so a hijacked or maliciously republished release of either tool —
