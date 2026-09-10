@@ -709,6 +709,44 @@ derivation dispatched to the Web Worker (Issue #560):
 
 ---
 
+## 🔀 Compare graph views (`/compare/`)
+
+`docs/compare/` is the shared entry point for the three candidate replacement
+views above. It loads no snapshot itself: it takes **one** snapshot URL and
+wires every candidate to it as a launcher card, so the three are judged on
+identical data (Issue #528, parent #522). The side-by-side `<iframe>` layout was
+removed as too heavy on phones (Issue #554); the launcher cards remain.
+
+- **Entry point**: `docs/compare/index.html`. Reach it from the **Compare graph
+  views** button on the Trace explorer's overview, or by navigating to
+  `/compare/` directly.
+- **One snapshot, three views** — the header's snapshot URL field seeds every
+  card. **Apply** re-points all three at the URL you typed; leaving it blank
+  opens each view on its own default snapshot. The URL travels through the
+  shared `snapshotUrl` query contract, and dangerous URL schemes are refused
+  before they reach a link.
+- **Cards** — one per candidate (**Layered DAG** `/dag/`, **Sankey contribution
+  flow** `/sankey/`, **Top-impact subgraph** `/subgraph/`), each stating its
+  tagline and which of the three #522 goals it serves best. The candidate list
+  and link-building live in the DOM-free `docs/shared/candidate_views.js`,
+  unit-tested by `tests/candidate_comparison_test.ts`.
+- **Evaluation** — the recorded comparison and recommended winner live in
+  `docs/archive/candidate-view-evaluation-528.md`.
+
+```mermaid
+flowchart LR
+    U["snapshot URL<br/>(field or ?snapshotUrl=)"] --> C["docs/compare/<br/>launcher cards"]
+    C --> D["/dag/ — layered DAG"]
+    C --> S["/sankey/ — contribution flow"]
+    C --> G["/subgraph/ — top-impact paths"]
+```
+
+![Compare graph views, desktop](docs/evidence/issue-554-compare-desktop.png)
+
+![Compare graph views, phone](docs/evidence/issue-554-compare-phone.png)
+
+---
+
 ## 🧭 Direction terminology (to avoid confusion)
 
 The NEAT network computation direction and the explorer navigation direction are
