@@ -3,11 +3,11 @@
   "imports": {
     "@astral/astral": "jsr:@astral/astral@^0.5.6",
     "@b-fuze/deno-dom": "jsr:@b-fuze/deno-dom@^0.1.56",
-    "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
-    "@std/path": "jsr:@std/path@^1.0.0",
-    "@std/yaml": "jsr:@std/yaml@^1.0.0",
+    "@std/http/file-server": "jsr:@std/http@^1.1.3/file-server",
+    "@std/path": "jsr:@std/path@^1.1.6",
+    "@std/yaml": "jsr:@std/yaml@^1.2.0",
     "jimp": "npm:jimp@1.6.1",
-    "playwright": "npm:playwright@1.60.0"
+    "playwright": "npm:playwright@1.63.0"
   },
   "minimumDependencyAge": {
     "age": "P1D",
