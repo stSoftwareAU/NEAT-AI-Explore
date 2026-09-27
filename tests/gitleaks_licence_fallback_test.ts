@@ -378,6 +378,17 @@ Deno.test("gitleaks workflow gates on a job-level licence (#651)", async () => {
     "env.GITLEAKS_LICENSE == ''",
     "the fallback must run exactly when the licensed action does not",
   );
+  // runFallbackStep injects these itself, so only this pins the step's env.
+  assertEquals(
+    fallback.env?.BASE_SHA,
+    "${{ github.event.pull_request.base.sha }}",
+    "the fallback's `run:` reads BASE_SHA under `set -u`",
+  );
+  assertEquals(
+    fallback.env?.HEAD_SHA,
+    "${{ github.event.pull_request.head.sha }}",
+    "the fallback's `run:` reads HEAD_SHA under `set -u`",
+  );
 });
 
 /**
