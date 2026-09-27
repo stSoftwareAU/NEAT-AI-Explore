@@ -14,6 +14,8 @@
 //   Issue #208) is excluded so that legacy formatting does not block new
 //   PRs. The lint applies to README.md and any other authored docs added
 //   in future.
+// - graft/ is a local, untracked tooling workspace (git-excluded) and is not
+//   authored repository content, so it is excluded as well.
 {
   "config": {
     "default": true,
@@ -26,6 +28,7 @@
   ],
   "ignores": [
     "docs/archive/**",
+    "graft/**",
     "node_modules/**"
   ]
 }
