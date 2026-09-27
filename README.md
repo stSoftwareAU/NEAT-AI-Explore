@@ -122,6 +122,13 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   — one component per JSR/npm package, carrying its purl and the integrity hash
   Deno already pinned — so a later advisory can be matched against exactly what
   was deployed (#358).
+- **Deno dependency cache**: every `denoland/setup-deno` step sets
+  `cache: true`, so `DENO_DIR` is cached under a key ending in the `deno.lock`
+  hash and restored from the `deno-cache-<os>-<arch>` prefix on a miss — PR runs
+  start warm instead of re-downloading the whole dependency graph. Keying
+  strictly on the lockfile is what stops the cache going stale, so
+  `tests/workflow_deno_cache_test.ts` refuses both a missing `cache:` and a
+  `cache-hash` override (#653).
 
 ### Adding a new entry page
 

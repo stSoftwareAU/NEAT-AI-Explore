@@ -38,6 +38,8 @@ jobs:
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
         with:
           deno-version: v2.x
+          # Cache DENO_DIR keyed on the deno.lock hash (#653).
+          cache: true
       - name: Format check
         run: deno fmt --check
       - name: Lint

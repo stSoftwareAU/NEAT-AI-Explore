@@ -36,6 +36,8 @@ jobs:
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
         with:
           deno-version: v2.x
+          # Cache DENO_DIR keyed on the deno.lock hash (#653).
+          cache: true
 
       # Refuse a PR whose version.json sits *behind* the base branch (#605).
       # A merge conflict that silently takes Develop's older version looks
