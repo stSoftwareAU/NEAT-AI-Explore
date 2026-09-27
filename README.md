@@ -951,7 +951,7 @@ classDiagram
 Tests use [Deno](https://deno.com/) and live in `tests/`. Run them with:
 
 ```bash
-deno test -A
+deno test -A --reporter=dot
 ```
 
 Or use the quality gate (format + lint + test):
@@ -970,7 +970,7 @@ graph LR
         direction LR
         fmt["📐 deno fmt<br/>--check"]
         lint["🔍 deno lint"]
-        test["🧪 deno test -A"]
+        test["🧪 deno test -A --reporter=dot"]
         fmt -->|"pass"| lint
         lint -->|"pass"| test
     end
@@ -996,10 +996,10 @@ following status check is **required** and blocks PR merge when it fails:
 - **`quality`** — the job from
   [`.github/workflows/deno-quality.yml`](.github/workflows/deno-quality.yml).
   This runs `deno fmt --check`, `deno lint`, `deno check` (repo-wide, including
-  `docs/`), and `deno test -A` with coverage. A failing `deno check` — for
-  example, the duplicate top-level identifier regression fixed in #201 — will
-  turn this check red and disable the **Merge** button until the underlying
-  issue is fixed.
+  `docs/`), and `deno test -A --reporter=dot` with coverage. A failing
+  `deno check` — for example, the duplicate top-level identifier regression
+  fixed in #201 — will turn this check red and disable the **Merge** button
+  until the underlying issue is fixed.
 
 Run `./quality.sh` locally before pushing to land green on the first attempt.
 See Issue #211 for the rationale and the configuration audit trail.

@@ -66,7 +66,7 @@ deno check helpers/ scripts/ tests/ docs/
 
 echo ""
 echo "==> Tests"
-deno test -A
+deno test -A --reporter=dot
 
 echo ""
 echo "==> OK"
