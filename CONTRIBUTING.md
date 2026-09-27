@@ -68,7 +68,8 @@ Every PR must pass `./quality.sh` cleanly before review. The script runs:
 1. `deno fmt --check` — formatting (Deno is strict; run `deno fmt` to fix).
 2. `deno lint` — linting (config in [`deno.json`](deno.json)).
 3. `deno check helpers/ scripts/ tests/` — TypeScript type checking.
-4. `deno test -A` — full test suite (Deno tests in `tests/`).
+4. `deno test -A --reporter=dot` — full test suite (Deno tests in `tests/`); the
+   dot reporter hides per-test pass lines but prints every failure in full.
 
 Run locally (always redirect stdin on unattended machines):
 

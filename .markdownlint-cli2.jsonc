@@ -14,6 +14,9 @@
 //   Issue #208) is excluded so that legacy formatting does not block new
 //   PRs. The lint applies to README.md and any other authored docs added
 //   in future.
+// - graft/ is a locally generated, untracked repo map (excluded via
+//   .git/info/exclude); markdownlint-cli2 does not honour git excludes, so it
+//   is ignored explicitly.
 // - graft/ is a local, untracked tooling workspace (git-excluded) and is not
 //   authored repository content, so it is excluded as well.
 {

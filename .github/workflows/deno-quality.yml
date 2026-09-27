@@ -49,7 +49,7 @@ jobs:
       # Run tests with coverage and upload to Codecov (Issue #1636).
       # The codecov-action is a no-op when no test files are found.
       - name: Tests with coverage
-        run: deno test -A --coverage=cov_profile
+        run: deno test -A --reporter=dot --coverage=cov_profile
       - name: Generate lcov coverage report
         run: deno coverage cov_profile --lcov --output=coverage.lcov
       # codecov/codecov-action@v5.5.4
