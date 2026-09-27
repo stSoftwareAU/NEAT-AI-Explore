@@ -38,15 +38,28 @@ async function loadTriggers(): Promise<Triggers> {
 }
 
 /** Minimal GitHub-style glob match: `**` spans `/`, `*` does not. */
+function globMatch(glob: string, file: string): boolean {
+  if (glob === "") return file === "";
+  if (glob.startsWith("**")) {
+    const rest = glob.slice(2);
+    for (let i = 0; i <= file.length; i++) {
+      if (globMatch(rest, file.slice(i))) return true;
+    }
+    return false;
+  }
+  if (glob[0] === "*") {
+    const rest = glob.slice(1);
+    for (let i = 0; i <= file.length; i++) {
+      if (globMatch(rest, file.slice(i))) return true;
+      if (file[i] === "/") break;
+    }
+    return false;
+  }
+  return file[0] === glob[0] && globMatch(glob.slice(1), file.slice(1));
+}
+
 function matchesAny(file: string, globs: string[]): boolean {
-  return globs.some((glob) => {
-    const re = glob
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*\*/g, "\u0000")
-      .replace(/\*/g, "[^/]*")
-      .replace(/\u0000/g, ".*");
-    return new RegExp(`^${re}$`).test(file);
-  });
+  return globs.some((glob) => globMatch(glob, file));
 }
 
 for (const event of ["pull_request", "push"]) {
