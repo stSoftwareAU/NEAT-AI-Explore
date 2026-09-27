@@ -13,8 +13,20 @@ on:
     # `milestone/*` glob so this gate also runs on milestone sub-issue PRs
     # (#497); without it those PRs merge into the milestone branch unchecked.
     branches: ["*", "milestone/*"]
+    # Only run when the scanned inputs change (#652): the job serves `docs/`
+    # and scans it with `pa11yci.json`, so a diff confined to `helpers/`,
+    # `scripts/` or `tests/` cannot change the result. Safe because this
+    # workflow is not a required status check (see `.github/rulesets/`).
+    paths:
+      - "docs/**"
+      - "pa11yci.json"
+      - ".github/workflows/a11y.yml"
   push:
     branches: [Develop]
+    paths:
+      - "docs/**"
+      - "pa11yci.json"
+      - ".github/workflows/a11y.yml"
 
 # Cancel superseded runs when a PR receives a new commit so the latest push
 # gets feedback fastest and we do not waste runner minutes on stale work
