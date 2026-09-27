@@ -33,6 +33,11 @@ const CASES: Case[] = [
   { workflow: "a11y.yml", job: "a11y", ref: "#455" },
   { workflow: "actionlint.yml", job: "actionlint", ref: "#456" },
   { workflow: "bash-syntax.yml", job: "bash-syntax", ref: "#588" },
+  {
+    workflow: "codeql.yml",
+    job: "analyze",
+    ref: "stSoftwareAU/VibeCoder#2716",
+  },
   { workflow: "deno-quality.yml", job: "quality", ref: "#457" },
   { workflow: "dependency-audit.yml", job: "audit", ref: "#458" },
   { workflow: "dependency-review.yml", job: "dependency-review", ref: "#459" },

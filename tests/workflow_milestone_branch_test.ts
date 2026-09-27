@@ -55,6 +55,11 @@ const EXEMPT = new Map<string, string>([
     "gates only PRs into Develop (`branches: [Develop]`) because the version " +
     "bump belongs to the rollup PR, not to milestone sub-issue PRs",
   ],
+  [
+    "codeql.yml",
+    "CodeQL advanced setup gates only PRs into Develop (`branches: [Develop]`), " +
+    "matching the default setup it replaces (stSoftwareAU/VibeCoder#2716)",
+  ],
 ]);
 
 /**
