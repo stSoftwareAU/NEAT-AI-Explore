@@ -56,6 +56,8 @@ jobs:
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
         with:
           deno-version: v2.x
+          # Cache DENO_DIR keyed on the deno.lock hash (#653).
+          cache: true
       - name: Audit resolved dependency tree
         # `deno audit` scans the resolved lockfile against the advisory
         # database and exits non-zero when a known vulnerability is found,
