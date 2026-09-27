@@ -1,6 +1,7 @@
 name: Gitleaks
 
-# Detect secrets in pull request diffs using gitleaks-action.
+# Detect secrets in pull request diffs using gitleaks-action, or the
+# open-source gitleaks CLI when no licence is available (#609, #651).
 #
 # Mirrors the canonical NEAT-AI pattern at
 # stSoftwareAU/NEAT-AI/.github/workflows/quality.yml. Third-party
@@ -31,6 +32,13 @@ jobs:
     # Cap the runner so a wedged gitleaks scan cannot hold the runner for the
     # GitHub default of 360 minutes (#257).
     timeout-minutes: 10
+    # Dependabot-authored PRs receive no Actions secrets, so the licence
+    # arrives empty and gitleaks-action exits with ErrLicense before scanning
+    # anything — green over an unscanned diff (#609). The `secrets` context is
+    # not available in a step-level `if:`, so expose the licence at job level
+    # and branch on `env` (#651).
+    env:
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -47,44 +55,29 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: git fetch origin "$BASE_REF:$BASE_REF" || true
-      # Dependabot-authored PRs receive no Actions secrets, so the licence
-      # arrives empty and gitleaks-action exits with ErrLicense before
-      # scanning anything — green over an unscanned diff (#609). Branch on
-      # whether the licence is actually present; the `secrets` context is not
-      # available in a step-level `if:`, so record it as a step output.
-      - name: Detect gitleaks licence
-        id: gitleaks_licence
-        env:
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-        run: |
-          set -euo pipefail
-          if [[ -n "$GITLEAKS_LICENSE" ]]; then
-            echo "licensed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "licensed=false" >> "$GITHUB_OUTPUT"
-          fi
       # gitleaks/gitleaks-action@v3.0.0 (runs on the supported Node 24
-      # runtime; v2.3.9 ran on the deprecated Node 20 — Issue #298).
+      # runtime; v2.3.9 ran on the deprecated Node 20 — Issue #298). Needs the
+      # org-level Gitleaks Pro licence (Issue #1636), read from the job env.
       - name: Detect secrets with gitleaks (licensed action)
-        if: steps.gitleaks_licence.outputs.licensed == 'true'
+        if: env.GITLEAKS_LICENSE != ''
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Org-level Gitleaks Pro licence (Issue #1636). Required for
-          # repos under stSoftwareAU/*; without it gitleaks-action exits
-          # with ErrLicense before scanning. Configure in repo or org
-          # secrets.
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-      # The free, open-source CLI needs no licence. `quality/gitleaks_scan.sh`
-      # fetches it at a pinned version, verifies it against its published
-      # SHA-256 checksum, and falls back to a whole-tree scan when the PR
-      # commit range is not reachable in the checkout — so this branch never
-      # reports success over an unscanned diff (#609).
+      # The free, open-source CLI needs no licence. `quality/gitleaks_scan.sh
+      # --install` fetches it at a pinned version and verifies its published
+      # SHA-256 checksum before it lands on PATH (#609, #651).
       - name: Detect secrets with gitleaks (open-source CLI fallback)
-        if: steps.gitleaks_licence.outputs.licensed != 'true'
+        if: env.GITLEAKS_LICENSE == ''
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          ./quality/gitleaks_scan.sh .
+          ./quality/gitleaks_scan.sh --install "$RUNNER_TEMP/gitleaks-cli"
+          export PATH="$RUNNER_TEMP/gitleaks-cli:$PATH"
+          # `gitleaks git --log-opts` exits 0 on a range git cannot resolve,
+          # so refuse one rather than report green over an unscanned diff.
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          gitleaks git --redact --no-banner --exit-code 1 \
+            --log-opts="${BASE_SHA}..${HEAD_SHA}" .
