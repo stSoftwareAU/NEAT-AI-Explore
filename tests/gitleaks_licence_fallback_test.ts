@@ -10,7 +10,7 @@
  * `quality/gitleaks_scan.sh` is the licence-less scanner CI runs instead. These
  * tests execute the committed script end-to-end against temporary git
  * repositories with a stubbed scanner binary, and execute the workflow's own
- * licence-detection `run:` block under `bash`, so the assertions are about real
+ * licence-less fallback `run:` block under `bash`, so the assertions are about real
  * behaviour rather than the source text.
  */
 
@@ -227,12 +227,13 @@ async function publishFakeRelease(
   dir: string,
   version: string,
   markerPath: string,
+  exitCode = 0,
 ): Promise<{ asset: string; sha256: string; baseUrl: string }> {
   const releaseDir = `${dir}/releases/v${version}`;
   await Deno.mkdir(releaseDir, { recursive: true });
   const stageDir = `${dir}/stage`;
   await Deno.mkdir(stageDir, { recursive: true });
-  await writeStubScanner(`${stageDir}/gitleaks`, markerPath);
+  await writeStubScanner(`${stageDir}/gitleaks`, markerPath, exitCode);
 
   const asset = `gitleaks_${version}_test.tar.gz`;
   const tar = await run("tar", [
@@ -350,90 +351,215 @@ async function gitleaksSteps(): Promise<WorkflowStep[]> {
   return job!.steps ?? [];
 }
 
-/** Execute the workflow's licence-detection block and read back its output. */
-async function detectLicence(
-  step: WorkflowStep,
-  licence: string,
-): Promise<string> {
-  const dir = await Deno.makeTempDir();
-  try {
-    const outputFile = `${dir}/github_output`;
-    await Deno.writeTextFile(outputFile, "");
-    const script = `${dir}/detect.sh`;
-    await Deno.writeTextFile(script, step.run ?? "");
-    const result = await run("bash", ["-e", script], {
-      env: {
-        PATH: Deno.env.get("PATH") ?? "",
-        GITHUB_OUTPUT: outputFile,
-        GITLEAKS_LICENSE: licence,
-      },
-    });
-    assertEquals(
-      result.code,
-      0,
-      `the licence-detection step must succeed\n${result.stderr}`,
-    );
-    const written = await Deno.readTextFile(outputFile);
-    const match = written.match(/^licensed=(.*)$/m);
-    assert(match !== null, `no \`licensed\` output written, got:\n${written}`);
-    return match![1];
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-  }
-}
-
-Deno.test("gitleaks workflow detects an absent licence (#609)", async () => {
-  const steps = await gitleaksSteps();
-  const detect = steps.find((s) =>
-    typeof s.run === "string" && s.id !== undefined
-  );
-  assert(
-    detect !== undefined && detect.id === "gitleaks_licence",
-    "gitleaks.yml must carry a `gitleaks_licence` detection step",
-  );
+Deno.test("gitleaks workflow gates on a job-level licence (#651)", async () => {
+  const wf = await loadWorkflow(GITLEAKS_WORKFLOW);
+  const job = wf.jobs?.gitleaks as { env?: Record<string, unknown> };
+  // The `secrets` context is not available in a step `if:`; `env` is.
   assertEquals(
-    await detectLicence(detect!, ""),
-    "false",
-    "an empty licence — what a Dependabot PR sees — must report licensed=false",
+    job.env?.GITLEAKS_LICENSE,
+    "${{ secrets.GITLEAKS_LICENSE }}",
+    "the licence must be exposed at job level so step `if:`s can read it",
   );
-  assertEquals(
-    await detectLicence(detect!, "dummy-licence-key"),
-    "true",
-    "a present licence must report licensed=true",
-  );
-});
 
-Deno.test("gitleaks workflow gates the licensed action and adds a fallback (#609)", async () => {
   const steps = await gitleaksSteps();
-
   const licensed = steps.find((s) =>
     typeof s.uses === "string" && s.uses.startsWith("gitleaks/gitleaks-action@")
   );
   assert(licensed !== undefined, "the licensed action must still be wired up");
   assertEquals(
     licensed!.if,
-    "steps.gitleaks_licence.outputs.licensed == 'true'",
+    "env.GITLEAKS_LICENSE != ''",
     "the licensed action must only run when a licence is actually present",
   );
 
+  const fallback = await fallbackStep();
+  assertEquals(
+    fallback.if,
+    "env.GITLEAKS_LICENSE == ''",
+    "the fallback must run exactly when the licensed action does not",
+  );
+  // runFallbackStep injects these itself, so only this pins the step's env.
+  assertEquals(
+    fallback.env?.BASE_SHA,
+    "${{ github.event.pull_request.base.sha }}",
+    "the fallback's `run:` reads BASE_SHA under `set -u`",
+  );
+  assertEquals(
+    fallback.env?.HEAD_SHA,
+    "${{ github.event.pull_request.head.sha }}",
+    "the fallback's `run:` reads HEAD_SHA under `set -u`",
+  );
+});
+
+/**
+ * The fleet audit's contract for "a licence-less scanner exists" (#651): a
+ * `run:` line that invokes the `gitleaks` binary itself, bare or by path.
+ * Mirrors `CLI_INVOCATION` in VibeCoder's `gitleaks_drift_scanner.ts`.
+ */
+const CLI_INVOCATION = /(?:^|[\s;&|(`])(?:\.{0,2}\/[\w./-]*)?gitleaks(?=\s|$)/m;
+
+Deno.test("gitleaks fallback step invokes the CLI where the audit can see it (#651)", async () => {
+  const fallback = await fallbackStep();
+  assert(
+    CLI_INVOCATION.test(fallback.run ?? ""),
+    "the fallback must call `gitleaks` directly, not only via a wrapper script",
+  );
+  // The pattern must not be satisfied by the wrapper's own name.
+  assertEquals(CLI_INVOCATION.test("./quality/gitleaks_scan.sh ."), false);
+});
+
+/** The licence-less step: the one `run:` that installs the pinned CLI. */
+async function fallbackStep(): Promise<WorkflowStep> {
+  const steps = await gitleaksSteps();
   const fallback = steps.find((s) =>
     typeof s.run === "string" && s.run.includes("quality/gitleaks_scan.sh")
   );
   assert(
     fallback !== undefined,
-    "gitleaks.yml must run the committed licence-less scanner as a fallback",
+    "gitleaks.yml must install the CLI via the committed gate script",
+  );
+  return fallback!;
+}
+
+/**
+ * Execute the workflow's fallback `run:` block, as the runner would, inside a
+ * temporary checkout. The CLI is "downloaded" from a local fake release so the
+ * real pinned-install path runs; the stub records the argv it was given.
+ */
+async function runFallbackStep(
+  opts: { baseSha: string; headSha: string; stubExit?: number },
+): Promise<{ result: RunResult; argv: string[] | null; head: string }> {
+  const fallback = await fallbackStep();
+  const dir = await Deno.makeTempDir();
+  try {
+    const repo = `${dir}/repo`;
+    const head = await initRepo(repo);
+    await Deno.mkdir(`${repo}/quality`);
+    await Deno.copyFile(SCAN_SCRIPT, `${repo}/quality/gitleaks_scan.sh`);
+    await Deno.chmod(`${repo}/quality/gitleaks_scan.sh`, 0o755);
+
+    const argvPath = `${dir}/argv.txt`;
+    const release = await publishFakeRelease(
+      dir,
+      "9.9.9",
+      argvPath,
+      opts.stubExit ?? 0,
+    );
+
+    const runnerTemp = `${dir}/runner-temp`;
+    await Deno.mkdir(runnerTemp);
+    await Deno.writeTextFile(`${dir}/step.sh`, fallback.run ?? "");
+    const result = await run("bash", [`${dir}/step.sh`], {
+      cwd: repo,
+      env: {
+        PATH: Deno.env.get("PATH") ?? "",
+        HOME: dir,
+        RUNNER_TEMP: runnerTemp,
+        BASE_SHA: opts.baseSha.replace("HEAD", head),
+        HEAD_SHA: opts.headSha.replace("HEAD", head),
+        GITLEAKS_VERSION: "9.9.9",
+        GITLEAKS_ASSET: release.asset,
+        GITLEAKS_SHA256: release.sha256,
+        GITLEAKS_BASE_URL: release.baseUrl,
+      },
+    });
+    const argv = await Deno.readTextFile(argvPath)
+      .then((t) => t.split("\n").filter((l) => l !== ""))
+      .catch(() => null);
+    return { result, argv, head };
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+}
+
+Deno.test("gitleaks fallback step invokes the CLI on the PR range (#651)", async () => {
+  const { result, argv, head } = await runFallbackStep({
+    baseSha: "HEAD",
+    headSha: "HEAD",
+  });
+  assertEquals(
+    result.code,
+    0,
+    `the fallback step must succeed\n${result.stdout}\n${result.stderr}`,
   );
   assertEquals(
-    fallback!.if,
-    "steps.gitleaks_licence.outputs.licensed != 'true'",
-    "the fallback must run exactly when the licensed action does not",
+    JSON.stringify(argv),
+    JSON.stringify([
+      "git",
+      "--redact",
+      "--no-banner",
+      "--exit-code",
+      "1",
+      `--log-opts=${head}..${head}`,
+      ".",
+    ]),
+    "the step must run the verified CLI directly over the PR commit range",
   );
+});
 
-  const env = (fallback!.env ?? {}) as Record<string, unknown>;
-  assert(
-    typeof env.BASE_SHA === "string" && typeof env.HEAD_SHA === "string",
-    `the fallback needs the PR commit range, got env=${JSON.stringify(env)}`,
-  );
+Deno.test("gitleaks fallback step fails on a detected leak (#651)", async () => {
+  const { result, argv } = await runFallbackStep({
+    baseSha: "HEAD",
+    headSha: "HEAD",
+    stubExit: 1,
+  });
+  assert(argv !== null, "the CLI must have been invoked");
+  assert(result.code !== 0, "a leak reported by the CLI must fail the step");
+});
+
+Deno.test("gitleaks fallback step refuses an unreachable range (#651)", async () => {
+  // `gitleaks git --log-opts` exits 0 on a range git cannot resolve, so the
+  // step must fail loud rather than report green over nothing.
+  const { result, argv } = await runFallbackStep({
+    baseSha: "0".repeat(40),
+    headSha: "HEAD",
+  });
+  assert(result.code !== 0, "an unreachable range must fail the step");
+  assertEquals(argv, null, "the CLI must not run over an unresolvable range");
+});
+
+Deno.test("gitleaks_scan.sh --install places the verified CLI in a directory (#651)", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const argv = `${dir}/argv.txt`;
+    const release = await publishFakeRelease(dir, "9.9.9", argv);
+    const env = {
+      PATH: Deno.env.get("PATH") ?? "",
+      HOME: dir,
+      GITLEAKS_VERSION: "9.9.9",
+      GITLEAKS_ASSET: release.asset,
+      GITLEAKS_BASE_URL: release.baseUrl,
+    };
+
+    const ok = await run("bash", [SCAN_SCRIPT, "--install", `${dir}/bin`], {
+      env: { ...env, GITLEAKS_SHA256: release.sha256 },
+    });
+    assertEquals(ok.code, 0, `install must succeed\n${ok.stderr}`);
+    const stat = await Deno.stat(`${dir}/bin/gitleaks`);
+    assert(stat.isFile, "the CLI must be installed as <dir>/gitleaks");
+    assertEquals(
+      await Deno.stat(argv).then(() => true).catch(() => false),
+      false,
+      "install mode must not run a scan",
+    );
+
+    const bad = await run("bash", [SCAN_SCRIPT, "--install", `${dir}/bad`], {
+      env: { ...env, GITLEAKS_SHA256: "f".repeat(64) },
+    });
+    assert(bad.code !== 0, "a tampered download must not be installed");
+    assertEquals(
+      await Deno.stat(`${dir}/bad/gitleaks`).then(() => true).catch(() =>
+        false
+      ),
+      false,
+      "an unverified binary must never land in the install directory",
+    );
+
+    const noDir = await run("bash", [SCAN_SCRIPT, "--install"], { env });
+    assert(noDir.code !== 0, "--install without a directory must fail loud");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });
 
 Deno.test("the committed scanner referenced by gitleaks.yml exists (#609)", async () => {

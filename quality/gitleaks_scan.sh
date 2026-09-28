@@ -18,6 +18,9 @@ set -euo pipefail
 # Usage:
 #   quality/gitleaks_scan.sh [TARGET_DIR]
 #     TARGET_DIR   Directory to scan. Defaults to the current directory.
+#   quality/gitleaks_scan.sh --install DIR
+#     Install the pinned, checksum-verified CLI as DIR/gitleaks without
+#     scanning, so a CI step can invoke `gitleaks` itself (#651).
 #
 # Environment:
 #   BASE_SHA, HEAD_SHA  Commit range to scan. When either is empty or not
@@ -32,7 +35,8 @@ set -euo pipefail
 #   GITLEAKS_BASE_URL   Release download location.
 #
 # Exit status:
-#   0  the scan completed and found no secrets
+#   0  the scan completed and found no secrets (or, with --install, the CLI was
+#      installed and verified)
 #   1  a secret was found, or the scanner could not be obtained and verified
 
 # To bump: pick a release from https://github.com/gitleaks/gitleaks/releases and
@@ -42,7 +46,7 @@ GITLEAKS_SHA256_LINUX_X64="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7c
 GITLEAKS_SHA256_LINUX_ARM64="e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
 GITLEAKS_BASE_URL="${GITLEAKS_BASE_URL:-https://github.com/gitleaks/gitleaks/releases/download}"
 
-TARGET_DIR="${1:-.}"
+TARGET_DIR="."
 BASE_SHA="${BASE_SHA:-}"
 HEAD_SHA="${HEAD_SHA:-}"
 
@@ -110,8 +114,25 @@ range_is_scannable() {
     git -C "$TARGET_DIR" cat-file -e "${HEAD_SHA}^{commit}" 2> /dev/null
 }
 
+# Place the verified CLI at DIR/gitleaks. Nothing lands in DIR unless the
+# download passed its checksum, so a caller can never pick up a tampered build.
+install_to() {
+  local dest="$1" bin
+  bin="$(install_gitleaks)"
+  mkdir -p "$dest" || die "could not create ${dest}"
+  mv "$bin" "${dest}/gitleaks" || die "could not install gitleaks into ${dest}"
+  echo "==> gitleaks: installed v${GITLEAKS_VERSION} to ${dest}/gitleaks"
+}
+
 main() {
   local bin
+  if [[ "${1:-}" == "--install" ]]; then
+    [[ -n "${2:-}" ]] || die "--install needs a destination directory"
+    install_to "$2"
+    return
+  fi
+  TARGET_DIR="${1:-.}"
+
   if [[ -n "${GITLEAKS_BIN:-}" ]]; then
     bin="$GITLEAKS_BIN"
     [[ -x "$bin" ]] || die "GITLEAKS_BIN=${bin} is not executable"
