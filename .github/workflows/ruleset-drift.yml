@@ -1,0 +1,57 @@
+name: Ruleset Drift
+
+# Keep `.github/rulesets/*.json` in step with the live rulesets (#658).
+#
+# The Develop mirror once listed `quality` and `dependency-quarantine` while
+# live required eight other contexts, and a PR trusted the stale file. This
+# job fetches every live ruleset and fails on any difference, so the mirror
+# stays a trustworthy view of branch protection. It only reads: changing a
+# live ruleset is an admin action and never happens here.
+#
+# Not a required check itself — the daily run catches a live change made in
+# the Settings UI, and the PR run catches an edit to the mirror.
+
+on:
+  pull_request:
+    # `*` does not cross a `/`, so add `milestone/*` for milestone sub-issue
+    # PRs (#497).
+    branches: ["*", "milestone/*"]
+  schedule:
+    # Daily, to catch live edits made outside a PR.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# Cancel superseded runs on a new push (#258).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only: the check reads the mirror and the rulesets API.
+permissions:
+  contents: read
+
+jobs:
+  ruleset-drift:
+    runs-on: ubuntu-latest
+    # A handful of API calls; cap well below the 360-minute default (#257).
+    timeout-minutes: 5
+    steps:
+      # actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # Never pushes, so keep the token out of .git/config.
+          persist-credentials: false
+      # denoland/setup-deno@v2.0.4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+        with:
+          deno-version: v2.x
+          # Cache DENO_DIR keyed on the deno.lock hash (#653).
+          cache: true
+      - name: Compare checked-in rulesets with live
+        # Fails on any difference, and on any API error (no silent pass).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -E # errtrace: keep ERR traps in functions/subshells (#557)
+          deno task rulesets:check

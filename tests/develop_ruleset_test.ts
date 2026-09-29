@@ -2,14 +2,15 @@
  * Tests for the Develop branch ruleset (Issue #211).
  *
  * The repo protects the default branch (Develop) with a GitHub ruleset that
- * lists `quality` (the job ID in .github/workflows/deno-quality.yml) as a
- * required status check, so a failing `deno fmt --check`, `deno lint`,
- * `deno check`, or `deno test` blocks PR merge.
+ * lists `Quality Gate` (the `name:` of the `quality` job in
+ * .github/workflows/deno-quality.yml) as a required status check, so a
+ * failing `deno fmt --check`, `deno lint`, `deno check`, or `deno test`
+ * blocks PR merge.
  *
  * `.github/rulesets/develop.json` is the settings-as-code mirror of the
- * live ruleset and is the audit trail for the configuration. This test
- * pins the JSON shape so an accidental edit that drops the `quality`
- * required-check or relaxes the rule set is caught locally.
+ * live ruleset, kept in step with it by `ruleset-drift.yml` (#658). This
+ * test pins the JSON shape so an accidental edit that drops the quality
+ * gate or relaxes the rule set is caught locally.
  */
 
 import { assert, assertEquals } from "./test_helpers.ts";
@@ -93,7 +94,7 @@ Deno.test("develop ruleset is actively enforced", async () => {
   assertEquals(ruleset.enforcement, "active");
 });
 
-Deno.test("develop ruleset requires the 'quality' status check (Issue #211)", async () => {
+Deno.test("develop ruleset requires the 'Quality Gate' status check (#211, #658)", async () => {
   const ruleset = await loadRuleset();
   const rule = findRule<RequiredStatusChecksRule>(
     ruleset.rules,
@@ -103,9 +104,10 @@ Deno.test("develop ruleset requires the 'quality' status check (Issue #211)", as
   const contexts = rule!.parameters.required_status_checks.map((c) =>
     c.context
   );
+  // A check context is the job's `name:`, not its id (#658).
   assert(
-    contexts.includes("quality"),
-    `'quality' must be a required status check, got: ${
+    contexts.includes("Quality Gate"),
+    `'Quality Gate' must be a required status check, got: ${
       JSON.stringify(contexts)
     }`,
   );

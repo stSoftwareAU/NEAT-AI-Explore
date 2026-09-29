@@ -41,6 +41,7 @@ const CASES: Case[] = [
   { workflow: "dependency-review.yml", ref: "#497" },
   { workflow: "gitleaks.yml", ref: "#494" },
   { workflow: "markdown-lint.yml", ref: "#495" },
+  { workflow: "ruleset-drift.yml", ref: "#658" },
   { workflow: "semgrep.yml", ref: "#496" },
   { workflow: "shellcheck.yml", ref: "#497" },
 ];

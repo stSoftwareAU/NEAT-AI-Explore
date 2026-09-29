@@ -10,9 +10,9 @@
  * publish recency.
  *
  * These tests assert the gate now runs on pull requests, in resolved
- * (`--lock`) mode so transitive packages are covered too, and that its job
- * is listed in the Develop ruleset's required status checks so it cannot be
- * bypassed. Repo-wide policies (SHA pinning, checkout consistency, job
+ * (`--lock`) mode so transitive packages are covered too. Making its job a
+ * required status check is an admin change to the live rulesets, tracked in
+ * #661; the checked-in mirror follows live (#658). Repo-wide policies (SHA pinning, checkout consistency, job
  * timeout, concurrency, persist-credentials) are enforced by their own
  * suites across every workflow and are not re-checked here.
  */
@@ -27,20 +27,6 @@ import {
 
 const QUARANTINE_WORKFLOW = "dependency-quarantine.yml";
 const QUARANTINE_JOB = "dependency-quarantine";
-const RULESET_PATH = new URL(
-  "../.github/rulesets/develop.json",
-  import.meta.url,
-);
-
-interface Ruleset {
-  rules: Array<{
-    type: string;
-    parameters?: {
-      required_status_checks?: Array<{ context: string }>;
-    };
-  }>;
-}
-
 /** Every `run:` script body across every job in a workflow. */
 function collectRunScripts(wf: Workflow): string[] {
   const out: string[] = [];
@@ -113,28 +99,6 @@ Deno.test("the PR gate reaches only the registries it age-checks against (#616)"
       "the gate must not run with blanket permissions",
     );
   }
-});
-
-Deno.test("the quarantine job is a required status check on Develop (#616)", async () => {
-  const ruleset = JSON.parse(
-    await Deno.readTextFile(RULESET_PATH),
-  ) as Ruleset;
-  const rule = ruleset.rules.find((r) => r.type === "required_status_checks");
-  assert(rule, "ruleset must include a 'required_status_checks' rule");
-  const contexts = (rule!.parameters?.required_status_checks ?? []).map((c) =>
-    c.context
-  );
-  assert(
-    contexts.includes(QUARANTINE_JOB),
-    `'${QUARANTINE_JOB}' must be a required status check so the gate cannot ` +
-      `be bypassed, got: ${JSON.stringify(contexts)}`,
-  );
-  const wf = await loadWorkflow(QUARANTINE_WORKFLOW);
-  assert(
-    wf.jobs?.[QUARANTINE_JOB] !== undefined,
-    `the required check '${QUARANTINE_JOB}' must name a job that exists in ` +
-      QUARANTINE_WORKFLOW,
-  );
 });
 
 Deno.test("every quarantine gate step can read the configured window (#616)", async () => {
