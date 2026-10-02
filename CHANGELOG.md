@@ -19,6 +19,14 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- `.github/rulesets/develop.json` had drifted from the live `Develop` ruleset:
+  it listed `quality` and `dependency-quarantine` while live requires
+  `update-version`, `a11y`, `gitleaks`, `markdownlint`, `dependency-review`,
+  `semgrep`, `shellcheck` and `Quality Gate`. Both mirrors are now exported from
+  live (new `milestone.json`), and `ruleset-drift.yml` /
+  `deno task
+  rulesets:check` fails on any future drift. A test also requires
+  every required context to be an unfiltered `pull_request` job (#658).
 - The `actions/checkout` + `denoland/setup-deno` preamble, copy-pasted across
   six workflows, can no longer drift apart unnoticed (#623). The pair itself
   cannot be extracted: a local composite action is read from the workspace, so
