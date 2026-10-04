@@ -1,0 +1,60 @@
+{
+  "_comment": "Settings-as-code mirror of the live ruleset 21880683 protecting Vibe Coder milestone/** branches: the Develop checks minus update-version (milestone PRs do not bump the version), non-strict. Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it.",
+  "name": "Vibe Coder milestone branches",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "refs/heads/milestone/**"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": true,
+        "required_status_checks": [
+          {
+            "context": "a11y",
+            "integration_id": 15368
+          },
+          {
+            "context": "gitleaks",
+            "integration_id": 15368
+          },
+          {
+            "context": "markdownlint",
+            "integration_id": 15368
+          },
+          {
+            "context": "dependency-review",
+            "integration_id": 15368
+          },
+          {
+            "context": "semgrep",
+            "integration_id": 15368
+          },
+          {
+            "context": "shellcheck",
+            "integration_id": 15368
+          },
+          {
+            "context": "Quality Gate",
+            "integration_id": 15368
+          }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": []
+}

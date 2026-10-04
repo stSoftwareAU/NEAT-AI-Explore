@@ -99,8 +99,9 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   24h) — closing the cron-window exposure to freshly-published malicious
   versions. `stSoftwareAU/*` scopes bypass the gate as internal.
 - **PR dependency quarantine**: `.github/workflows/dependency-quarantine.yml`
-  runs `scripts/jsr_quarantine_check.ts --lock deno.lock` on every pull request
-  and is a required status check on `Develop`. The scheduled gate above only
+  runs `scripts/jsr_quarantine_check.ts --lock deno.lock` on every pull request.
+  It is not yet a required status check on the live `Develop` ruleset — making
+  it one is an admin change tracked in #661. The scheduled gate above only
   guards the weekly bump, so a PR that hand-edited `deno.json`/`deno.lock` could
   adopt a package published minutes earlier with no publish-age check at all
   (#616). The PR gate ages the versions the branch actually **resolves** —
@@ -1002,19 +1003,57 @@ graph LR
 ### Required checks (branch protection)
 
 The default branch (**Develop**) is protected by the `Develop` repository
-ruleset (`.github/rulesets/develop.json` is the settings-as-code mirror). The
-following status check is **required** and blocks PR merge when it fails:
+ruleset, and `milestone/**` branches by the `Vibe Coder milestone branches`
+ruleset. `.github/rulesets/develop.json` and `.github/rulesets/milestone.json`
+are read-only mirrors of the live rulesets. The following status checks are
+**required** and block merge when they fail or never report:
 
-- **`quality`** — the job from
-  [`.github/workflows/deno-quality.yml`](.github/workflows/deno-quality.yml).
-  This runs `deno fmt --check`, `deno lint`, `deno check` (repo-wide, including
-  `docs/`), and `deno test -A --reporter=dot` with coverage. A failing
-  `deno check` — for example, the duplicate top-level identifier regression
-  fixed in #201 — will turn this check red and disable the **Merge** button
-  until the underlying issue is fixed.
+| Context             | Workflow                                                           | Develop | milestone |
+| ------------------- | ------------------------------------------------------------------ | ------- | --------- |
+| `Quality Gate`      | [`deno-quality.yml`](.github/workflows/deno-quality.yml)           | ✅      | ✅        |
+| `a11y`              | [`a11y.yml`](.github/workflows/a11y.yml)                           | ✅      | ✅        |
+| `gitleaks`          | [`gitleaks.yml`](.github/workflows/gitleaks.yml)                   | ✅      | ✅        |
+| `markdownlint`      | [`markdown-lint.yml`](.github/workflows/markdown-lint.yml)         | ✅      | ✅        |
+| `dependency-review` | [`dependency-review.yml`](.github/workflows/dependency-review.yml) | ✅      | ✅        |
+| `semgrep`           | [`semgrep.yml`](.github/workflows/semgrep.yml)                     | ✅      | ✅        |
+| `shellcheck`        | [`shellcheck.yml`](.github/workflows/shellcheck.yml)               | ✅      | ✅        |
+| `update-version`    | [`semver-bump.yml`](.github/workflows/semver-bump.yml)             | ✅      | —         |
+
+`Quality Gate` runs `deno fmt --check`, `deno lint`, `deno check` (repo-wide,
+including `docs/`) and `deno test -A --reporter=dot` with coverage. A failing
+`deno check` — for example, the duplicate top-level identifier regression fixed
+in #201 — turns it red and disables the **Merge** button (#211).
+
+**The live rulesets are the source of truth; the mirrors follow them (#658).**
+The Develop mirror once drifted to list `quality` and `dependency-quarantine`
+while live required the contexts above, and a PR trusted the stale file.
+[`ruleset-drift.yml`](.github/workflows/ruleset-drift.yml) now compares the
+mirrors with the live API on every pull request and nightly, and fails on any
+difference. Run the same check locally:
+
+```sh
+deno task rulesets:check
+```
+
+```mermaid
+flowchart LR
+    admin([Repo admin]) -->|edits| live[(Live rulesets<br/>GitHub API)]
+    live -->|export| mirror[.github/rulesets/*.json]
+    mirror --> drift{ruleset-drift.yml<br/>rulesets:check}
+    live --> drift
+    drift -->|identical| ok([green])
+    drift -->|differs| fail([red: update the mirror<br/>or ask an admin])
+    mirror --> req[ruleset_required_checks_test.ts]
+    req -->|each required context is an<br/>unfiltered pull_request job| ok
+```
+
+Because a required workflow that GitHub skips never reports its check, a
+workflow that produces a required context **must not** set a workflow-level
+`paths:` or `paths-ignore:` filter — the PR would wait on "Expected" forever.
+`tests/ruleset_required_checks_test.ts` enforces this, and that every required
+context is the name (or id) of a job with a `pull_request` trigger.
 
 Run `./quality.sh` locally before pushing to land green on the first attempt.
-See Issue #211 for the rationale and the configuration audit trail.
 
 ### Code-owner review for privileged CI paths
 
@@ -1032,9 +1071,8 @@ This is defence-in-depth on top of the generic single-review rule: a single
 contributor cannot quietly alter a privileged workflow to exfiltrate secrets,
 push to **Develop**, or publish content to the public GitHub Pages site without
 a workflow owner's sign-off. Like the rest of the ruleset, the
-`require_code_owner_review` change is settings-as-code only — a repo admin must
-re-apply `.github/rulesets/develop.json` to the live ruleset for it to take
-effect.
+`require_code_owner_review` setting lives in the live ruleset; only a repo admin
+can change it there, after which the mirror is updated to match (#658).
 
 ### Unit tests vs benchmarks
 

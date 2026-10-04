@@ -48,6 +48,7 @@ const CASES: Case[] = [
   },
   { workflow: "deploy.yml", job: "deploy", ref: "#460" },
   { workflow: "markdown-lint.yml", job: "markdownlint", ref: "#461" },
+  { workflow: "ruleset-drift.yml", job: "ruleset-drift", ref: "#658" },
   { workflow: "semgrep.yml", job: "semgrep", ref: "#462" },
   { workflow: "shellcheck.yml", job: "shellcheck", ref: "#463" },
 ];

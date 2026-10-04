@@ -36,6 +36,7 @@
   "tasks": {
     "lint": "deno lint",
     "fmt": "deno fmt",
-    "test": "deno test --allow-read --reporter=dot"
+    "test": "deno test --allow-read --reporter=dot",
+    "rulesets:check": "deno run --allow-read=.github/rulesets --allow-net=api.github.com --allow-env=GITHUB_TOKEN scripts/check_ruleset_drift.ts --repo stSoftwareAU/NEAT-AI-Explore"
   }
 }

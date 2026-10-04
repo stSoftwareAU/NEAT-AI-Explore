@@ -1,17 +1,23 @@
 {
-  "_comment": "Issue #211 — settings-as-code mirror of the live GitHub ruleset that protects the default branch (Develop). The `quality` job from .github/workflows/deno-quality.yml is listed as a required status check so a failing `deno check`, `deno fmt --check`, `deno lint`, or `deno test` blocks PR merge. Keep this file in sync with the live ruleset; edits here are not auto-applied — a repo admin must PUT this payload to /repos/stSoftwareAU/NEAT-AI-Explore/rulesets/11243690. Issue #616 — `dependency-quarantine` (the job in .github/workflows/dependency-quarantine.yml) is a required status check so a PR that hand-edits deno.json/deno.lock cannot merge without the 24-hour dependency-age gate. Issue #361 — `require_code_owner_review` is true so the .github/CODEOWNERS rules on privileged paths (.github/workflows/, .github/actions/, .github/rulesets/) are enforced at merge.",
+  "_comment": "Settings-as-code mirror of the live ruleset 11243690 that protects the default branch (Develop). Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. Required contexts are check-run names: a job's `name:` if set, else its id (#211 — the deno-quality.yml job reports as `Quality Gate`). A required workflow must not use a workflow-level `paths:`/`paths-ignore:` filter, or PRs wait on a check that never reports (tests/ruleset_required_checks_test.ts). #361 — require_code_owner_review enforces .github/CODEOWNERS on privileged paths. #616 — dependency-quarantine is not yet required live; making it required is an admin change tracked in #661. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it.",
   "name": "Develop",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
       "exclude": [],
-      "include": ["~DEFAULT_BRANCH"]
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -20,26 +26,69 @@
         "required_reviewers": [
           {
             "minimum_approvals": 1,
-            "file_patterns": ["*"],
-            "reviewer": { "id": 2166335, "type": "Team" }
+            "file_patterns": [
+              "*"
+            ],
+            "reviewer": {
+              "id": 2166335,
+              "type": "Team"
+            }
           }
         ],
         "require_code_owner_review": true,
+        "dismissal_restriction": {
+          "enabled": false,
+          "allowed_actors": []
+        },
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
-        "allowed_merge_methods": ["squash"]
+        "require_extra_approval_for_unattributed_changes": true,
+        "allowed_merge_methods": [
+          "squash"
+        ]
       }
     },
-    { "type": "required_linear_history" },
+    {
+      "type": "required_linear_history"
+    },
     {
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": true,
         "required_status_checks": [
-          { "context": "update-version", "integration_id": 15368 },
-          { "context": "quality" },
-          { "context": "dependency-quarantine" }
+          {
+            "context": "update-version",
+            "integration_id": 15368
+          },
+          {
+            "context": "a11y",
+            "integration_id": 15368
+          },
+          {
+            "context": "gitleaks",
+            "integration_id": 15368
+          },
+          {
+            "context": "markdownlint",
+            "integration_id": 15368
+          },
+          {
+            "context": "dependency-review",
+            "integration_id": 15368
+          },
+          {
+            "context": "semgrep",
+            "integration_id": 15368
+          },
+          {
+            "context": "shellcheck",
+            "integration_id": 15368
+          },
+          {
+            "context": "Quality Gate",
+            "integration_id": 15368
+          }
         ]
       }
     }

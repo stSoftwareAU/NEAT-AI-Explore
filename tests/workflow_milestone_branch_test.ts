@@ -41,6 +41,7 @@ const CASES: Case[] = [
   { workflow: "dependency-review.yml", ref: "#497" },
   { workflow: "gitleaks.yml", ref: "#494" },
   { workflow: "markdown-lint.yml", ref: "#495" },
+  { workflow: "ruleset-drift.yml", ref: "#658" },
   { workflow: "semgrep.yml", ref: "#496" },
   { workflow: "shellcheck.yml", ref: "#497" },
 ];
@@ -69,23 +70,35 @@ const EXEMPT = new Map<string, string>([
  * See docs: "Patterns to match branches and tags".
  */
 function branchGlobMatches(pattern: string, branch: string): boolean {
-  let regex = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i];
-    if (ch === "*") {
-      if (pattern[i + 1] === "*") {
-        regex += ".*"; // `**` crosses `/`
-        i++;
-      } else {
-        regex += "[^/]*"; // `*` stops at `/`
+  // Memoised matcher over (pattern index, branch index) pairs, so no
+  // RegExp is ever built from the pattern text.
+  const memo = new Map<string, boolean>();
+  const match = (pi: number, bi: number): boolean => {
+    const key = `${pi},${bi}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    let result: boolean;
+    if (pi === pattern.length) {
+      result = bi === branch.length;
+    } else if (pattern[pi] === "*") {
+      const crossesSlash = pattern[pi + 1] === "*"; // `**` crosses `/`
+      const next = crossesSlash ? pi + 2 : pi + 1;
+      result = match(next, bi);
+      for (let j = bi; !result && j < branch.length; j++) {
+        if (!crossesSlash && branch[j] === "/") break; // `*` stops at `/`
+        result = match(next, j + 1);
       }
-    } else if (ch === "?") {
-      regex += "[^/]";
+    } else if (pattern[pi] === "?") {
+      result = bi < branch.length && branch[bi] !== "/" &&
+        match(pi + 1, bi + 1);
     } else {
-      regex += ch.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+      result = bi < branch.length && branch[bi] === pattern[pi] &&
+        match(pi + 1, bi + 1);
     }
-  }
-  return new RegExp(`^${regex}$`).test(branch);
+    memo.set(key, result);
+    return result;
+  };
+  return match(0, 0);
 }
 
 /** True when any configured branch pattern matches the branch name. */
