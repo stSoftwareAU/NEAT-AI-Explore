@@ -107,12 +107,7 @@ the suite re-run:
 | `$RUNNER_TEMP` on the `upgrade.log` tee   | 1 (checkout empty), 2                       |
 | `$RUNNER_TEMP` on the Build summary `cat` | 3                                           |
 
-Docs sweep:
-`git grep -nE 'upgrade(-dry-run\.txt|\.log)|dry-run log|NO_COLOR|FORCE_COLOR'`
-outside `docs/archive`. The only hit outside the workflow is `README.md:95`
-("dry-run log embedded in the body"), which is still true. The hits in
-`docs/archive/pr-summary-158.md:25,54` are a historical record and stay
-unchanged.
+**Docs sweep** — grep: `upgrade-dry-run.txt`, `upgrade.log`, `NO_COLOR`, `FORCE_COLOR`, `RUNNER_TEMP`, `upgrade-dependencies`, "Upgrade dependencies", "Build summary", "dry-run log"; section: `README.md#-github-pages--pwa` ("Auto-bump workflow" bullet, `README.md:92-99`); no hits — the bullet was read through and stays true, since the dry-run log is still embedded in the PR body and no sentence says the logs are committed to the checkout
 
 ## Test Plan
 
