@@ -5,6 +5,8 @@
 !.gitattributes
 !.github
 !.markdownlint-cli2.jsonc
+# Build image and threat-model brief for Anthropic's OSS Scanner.
+!.oss-scanner
 
 # Python build artefacts (local tooling only)
 __pycache__/
