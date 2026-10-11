@@ -51,6 +51,10 @@
           {
             "context": "Quality Gate",
             "integration_id": 15368
+          },
+          {
+            "context": "dependency-quarantine",
+            "integration_id": 15368
           }
         ]
       }
