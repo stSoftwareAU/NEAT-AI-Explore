@@ -1,5 +1,5 @@
 {
-  "_comment": "Settings-as-code mirror of the live ruleset 21880683 protecting Vibe Coder milestone/** branches: the Develop checks minus update-version (milestone PRs do not bump the version), non-strict. Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it.",
+  "_comment": "Settings-as-code mirror of the live ruleset 21880683 protecting Vibe Coder milestone/** branches: the Develop checks minus update-version (milestone PRs do not bump the version), non-strict. Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it; the entry is the repository Admin role (actor_id 5), exported from live with an admin token (#663).",
   "name": "Vibe Coder milestone branches",
   "target": "branch",
   "enforcement": "active",
@@ -56,5 +56,11 @@
       }
     }
   ],
-  "bypass_actors": []
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ]
 }
