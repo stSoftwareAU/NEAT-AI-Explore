@@ -2,6 +2,9 @@ name: Bash Syntax
 
 on:
   pull_request:
+    # Draft PRs are work in progress (owner, 2026-10-23): CI runs
+    # once, when the PR is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
     # `*` does not cross a `/`, so it matches single-segment branches
     # (Develop, main) but never a `milestone/<slug>` branch. Add the
     # `milestone/*` glob so this gate also runs on milestone sub-issue PRs
@@ -20,6 +23,7 @@ permissions:
 
 jobs:
   bash-syntax:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     # Cap the runner so a wedged scan cannot hold it for the GitHub default of
     # 360 minutes (#257).
