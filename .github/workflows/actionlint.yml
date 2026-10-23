@@ -46,7 +46,7 @@ env:
 
 jobs:
   actionlint:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # Cap the runner so a wedged lint cannot hold it for the GitHub default
     # of 360 minutes (#257). actionlint scans a handful of files in seconds.

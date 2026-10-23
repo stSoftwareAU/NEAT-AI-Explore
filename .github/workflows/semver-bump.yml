@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-    if: ${{ (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref != 'Develop') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref != 'Develop') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     steps:
       - name: Checkout Code
         # actions/checkout@v6.0.2

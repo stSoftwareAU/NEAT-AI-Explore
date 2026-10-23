@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   ruleset-drift:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # A handful of API calls; cap well below the 360-minute default (#257).
     timeout-minutes: 5

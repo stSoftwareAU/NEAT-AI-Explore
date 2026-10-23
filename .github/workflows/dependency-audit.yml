@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   audit:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Dependency Audit
     runs-on: ubuntu-latest
     # Cap the runner so a wedged audit / registry hang cannot hold it for the

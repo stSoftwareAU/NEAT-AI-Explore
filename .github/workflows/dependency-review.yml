@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   dependency-review:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # Cap the runner so a wedged dependency-review-action cannot hold the
     # runner for the GitHub default of 360 minutes (#257).
