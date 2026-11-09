@@ -2,7 +2,7 @@
  * Generate PWA assets for NEAT-AI Explore — Deno port (Issue #227).
  *
  * Replaces the original `scripts/generate_pwa_assets.py` so the
- * verification stack is single-language Deno + npm:playwright + npm:jimp.
+ * verification stack is single-language Deno + npm:playwright.
  *
  * Outputs:
  * - docs/icons/icon-source.png
@@ -12,25 +12,18 @@
  * - docs/screenshots/{desktop,iphone,ipad}-inbound-modal.png
  * - docs/screenshots/graph-{desktop,desktop-focus,desktop-tilt}.png
  *
- * Raster library choice — jimp:
- *   The issue listed `sharp` as the preferred candidate, but sharp pulls in
- *   `@img/sharp-libvips-*` native binaries via its CJS loader, which Deno
- *   2.x only resolves when `nodeModulesDir: "auto"` is enabled. That would
- *   add a `node_modules/` directory to this otherwise pure-Deno repo —
- *   a regression the project's coding guidelines explicitly forbid.
- *
- *   Jimp is the next-preference candidate. It is pure JavaScript, has no
- *   native dependencies, runs cleanly under `--node-modules-dir=none`, and
- *   produces deterministic output given the same seed (verified locally).
+ * Raster helpers (blur, bicubic resize, PNG encode) live in ./raster.ts with
+ * no third-party dependency. jimp was dropped because its transitive zod@3 is
+ * flagged by GHSA-mrhx-c7xc-m3w5 and jimp has no release that clears it.
  *
  * Usage (from repo root):
  *   deno run -A --node-modules-dir=none scripts/generate_pwa_assets.ts
  */
 
-import { Jimp, ResizeStrategy } from "jimp";
 import { chromium, type Page } from "playwright";
 import { serveDir } from "@std/http/file-server";
 import { fromFileUrl } from "@std/path";
+import { blur, encodePng, type Pixels, resizeBicubic } from "./raster.ts";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -91,16 +84,10 @@ class SeededRng {
 // ---------------------------------------------------------------------------
 // RGBA pixel buffer + drawing primitives (port of the PIL ops used by the
 // Python original). Working in a flat Uint8ClampedArray keeps everything
-// deterministic and avoids per-pixel Jimp overhead.
+// deterministic and avoids per-pixel library overhead.
 // ---------------------------------------------------------------------------
 
 type RGBA = readonly [number, number, number, number];
-
-interface Pixels {
-  readonly w: number;
-  readonly h: number;
-  readonly data: Uint8ClampedArray;
-}
 
 function makePixels(w: number, h: number): Pixels {
   return { w, h, data: new Uint8ClampedArray(w * h * 4) };
@@ -283,21 +270,6 @@ const BG_BOTTOM: RGBA = [2, 6, 14, 255];
 const ACCENT: RGBA = [96, 165, 250, 255];
 const ACCENT2: RGBA = [45, 212, 191, 255];
 
-function pixelsToJimpImage(p: Pixels) {
-  // Jimp's RawImageData layout (bitmap.data) is a flat RGBA Buffer — we copy
-  // our Uint8ClampedArray straight in. Two-step (construct → set) is required
-  // because Jimp's constructor doesn't accept a raw pixel buffer.
-  const img = new Jimp({ width: p.w, height: p.h, color: 0x00000000 });
-  img.bitmap.data.set(p.data);
-  return img;
-}
-
-function jimpToPixels(img: ReturnType<typeof pixelsToJimpImage>): Pixels {
-  const w = img.bitmap.width;
-  const h = img.bitmap.height;
-  return { w, h, data: new Uint8ClampedArray(img.bitmap.data) };
-}
-
 /** Generate the 1024² source icon + a luminance "in-beam" mask. */
 function generateIcon(): { img: Pixels; beamMask: Uint8ClampedArray } {
   const w = BASE_SIZE;
@@ -338,13 +310,11 @@ function generateIcon(): { img: Pixels; beamMask: Uint8ClampedArray } {
     [beamTipX, beamTipY - Math.floor(farW / 2)],
   ];
 
-  // Beam mask (L-channel) — blurred via Jimp so node brightness lookup
+  // Beam mask (L-channel) — blurred via raster.ts so node brightness lookup
   // matches the Python original's GaussianBlur(radius ≈ 1.8% of base).
   const maskPixels = makePixels(w, w);
   fillPolygon(maskPixels, beamPoly, [255, 255, 255, 255]);
-  const maskImg = pixelsToJimpImage(maskPixels);
-  maskImg.blur(Math.max(1, Math.round(w * 0.018)));
-  const blurredMask = jimpToPixels(maskImg);
+  const blurredMask = blur(maskPixels, Math.max(1, Math.round(w * 0.018)));
   // Extract alpha (or red, since mask is greyscale white) into a flat array.
   const beamMask = new Uint8ClampedArray(w * w);
   for (let i = 0; i < beamMask.length; i++) {
@@ -464,7 +434,7 @@ function generateIcon(): { img: Pixels; beamMask: Uint8ClampedArray } {
 }
 
 // ---------------------------------------------------------------------------
-// ICO encoder — sharp/jimp don't write .ico, so we splice PNG payloads into
+// ICO encoder — raster.ts doesn't write .ico, so we splice PNG payloads into
 // a tiny custom container. Format: Wikipedia "ICO (file format)".
 // ---------------------------------------------------------------------------
 
@@ -506,27 +476,21 @@ function encodeIco(
 // Icon rendering — write source + every ICON_SIZES + multi-res favicon.
 // ---------------------------------------------------------------------------
 
-async function writePng(
-  img: ReturnType<typeof pixelsToJimpImage>,
-  path: string,
-): Promise<void> {
-  const buf = await img.getBuffer("image/png");
-  await Deno.writeFile(path, new Uint8Array(buf));
+async function writePng(img: Pixels, path: string): Promise<void> {
+  await Deno.writeFile(path, await encodePng(img));
 }
 
 async function renderIcons(): Promise<void> {
   await Deno.mkdir(ICONS_DIR, { recursive: true });
 
-  const { img: sourcePixels } = generateIcon();
-  const sourceImg = pixelsToJimpImage(sourcePixels);
+  const { img: sourceImg } = generateIcon();
 
   // Source PNG at full base size.
   await writePng(sourceImg, `${ICONS_DIR}/icon-source.png`);
 
-  // Resized icons (BICUBIC — Jimp 1.x's best-quality option short of Lanczos).
+  // Resized icons (bicubic, kernel widened on downscale to avoid aliasing).
   for (const size of ICON_SIZES) {
-    const resized = sourceImg.clone();
-    resized.resize({ w: size, h: size, mode: ResizeStrategy.BICUBIC });
+    const resized = resizeBicubic(sourceImg, size, size);
     await writePng(resized, `${ICONS_DIR}/icon-${size}x${size}.png`);
   }
 
@@ -535,10 +499,12 @@ async function renderIcons(): Promise<void> {
   const faviconImages: { width: number; height: number; png: Uint8Array }[] =
     [];
   for (const size of faviconSizes) {
-    const resized = sourceImg.clone();
-    resized.resize({ w: size, h: size, mode: ResizeStrategy.BICUBIC });
-    const buf = await resized.getBuffer("image/png");
-    faviconImages.push({ width: size, height: size, png: new Uint8Array(buf) });
+    const resized = resizeBicubic(sourceImg, size, size);
+    faviconImages.push({
+      width: size,
+      height: size,
+      png: await encodePng(resized),
+    });
   }
   const ico = encodeIco(faviconImages);
   await Deno.writeFile(`${DOCS_DIR}/favicon.ico`, ico);
