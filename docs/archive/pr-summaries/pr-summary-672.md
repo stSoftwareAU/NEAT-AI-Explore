@@ -4,6 +4,7 @@ The `Ruleset Drift` check was red because the live rulesets differ from the
 `.github/rulesets` mirror. The worker has no admin token
 (`permissions.admin: false`), so live cannot be changed from here; the mirror
 now follows live, which the README already names the source of truth (#658).
+
 Closes #672.
 
 - `develop.json`: `require_code_owner_review` is `false`, as on live.
