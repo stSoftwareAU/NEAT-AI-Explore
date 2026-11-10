@@ -1057,9 +1057,8 @@ Run `./quality.sh` locally before pushing to land green on the first attempt.
 
 ### Code-owner review for privileged CI paths
 
-[`.github/CODEOWNERS`](.github/CODEOWNERS) defines the owners of the privileged
-CI paths, which are reviewed by the `@stSoftwareAU/developers` team (Issue
-#361):
+Issue #361 added [`.github/CODEOWNERS`](.github/CODEOWNERS), which defines the
+owners of the privileged CI paths (the `@stSoftwareAU/developers` team):
 
 - `/.github/workflows/` — run with the repository's secrets and (for
   `deploy.yml`) an OIDC `id-token`.
