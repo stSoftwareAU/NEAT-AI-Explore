@@ -58,8 +58,7 @@ version.
   through `createImageBitmap` at the expected sizes (16 to 512,
   `icon-source.png` 1024) and `docs/favicon.ico` was written (4770 bytes). The
   regenerated binaries were reverted, not committed.
-- `./quality.sh` (final head):
-  `ok | 1263 passed | 0 failed`, `==> OK`.
+- `./quality.sh` (final head): `ok | 1263 passed | 0 failed`, `==> OK`.
 
 ## Reproduction
 
