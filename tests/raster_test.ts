@@ -51,18 +51,74 @@ Deno.test("resizeBicubic rejects a zero-sized target", () => {
   assert(threw);
 });
 
-Deno.test("encodePng round-trips through the platform decoder", async () => {
+Deno.test("boxBlur blurs both axes of a 2-D image", () => {
+  const img = solid(3, 3, 0);
+  img.data[(1 * 3 + 1) * 4] = 90; // red channel of the centre pixel
+  const red = [...boxBlur(img, 1).data].filter((_, i) => i % 4 === 0);
+  assertDeepEquals(red, [10, 10, 10, 10, 10, 10, 10, 10, 10]);
+});
+
+Deno.test("resizeBicubic resamples a 2-D gradient on each axis", () => {
+  const img = solid(8, 4, 0);
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 8; x++) {
+      const i = (y * 8 + x) * 4;
+      img.data[i] = x * 32;
+      img.data[i + 1] = y * 64;
+    }
+  }
+  const out = resizeBicubic(img, 4, 2);
+  assertDeepEquals([out.w, out.h], [4, 2]);
+  const px = (x: number, y: number, c: number) => out.data[(y * 4 + x) * 4 + c];
+  for (let y = 0; y < 2; y++) {
+    assertDeepEquals([0, 1, 2, 3].map((x) => px(x, y, 0)), [16, 80, 144, 208]);
+    for (let x = 0; x < 4; x++) assertEquals(px(x, y, 1), y === 0 ? 33 : 159);
+  }
+});
+
+Deno.test("encodePng output decodes through the platform decoder", async () => {
   const img = solid(3, 2, 0);
-  img.data.set([255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255]);
+  img.data.set([
+    255,
+    0,
+    0,
+    255,
+    0,
+    255,
+    0,
+    128,
+    0,
+    0,
+    255,
+    255,
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120,
+  ]);
   const png = await encodePng(img);
   assertDeepEquals([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  // IHDR width/height live at bytes 16..24 (big-endian).
   const dv = new DataView(png.buffer, png.byteOffset);
+  // IHDR: width/height at 16..24, then bit depth 8, RGBA (6), deflate, filter 0, no interlace.
   assertDeepEquals([dv.getUint32(16), dv.getUint32(20)], [3, 2]);
-  // Decode the IDAT payload back and compare scanlines.
-  const idatStart = 33 + 8;
+  assertDeepEquals([...png.subarray(24, 29)], [8, 6, 0, 0, 0]);
+  // createImageBitmap verifies chunk CRCs, so a wrong crc32 is rejected here.
+  const bmp = await createImageBitmap(
+    new Blob([png as BlobPart], { type: "image/png" }),
+  );
+  assertDeepEquals([bmp.width, bmp.height], [3, 2]);
+  bmp.close();
+  // Decode the IDAT payload and compare both scanlines (filter byte 0 each).
   const idatLen = dv.getUint32(33);
-  const z = png.subarray(idatStart, idatStart + idatLen);
+  const z = png.subarray(41, 41 + idatLen);
   const raw = new Uint8Array(
     await new Response(
       new Blob([z as BlobPart]).stream().pipeThrough(
@@ -71,8 +127,22 @@ Deno.test("encodePng round-trips through the platform decoder", async () => {
     ).arrayBuffer(),
   );
   assertEquals(raw.length, 2 * (3 * 4 + 1));
-  assertDeepEquals([...raw.subarray(1, 13)], [...img.data.subarray(0, 12)]);
   assertEquals(raw[0], 0);
+  assertDeepEquals([...raw.subarray(1, 13)], [...img.data.subarray(0, 12)]);
+  assertEquals(raw[13], 0);
+  assertDeepEquals([...raw.subarray(14, 26)], [...img.data.subarray(12, 24)]);
+});
+
+Deno.test("encodePng output with a corrupted IHDR CRC is rejected by the decoder", async () => {
+  const png = await encodePng(solid(3, 2, 7));
+  png[32] ^= 0xff; // last IHDR CRC byte
+  let threw = false;
+  try {
+    await createImageBitmap(new Blob([png as BlobPart], { type: "image/png" }));
+  } catch {
+    threw = true;
+  }
+  assert(threw, "decoder should reject a bad CRC (positive control)");
 });
 
 Deno.test("encodePng rejects a buffer that does not match the size", async () => {

@@ -12,8 +12,12 @@ Closes #672.
   live.
 - `tests/codeowners_test.ts`: dropped the test asserting the mirror had
   `require_code_owner_review: true`; the CODEOWNERS file tests stay.
-- `README.md`, test header and ruleset `_comment`s no longer say code-owner
-  review is enforced.
+- `README.md`, `.github/CODEOWNERS` header, test header and ruleset `_comment`s
+  no longer say code-owner review is enforced.
+- Dependency Audit fix: `npm:jimp` is removed from `deno.json` and `deno.lock`
+  (it pulled in a `zod` version affected by GHSA-mrhx-c7xc-m3w5).
+  `scripts/raster.ts` (new, dependency-free: `boxBlur`, `resizeBicubic`,
+  `encodePng`) replaces it in `scripts/generate_pwa_assets.ts`.
 
 Version bump: no `version.json` change; the merged commit records the final
 version.
@@ -47,7 +51,15 @@ version.
 - This branch: `deno task rulesets:check` prints
   `2 rulesets in sync with stSoftwareAU/NEAT-AI-Explore` (unauthenticated, so
   `bypass_actors` is not compared; CI runs it with a token).
-- `./quality.sh`: `ok | 1253 passed | 0 failed`, `==> OK`.
+- Asset generator:
+  `deno run -A --node-modules-dir=none scripts/generate_pwa_assets.ts` wrote the
+  icons and favicon with the new helpers, then stopped at the screenshot step
+  (Playwright browsers not installed here). All 12 `docs/icons/*.png` decoded
+  through `createImageBitmap` at the expected sizes (16 to 512,
+  `icon-source.png` 1024) and `docs/favicon.ico` was written (4770 bytes). The
+  regenerated binaries were reverted, not committed.
+- `./quality.sh` (earlier head, before the raster test additions):
+  `ok | 1253 passed | 0 failed`, `==> OK`.
 
 ## Reproduction
 
@@ -65,6 +77,13 @@ version.
   "develop ruleset enables code-owner review (#361)"
   - Required by: "the mirror is deliberately changed to match live" (live has
     `false`; the drift check would otherwise fail).
+- Added `tests/raster_test.ts` (10 tests at head), covering `scripts/raster.ts`.
+  Added in review: 2-D `boxBlur` (3x3), 2-D `resizeBicubic` (8x4 to 4x2),
+  `encodePng` decoded via `createImageBitmap` with IHDR bytes 24..28 and both
+  scanlines checked, and a corrupted-CRC rejection control. Breaks checked red:
+  `resizeAxis` vertical index `(line * w + t.i)` (gradient test), blur
+  `stride = 4` (flat and 2-D blur tests), `ihdr[9] = 2` and a wrong CRC
+  polynomial (PNG test).
 - `deno task test` on the codeowners, drift, required-checks, quarantine and
   milestone-branch tests: passed.
 - `./quality.sh`: passed.
