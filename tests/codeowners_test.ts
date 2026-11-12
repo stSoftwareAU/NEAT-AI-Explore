@@ -3,19 +3,20 @@
  *
  * The repo ships privileged workflows under `.github/workflows/` that run
  * with the repository's secrets and (for `deploy.yml`) an OIDC `id-token`.
- * Without a CODEOWNERS file and code-owner review, a single contributor
- * could quietly alter a privileged workflow to exfiltrate secrets, push to
- * the default branch, or publish attacker-controlled content to the public
- * GitHub Pages site. A CODEOWNERS rule on those paths plus
- * `require_code_owner_review: true` in the ruleset is the defence-in-depth
- * the generic single-review rule does not provide.
+ * Without a CODEOWNERS file, a single contributor could quietly alter a
+ * privileged workflow to exfiltrate secrets, push to the default branch, or
+ * publish attacker-controlled content to the public GitHub Pages site.
+ * A CODEOWNERS rule on those paths documents who owns them. Note that
+ * `require_code_owner_review` is currently `false` on the live Develop
+ * ruleset (#672), so GitHub does not enforce CODEOWNERS at merge; these
+ * tests do not assert that it is enforced.
  *
- * These tests parse the committed CODEOWNERS file (the source of truth) and
- * the settings-as-code ruleset mirror, so an accidental edit that drops the
- * privileged-path coverage or relaxes the code-owner gate is caught locally.
+ * These tests parse the committed CODEOWNERS file (the source of truth), so
+ * an accidental edit that drops the privileged-path coverage or the owning
+ * team is caught locally.
  */
 
-import { assert, assertEquals } from "./test_helpers.ts";
+import { assert } from "./test_helpers.ts";
 
 /** GitHub recognises CODEOWNERS in these three locations, in this order. */
 const CODEOWNERS_LOCATIONS = [
@@ -117,21 +118,4 @@ Deno.test("every CODEOWNERS rule names at least one owner (#361)", async () => {
       `CODEOWNERS rule for ${rule.pattern} must name at least one owner`,
     );
   }
-});
-
-Deno.test("develop ruleset enables code-owner review (#361)", async () => {
-  const url = new URL("../.github/rulesets/develop.json", import.meta.url);
-  const ruleset = JSON.parse(await Deno.readTextFile(url)) as {
-    rules: Array<{
-      type: string;
-      parameters?: { require_code_owner_review?: boolean };
-    }>;
-  };
-  const pr = ruleset.rules.find((r) => r.type === "pull_request");
-  assert(pr, "ruleset must include a 'pull_request' rule");
-  assertEquals(
-    pr!.parameters?.require_code_owner_review,
-    true,
-    "require_code_owner_review must be true so CODEOWNERS is enforced at merge",
-  );
 });

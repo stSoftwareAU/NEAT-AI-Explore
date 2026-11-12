@@ -1057,22 +1057,19 @@ Run `./quality.sh` locally before pushing to land green on the first attempt.
 
 ### Code-owner review for privileged CI paths
 
-Changes under the privileged CI paths require a review from the
-[`.github/CODEOWNERS`](.github/CODEOWNERS) reviewing team
-(`@stSoftwareAU/developers`), enforced by `"require_code_owner_review": true` in
-the `Develop` ruleset (Issue #361):
+Issue #361 added [`.github/CODEOWNERS`](.github/CODEOWNERS), which defines the
+owners of the privileged CI paths (the `@stSoftwareAU/developers` team):
 
 - `/.github/workflows/` — run with the repository's secrets and (for
   `deploy.yml`) an OIDC `id-token`.
 - `/.github/actions/` — composite/local actions invoked by those workflows.
 - `/.github/rulesets/` — the branch-protection controls themselves.
 
-This is defence-in-depth on top of the generic single-review rule: a single
-contributor cannot quietly alter a privileged workflow to exfiltrate secrets,
-push to **Develop**, or publish content to the public GitHub Pages site without
-a workflow owner's sign-off. Like the rest of the ruleset, the
-`require_code_owner_review` setting lives in the live ruleset; only a repo admin
-can change it there, after which the mirror is updated to match (#658).
+CODEOWNERS defines these owners, but `"require_code_owner_review"` is currently
+`false` in the live `Develop` ruleset, so GitHub does not enforce code-owner
+review at merge (#672). If a repo admin enables `require_code_owner_review` on
+live, they must update `.github/rulesets/develop.json` to match (#658) and
+restore a test that asserts it.
 
 ### Unit tests vs benchmarks
 
