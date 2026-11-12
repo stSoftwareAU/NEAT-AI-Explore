@@ -2,7 +2,7 @@
  * Generate PWA assets for NEAT-AI Explore — Deno port (Issue #227).
  *
  * Replaces the original `scripts/generate_pwa_assets.py` so the
- * verification stack is single-language Deno + npm:playwright.
+ * verification stack is single-language Deno + npm:playwright + the pure-Deno helpers in scripts/raster.ts.
  *
  * Outputs:
  * - docs/icons/icon-source.png
@@ -12,18 +12,20 @@
  * - docs/screenshots/{desktop,iphone,ipad}-inbound-modal.png
  * - docs/screenshots/graph-{desktop,desktop-focus,desktop-tilt}.png
  *
- * Raster helpers (blur, bicubic resize, PNG encode) live in ./raster.ts with
- * no third-party dependency. jimp was dropped because its transitive zod@3 is
- * flagged by GHSA-mrhx-c7xc-m3w5 and jimp has no release that clears it.
+ * Raster library choice — none:
+ *   `sharp` needs native binaries (and `node_modules/`), and `jimp` pins
+ *   zod ^3, which GHSA-mrhx-c7xc-m3w5 flags with no patched 3.x release.
+ *   The generator only needs a box blur, a bicubic resize and a PNG
+ *   encoder, so scripts/raster.ts provides them with no dependencies.
  *
  * Usage (from repo root):
  *   deno run -A --node-modules-dir=none scripts/generate_pwa_assets.ts
  */
 
+import { boxBlur, encodePng, resizeBicubic } from "./raster.ts";
 import { chromium, type Page } from "playwright";
 import { serveDir } from "@std/http/file-server";
 import { fromFileUrl } from "@std/path";
-import { blur, encodePng, type Pixels, resizeBicubic } from "./raster.ts";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -88,6 +90,12 @@ class SeededRng {
 // ---------------------------------------------------------------------------
 
 type RGBA = readonly [number, number, number, number];
+
+interface Pixels {
+  readonly w: number;
+  readonly h: number;
+  readonly data: Uint8ClampedArray;
+}
 
 function makePixels(w: number, h: number): Pixels {
   return { w, h, data: new Uint8ClampedArray(w * h * 4) };
@@ -310,11 +318,11 @@ function generateIcon(): { img: Pixels; beamMask: Uint8ClampedArray } {
     [beamTipX, beamTipY - Math.floor(farW / 2)],
   ];
 
-  // Beam mask (L-channel) — blurred via raster.ts so node brightness lookup
+  // Beam mask (L-channel) — blurred via boxBlur so node brightness lookup
   // matches the Python original's GaussianBlur(radius ≈ 1.8% of base).
   const maskPixels = makePixels(w, w);
   fillPolygon(maskPixels, beamPoly, [255, 255, 255, 255]);
-  const blurredMask = blur(maskPixels, Math.max(1, Math.round(w * 0.018)));
+  const blurredMask = boxBlur(maskPixels, Math.max(1, Math.round(w * 0.018)));
   // Extract alpha (or red, since mask is greyscale white) into a flat array.
   const beamMask = new Uint8ClampedArray(w * w);
   for (let i = 0; i < beamMask.length; i++) {
@@ -434,7 +442,7 @@ function generateIcon(): { img: Pixels; beamMask: Uint8ClampedArray } {
 }
 
 // ---------------------------------------------------------------------------
-// ICO encoder — raster.ts doesn't write .ico, so we splice PNG payloads into
+// ICO encoder — neither sharp nor our PNG encoder writes .ico, so we splice PNG payloads into
 // a tiny custom container. Format: Wikipedia "ICO (file format)".
 // ---------------------------------------------------------------------------
 
@@ -488,7 +496,7 @@ async function renderIcons(): Promise<void> {
   // Source PNG at full base size.
   await writePng(sourceImg, `${ICONS_DIR}/icon-source.png`);
 
-  // Resized icons (bicubic, kernel widened on downscale to avoid aliasing).
+  // Resized icons (bicubic, Catmull-Rom kernel).
   for (const size of ICON_SIZES) {
     const resized = resizeBicubic(sourceImg, size, size);
     await writePng(resized, `${ICONS_DIR}/icon-${size}x${size}.png`);
