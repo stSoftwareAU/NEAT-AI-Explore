@@ -7,9 +7,10 @@
  * privileged workflow to exfiltrate secrets, push to the default branch, or
  * publish attacker-controlled content to the public GitHub Pages site.
  * A CODEOWNERS rule on those paths documents who owns them. Note that
- * `require_code_owner_review` is currently `false` on the live Develop
- * ruleset (#672), so GitHub does not enforce CODEOWNERS at merge; these
- * tests do not assert that it is enforced.
+ * `require_code_owner_review` is currently `true` on the live Develop
+ * ruleset (#672), so GitHub enforces CODEOWNERS at merge; these tests only
+ * check the committed CODEOWNERS file, and the ruleset-drift check keeps the
+ * mirror in step with live.
  *
  * These tests parse the committed CODEOWNERS file (the source of truth), so
  * an accidental edit that drops the privileged-path coverage or the owning

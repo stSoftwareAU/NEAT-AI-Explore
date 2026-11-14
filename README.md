@@ -1065,11 +1065,10 @@ owners of the privileged CI paths (the `@stSoftwareAU/developers` team):
 - `/.github/actions/` — composite/local actions invoked by those workflows.
 - `/.github/rulesets/` — the branch-protection controls themselves.
 
-CODEOWNERS defines these owners, but `"require_code_owner_review"` is currently
-`false` in the live `Develop` ruleset, so GitHub does not enforce code-owner
-review at merge (#672). If a repo admin enables `require_code_owner_review` on
-live, they must update `.github/rulesets/develop.json` to match (#658) and
-restore a test that asserts it.
+CODEOWNERS defines these owners, and `"require_code_owner_review"` is `true` in
+the live `Develop` ruleset, so GitHub requires a code-owner review at merge. The
+checked-in mirror `.github/rulesets/develop.json` follows live (#658, #672); if
+a repo admin changes the setting on live, they must update the mirror to match.
 
 ### Unit tests vs benchmarks
 
