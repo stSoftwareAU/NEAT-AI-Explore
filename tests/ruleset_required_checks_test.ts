@@ -8,10 +8,11 @@
  * check. #656 nearly shipped the second case because the mirror said `a11y`
  * was not required. The rulesets are kept in step with live by
  * `ruleset-drift.yml`, so this test holds against the real branch protection.
+ * The README required-checks table is also checked against the mirrors (#674).
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { assert } from "./test_helpers.ts";
+import { assert, assertEquals } from "./test_helpers.ts";
 import { listWorkflowFiles, WORKFLOWS_DIR } from "./workflow_helpers.ts";
 import {
   loadCheckedInRulesets,
@@ -110,4 +111,96 @@ Deno.test("no required workflow has a workflow-level paths filter (#658)", async
       }
     }
   }
+});
+
+Deno.test("README required-checks table matches the ruleset mirrors (#674)", async () => {
+  const readme = await Deno.readTextFile(
+    new URL("../README.md", import.meta.url),
+  );
+  const lines = readme.split("\n");
+  const start = lines.findIndex((l) =>
+    l.trim() === "### Required checks (branch protection)"
+  );
+  assert(
+    start >= 0,
+    "README.md: '### Required checks (branch protection)' not found",
+  );
+  let end = lines.findIndex((l, i) => i > start && l.startsWith("#"));
+  if (end < 0) end = lines.length;
+  const rows = lines.slice(start + 1, end).filter((l) => l.startsWith("|"));
+  assert(
+    rows.length > 0,
+    "README.md: required-checks section has no table rows",
+  );
+
+  const cells = (row: string) =>
+    row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) =>
+      c.trim()
+    );
+  const header = cells(rows[0]);
+  const col = (name: string) => {
+    const i = header.indexOf(name);
+    assert(i >= 0, `README.md: table has no '${name}' column`);
+    return i;
+  };
+  const iContext = col("Context");
+  const iWorkflow = col("Workflow");
+  const columns = [
+    { name: "Develop", file: "develop.json", index: col("Develop") },
+    { name: "milestone", file: "milestone.json", index: col("milestone") },
+  ];
+  const dataRows = rows.slice(1).map(cells).filter((c) =>
+    !c.every((x) => /^:?-+:?$/.test(x))
+  );
+  assert(
+    dataRows.length > 0,
+    "README.md: required-checks table has no data rows",
+  );
+
+  const rulesets = await loadCheckedInRulesets(RULESETS_DIR);
+  const required = new Map<string, Set<string>>();
+  for (const { file } of columns) {
+    const ruleset = rulesets.get(file);
+    assert(ruleset, `expected checked-in ruleset ${file}`);
+    required.set(file, new Set(requiredContexts(ruleset!)));
+  }
+  const reporters = await checkReporters();
+
+  const tableContexts = new Set<string>();
+  for (const row of dataRows) {
+    const context = /`([^`]+)`/.exec(row[iContext])?.[1];
+    assert(
+      context,
+      `README.md: no backticked context in row '${row[iContext]}'`,
+    );
+    tableContexts.add(context!);
+    const linked = /\(\.github\/workflows\/([^)]+)\)/.exec(row[iWorkflow])?.[1];
+    assert(linked, `README.md: '${context}' has no workflow link`);
+    assertEquals(
+      linked,
+      reporters.get(context!)?.workflow,
+      `README.md: '${context}' links ${linked}, not the workflow that reports it`,
+    );
+    for (const { name, file, index } of columns) {
+      const cell = row[index];
+      assert(
+        cell === "✅" || cell === "—",
+        `README.md: '${context}' ${name} cell must be ✅ or —, got '${cell}'`,
+      );
+      assertEquals(
+        cell === "✅",
+        required.get(file)!.has(context!),
+        `README.md: '${context}' ${name} cell '${cell}' disagrees with ${file}`,
+      );
+    }
+  }
+
+  const union = new Set([...required.values()].flatMap((s) => [...s]));
+  const missing = [...union].filter((c) => !tableContexts.has(c));
+  const extra = [...tableContexts].filter((c) => !union.has(c));
+  assert(
+    missing.length === 0 && extra.length === 0,
+    `README.md required-checks table out of step with rulesets: ` +
+      `missing [${missing.join(", ")}], extra [${extra.join(", ")}]`,
+  );
 });

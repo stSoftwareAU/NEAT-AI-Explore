@@ -100,15 +100,16 @@ Pages**. The published site lives in `docs/` (mirrors the approach used in
   versions. `stSoftwareAU/*` scopes bypass the gate as internal.
 - **PR dependency quarantine**: `.github/workflows/dependency-quarantine.yml`
   runs `scripts/jsr_quarantine_check.ts --lock deno.lock` on every pull request.
-  It is not yet a required status check on the live `Develop` ruleset — making
-  it one is an admin change tracked in #661. The scheduled gate above only
-  guards the weekly bump, so a PR that hand-edited `deno.json`/`deno.lock` could
-  adopt a package published minutes earlier with no publish-age check at all
-  (#616). The PR gate ages the versions the branch actually **resolves** —
-  transitive packages included — rather than the newest release on the registry,
-  so an unrelated PR is unaffected by someone else publishing today. It also
-  fails closed when `deno.json` declares an import `deno.lock` never resolved,
-  so a stale lockfile cannot hide a new dependency. `deno.json`'s
+  It is a required status check on both the `Develop` and
+  `Vibe Coder milestone branches` rulesets (#661), so a PR whose dependencies
+  fail the publish-age check cannot merge. The scheduled gate above only guards
+  the weekly bump, so a PR that hand-edited `deno.json`/`deno.lock` could adopt
+  a package published minutes earlier with no publish-age check at all (#616).
+  The PR gate ages the versions the branch actually **resolves** — transitive
+  packages included — rather than the newest release on the registry, so an
+  unrelated PR is unaffected by someone else publishing today. It also fails
+  closed when `deno.json` declares an import `deno.lock` never resolved, so a
+  stale lockfile cannot hide a new dependency. `deno.json`'s
   `minimumDependencyAge` (`P1D`, excluding internal `@stsoftwareau` scopes)
   states the same floor declaratively for Deno's own tooling.
 - **Dependency audit workflow**: `.github/workflows/dependency-audit.yml` runs
@@ -1008,16 +1009,17 @@ ruleset. `.github/rulesets/develop.json` and `.github/rulesets/milestone.json`
 are read-only mirrors of the live rulesets. The following status checks are
 **required** and block merge when they fail or never report:
 
-| Context             | Workflow                                                           | Develop | milestone |
-| ------------------- | ------------------------------------------------------------------ | ------- | --------- |
-| `Quality Gate`      | [`deno-quality.yml`](.github/workflows/deno-quality.yml)           | ✅      | ✅        |
-| `a11y`              | [`a11y.yml`](.github/workflows/a11y.yml)                           | ✅      | ✅        |
-| `gitleaks`          | [`gitleaks.yml`](.github/workflows/gitleaks.yml)                   | ✅      | ✅        |
-| `markdownlint`      | [`markdown-lint.yml`](.github/workflows/markdown-lint.yml)         | ✅      | ✅        |
-| `dependency-review` | [`dependency-review.yml`](.github/workflows/dependency-review.yml) | ✅      | ✅        |
-| `semgrep`           | [`semgrep.yml`](.github/workflows/semgrep.yml)                     | ✅      | ✅        |
-| `shellcheck`        | [`shellcheck.yml`](.github/workflows/shellcheck.yml)               | ✅      | ✅        |
-| `update-version`    | [`semver-bump.yml`](.github/workflows/semver-bump.yml)             | ✅      | —         |
+| Context                 | Workflow                                                                   | Develop | milestone |
+| ----------------------- | -------------------------------------------------------------------------- | ------- | --------- |
+| `Quality Gate`          | [`deno-quality.yml`](.github/workflows/deno-quality.yml)                   | ✅      | ✅        |
+| `a11y`                  | [`a11y.yml`](.github/workflows/a11y.yml)                                   | ✅      | ✅        |
+| `gitleaks`              | [`gitleaks.yml`](.github/workflows/gitleaks.yml)                           | ✅      | ✅        |
+| `markdownlint`          | [`markdown-lint.yml`](.github/workflows/markdown-lint.yml)                 | ✅      | ✅        |
+| `dependency-review`     | [`dependency-review.yml`](.github/workflows/dependency-review.yml)         | ✅      | ✅        |
+| `dependency-quarantine` | [`dependency-quarantine.yml`](.github/workflows/dependency-quarantine.yml) | ✅      | ✅        |
+| `semgrep`               | [`semgrep.yml`](.github/workflows/semgrep.yml)                             | ✅      | ✅        |
+| `shellcheck`            | [`shellcheck.yml`](.github/workflows/shellcheck.yml)                       | ✅      | ✅        |
+| `update-version`        | [`semver-bump.yml`](.github/workflows/semver-bump.yml)                     | ✅      | —         |
 
 `Quality Gate` runs `deno fmt --check`, `deno lint`, `deno check` (repo-wide,
 including `docs/`) and `deno test -A --reporter=dot` with coverage. A failing
@@ -1026,7 +1028,8 @@ in #201 — turns it red and disables the **Merge** button (#211).
 
 **The live rulesets are the source of truth; the mirrors follow them (#658).**
 The Develop mirror once drifted to list `quality` and `dependency-quarantine`
-while live required the contexts above, and a PR trusted the stale file.
+while live required a different set of contexts (`dependency-quarantine` became
+required later, #661), and a PR trusted the stale file.
 [`ruleset-drift.yml`](.github/workflows/ruleset-drift.yml) now compares the
 mirrors with the live API on every pull request and nightly, and fails on any
 difference. Run the same check locally:

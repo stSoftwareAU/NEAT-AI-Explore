@@ -19,6 +19,10 @@ themselves; minor and major bumps are made manually when warranted.
 
 ### Fixed
 
+- The README claimed `dependency-quarantine` was not yet a required check on
+  `Develop` and its required-checks table omitted it; both rulesets require it,
+  the README now says so, and `tests/ruleset_required_checks_test.ts` fails when
+  the table and the ruleset mirrors disagree (#674).
 - `.github/rulesets/develop.json` had drifted from the live `Develop` ruleset:
   it listed `quality` and `dependency-quarantine` while live requires
   `update-version`, `a11y`, `gitleaks`, `markdownlint`, `dependency-review`,
