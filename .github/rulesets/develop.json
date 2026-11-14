@@ -1,5 +1,5 @@
 {
-  "_comment": "Settings-as-code mirror of the live ruleset 11243690 that protects the default branch (Develop). Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. Required contexts are check-run names: a job's `name:` if set, else its id (#211 — the deno-quality.yml job reports as `Quality Gate`). A required workflow must not use a workflow-level `paths:`/`paths-ignore:` filter, or PRs wait on a check that never reports (tests/ruleset_required_checks_test.ts). #361 — require_code_owner_review is false on live (checked-in CODEOWNERS is not enforced at merge by the ruleset); the mirror follows live (#672). #616/#661 — dependency-quarantine is a required check. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it.",
+  "_comment": "Settings-as-code mirror of the live ruleset 11243690 that protects the default branch (Develop). Issue #658 — kept identical to live by .github/workflows/ruleset-drift.yml (deno task rulesets:check); edits here are not auto-applied, so a repo admin must change live and this file together. Required contexts are check-run names: a job's `name:` if set, else its id (#211 — the deno-quality.yml job reports as `Quality Gate`). A required workflow must not use a workflow-level `paths:`/`paths-ignore:` filter, or PRs wait on a check that never reports (tests/ruleset_required_checks_test.ts). #361 — require_code_owner_review is true on live (checked-in CODEOWNERS is enforced at merge by the ruleset); the mirror follows live (#672, PR #671). #616/#661 — dependency-quarantine is a required check. bypass_actors is only visible to admins, so the drift check compares it only when the API returns it.",
   "name": "Develop",
   "target": "branch",
   "enforcement": "active",
@@ -35,7 +35,7 @@
             }
           }
         ],
-        "require_code_owner_review": false,
+        "require_code_owner_review": true,
         "dismissal_restriction": {
           "enabled": false,
           "allowed_actors": []
