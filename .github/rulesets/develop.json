@@ -23,18 +23,7 @@
       "parameters": {
         "required_approving_review_count": 1,
         "dismiss_stale_reviews_on_push": true,
-        "required_reviewers": [
-          {
-            "minimum_approvals": 1,
-            "file_patterns": [
-              "*"
-            ],
-            "reviewer": {
-              "id": 2166335,
-              "type": "Team"
-            }
-          }
-        ],
+        "required_reviewers": [],
         "require_code_owner_review": true,
         "dismissal_restriction": {
           "enabled": false,
