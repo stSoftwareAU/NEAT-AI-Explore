@@ -9,8 +9,8 @@
 #
 # This file names the owners. It is enforced at merge time:
 # `require_code_owner_review` is true on the live Develop ruleset (#672), so
-# GitHub requires a code-owner sign-off. The ruleset's required_reviewers rule
-# for the @stSoftwareAU/developers team also applies. If an admin changes
+# GitHub requires a code-owner sign-off. The live ruleset has no separate
+# required_reviewers rule (`required_reviewers` is empty). If an admin changes
 # `require_code_owner_review` on live, update .github/rulesets/develop.json to
 # match.
 

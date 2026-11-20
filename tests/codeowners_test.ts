@@ -26,8 +26,8 @@ const CODEOWNERS_LOCATIONS = [
   "docs/CODEOWNERS",
 ];
 
-/** The reviewing team mirrors the `developers` team (id 2166335) already
- * named as the required reviewer in `.github/rulesets/develop.json`. */
+/** The reviewing team is the `developers` team (id 2166335) that owns the
+ * privileged paths; the live ruleset enforces it via code-owner review. */
 const REVIEWING_TEAM = "@stSoftwareAU/developers";
 
 /** Privileged paths that must be owned by the reviewing team. */
