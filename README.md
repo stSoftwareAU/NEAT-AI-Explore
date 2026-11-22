@@ -1005,9 +1005,10 @@ graph LR
 
 The default branch (**Develop**) is protected by the `Develop` repository
 ruleset, and `milestone/**` branches by the `Vibe Coder milestone branches`
-ruleset. `.github/rulesets/develop.json` and `.github/rulesets/milestone.json`
-are read-only mirrors of the live rulesets. The following status checks are
-**required** and block merge when they fail or never report:
+ruleset. The live rulesets (repo **Settings → Rules**) are the only source of
+truth; they change often as CI checks improve, so no copy is kept in the repo
+(#678). At the time of writing the following status checks are **required** and
+block merge when they fail or never report:
 
 | Context                 | Workflow                                                                   | Develop | milestone |
 | ----------------------- | -------------------------------------------------------------------------- | ------- | --------- |
@@ -1026,35 +1027,14 @@ including `docs/`) and `deno test -A --reporter=dot` with coverage. A failing
 `deno check` — for example, the duplicate top-level identifier regression fixed
 in #201 — turns it red and disables the **Merge** button (#211).
 
-**The live rulesets are the source of truth; the mirrors follow them (#658).**
-The Develop mirror once drifted to list `quality` and `dependency-quarantine`
-while live required a different set of contexts (`dependency-quarantine` became
-required later, #661), and a PR trusted the stale file.
-[`ruleset-drift.yml`](.github/workflows/ruleset-drift.yml) now compares the
-mirrors with the live API on every pull request and nightly, and fails on any
-difference. Run the same check locally:
-
-```sh
-deno task rulesets:check
-```
-
-```mermaid
-flowchart LR
-    admin([Repo admin]) -->|edits| live[(Live rulesets<br/>GitHub API)]
-    live -->|export| mirror[.github/rulesets/*.json]
-    mirror --> drift{ruleset-drift.yml<br/>rulesets:check}
-    live --> drift
-    drift -->|identical| ok([green])
-    drift -->|differs| fail([red: update the mirror<br/>or ask an admin])
-    mirror --> req[ruleset_required_checks_test.ts]
-    req -->|each required context is an<br/>unfiltered pull_request job| ok
-```
-
 Because a required workflow that GitHub skips never reports its check, a
 workflow that produces a required context **must not** set a workflow-level
 `paths:` or `paths-ignore:` filter — the PR would wait on "Expected" forever.
-`tests/ruleset_required_checks_test.ts` enforces this, and that every required
-context is the name (or id) of a job with a `pull_request` trigger.
+Any check may become required, so
+`tests/workflow_pull_request_paths_filter_test.ts` forbids a `paths:` or
+`paths-ignore:` filter on every workflow's `pull_request` trigger; a workflow
+that only needs to act on some files skips the work inside the job instead (as
+`a11y.yml` does).
 
 Run `./quality.sh` locally before pushing to land green on the first attempt.
 
@@ -1066,12 +1046,9 @@ owners of the privileged CI paths (the `@stSoftwareAU/developers` team):
 - `/.github/workflows/` — run with the repository's secrets and (for
   `deploy.yml`) an OIDC `id-token`.
 - `/.github/actions/` — composite/local actions invoked by those workflows.
-- `/.github/rulesets/` — the branch-protection controls themselves.
 
 CODEOWNERS defines these owners, and `"require_code_owner_review"` is `true` in
-the live `Develop` ruleset, so GitHub requires a code-owner review at merge. The
-checked-in mirror `.github/rulesets/develop.json` follows live (#658, #672); if
-a repo admin changes the setting on live, they must update the mirror to match.
+the live `Develop` ruleset, so GitHub requires a code-owner review at merge.
 
 ### Unit tests vs benchmarks
 

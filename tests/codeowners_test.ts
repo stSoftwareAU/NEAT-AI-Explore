@@ -9,8 +9,7 @@
  * A CODEOWNERS rule on those paths documents who owns them. Note that
  * `require_code_owner_review` is currently `true` on the live Develop
  * ruleset (#672), so GitHub enforces CODEOWNERS at merge; these tests only
- * check the committed CODEOWNERS file, and the ruleset-drift check keeps the
- * mirror in step with live.
+ * check the committed CODEOWNERS file.
  *
  * These tests parse the committed CODEOWNERS file (the source of truth), so
  * an accidental edit that drops the privileged-path coverage or the owning
@@ -34,7 +33,6 @@ const REVIEWING_TEAM = "@stSoftwareAU/developers";
 const PRIVILEGED_PATHS = [
   "/.github/workflows/",
   "/.github/actions/",
-  "/.github/rulesets/",
 ];
 
 interface CodeownersRule {

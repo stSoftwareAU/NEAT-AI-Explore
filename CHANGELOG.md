@@ -17,6 +17,17 @@ themselves; minor and major bumps are made manually when warranted.
 
 ## [Unreleased]
 
+### Removed
+
+- The `Ruleset Drift` check (`ruleset-drift.yml`, `deno task rulesets:check`)
+  and the `.github/rulesets/*.json` copies of the live rulesets. The rulesets
+  change often as CI checks improve, so the check kept going red and its only
+  fix was to copy live back into the repo (#678). The live rulesets are now the
+  only source of truth. The tests that read the copies are gone; the `paths:`
+  gotcha they guarded is kept by
+  `tests/workflow_pull_request_paths_filter_test.ts`, which forbids a `paths:`
+  or `paths-ignore:` filter on any workflow's `pull_request` trigger.
+
 ### Fixed
 
 - The README claimed `dependency-quarantine` was not yet a required check on
