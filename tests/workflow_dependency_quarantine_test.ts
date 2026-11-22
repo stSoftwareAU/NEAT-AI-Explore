@@ -12,7 +12,7 @@
  * These tests assert the gate now runs on pull requests, in resolved
  * (`--lock`) mode so transitive packages are covered too. Making its job a
  * required status check is an admin change to the live rulesets, tracked in
- * #661; the checked-in mirror follows live (#658). Repo-wide policies (SHA pinning, checkout consistency, job
+ * #661. Repo-wide policies (SHA pinning, checkout consistency, job
  * timeout, concurrency, persist-credentials) are enforced by their own
  * suites across every workflow and are not re-checked here.
  */
