@@ -1203,6 +1203,12 @@ graph TD
     Examples -->|depends on| Main
 ```
 
+Explore only reads snapshots and never compacts, rewrites or exports a creature,
+so it has no NEAT-AI-core dependency and the family-wide compaction migration
+(NEAT-AI-core#775) leaves it unchanged. See
+[`docs/archive/compaction-audit-680.md`](docs/archive/compaction-audit-680.md)
+for the audit.
+
 ---
 
 ## 📄 Licence
